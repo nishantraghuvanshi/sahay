@@ -89,7 +89,10 @@ export interface DoseEvent {
   id: string
   patient_id: string
   medication_id: string
+  /** The slot this event belongs to — its identity, even after a move. */
   slot_time: string
+  /** Where this single occurrence was moved to, if it was. Pairs with `deferred`. */
+  rescheduled_to?: string | null
   call_session_id: string | null
   status: DoseStatus
   note: string | null

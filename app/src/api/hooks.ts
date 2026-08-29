@@ -69,6 +69,19 @@ export async function postDose(body: {
   await api.post('/app/doses', body)
 }
 
+/**
+ * Move one occurrence of a dose without touching the recurring schedule. Series
+ * moves go through `postMedications` instead, because they change `medications.slots`.
+ */
+export async function postDoseMove(body: {
+  medication_id: string
+  from_slot_time: string
+  to_slot_time: string
+}): Promise<void> {
+  if (!live) throw new ApiError('No Care API configured — nothing was saved.', 'unreachable')
+  await api.post('/app/doses/move', body)
+}
+
 /** Screens that must visibly change while a call is in progress poll; the rest do not. */
 const LIVE = { refetchInterval: LIVE_POLL_MS }
 

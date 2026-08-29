@@ -294,6 +294,9 @@
       ↳ ⛔ not built — OCR cannot fail in the mock; needs the real endpoint
 - [ ] Missing states to add: **intro call scheduled but not yet placed**, and
       **parent declined on the intro call**. Neither is drawn; both are now reachable
+      ↳ the first is built — the calendar carries the scheduled intro call as its own event and
+      a banner saying dose reminders do not begin until it has happened. `declined` is a value
+      `intro_call_status` accepts but nothing writes or draws yet
 
 ## Gate verification (do this with Lane B present)
 

@@ -678,3 +678,64 @@ def post_dose(body: DoseMark):
         return {"ok": True}
     finally:
         con.close()
+
+
+class DoseMove(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    medication_id: str
+    from_slot_time: str
+    to_slot_time: str
+
+
+@router.post("/app/doses/move")
+def post_dose_move(body: DoseMove):
+    """Move a single occurrence of a dose, leaving the recurring schedule alone.
+
+    `medications.slots` are recurring local times, so there is nowhere in that row to
+    say "just Tuesday's 08:30 goes to 10:00". The occurrence is recorded instead as a
+    `dose_events` row keyed on its original `slot_time`, with status `deferred` — which
+    already means "put off to a later time, and still expected" — and the new time in
+    `rescheduled_to`.
+
+    Keying on the original slot is what makes this idempotent and reversible: moving
+    the same occurrence twice updates one row rather than accumulating them, and the
+    slot it came from is still recoverable.
+
+    Refused once the dose has been answered. A confirmed dose cannot be moved — it has
+    already been taken — and silently rewriting one would falsify the record.
+    """
+    con = db.connect()
+    try:
+        patient = current_patient(con)
+        if patient is None:
+            return _fail("not_found")
+        med = con.execute(
+            "SELECT id FROM medications WHERE id = ? AND patient_id = ? AND stopped_at IS NULL",
+            (body.medication_id, patient["id"]),
+        ).fetchone()
+        if med is None:
+            return _fail("not_found")
+
+        existing = con.execute(
+            "SELECT * FROM dose_events WHERE medication_id = ? AND slot_time = ?",
+            (body.medication_id, body.from_slot_time),
+        ).fetchone()
+        if existing and existing["status"] not in ("deferred",):
+            return _fail("dose_already_answered")
+
+        db.insert(con, "dose_events", {
+            "id": existing["id"] if existing else str(uuid.uuid4()),
+            "patient_id": patient["id"],
+            "medication_id": body.medication_id,
+            "slot_time": body.from_slot_time,
+            "rescheduled_to": body.to_slot_time,
+            "call_session_id": None,
+            "status": "deferred",
+            "note": "Moved by the caregiver in the app.",
+            "created_at": db.now_iso(),
+        })
+        con.commit()
+        return {"ok": True}
+    finally:
+        con.close()

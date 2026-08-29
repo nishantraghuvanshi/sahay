@@ -14,7 +14,14 @@ import {
   Row,
   Tag,
 } from '../ui'
-import { useCareRecord, useDoseHistory, useEscalations } from '../api/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  postDoseMove,
+  postMedications,
+  useCareRecord,
+  useDoseHistory,
+  useEscalations,
+} from '../api/hooks'
 import { slotsForDay } from '../lib/schedule'
 import type { UpcomingDose } from '../lib/schedule'
 import type { DoseStatus, Escalation } from '../api/types'
@@ -33,10 +40,12 @@ import type { DoseStatus, Escalation } from '../api/types'
  * Slot expansion is `slotsForDay()` from lib/schedule — one implementation of "which medicines
  * are due when", shared with Home's next-dose card, so the two can never drift apart.
  *
- * The `2f` annotation asks for drag-to-reschedule. Deliberately not built: there is no mutation
- * endpoint behind it, and a control that appears to move a dose but silently does not is worse
- * for a caregiver than no control. Times are changed in the medicine editor, which the two
- * buttons at the foot go to.
+ * Drag-to-reschedule (`2f`) is two different writes wearing one gesture. A plain drag moves a
+ * single occurrence, which `medications.slots` cannot express — those are recurring times — so
+ * it becomes a `dose_events` row keyed on the slot it came from. A shift-drag changes the
+ * medicine's slot itself and moves every future day with it. Picking the wrong one is
+ * destructive in a way a caregiver would not notice, so the cell says which it will be before
+ * the drop and an answered dose refuses to move at all: that is history, not schedule.
  */
 
 /**
@@ -49,6 +58,15 @@ import type { DoseStatus, Escalation } from '../api/types'
  * so a dose six hours away would be labelled "now".
  */
 const NOW_WINDOW_MS = 45 * 60_000
+
+/**
+ * A series move rewrites the prescription's own times, so it goes through the same
+ * endpoint as the medicine editor and carries the same kind of attestation. The
+ * wording is specific about what was done — the audit row should read back as the
+ * action taken, not as a generic edit.
+ */
+const SERIES_MOVE_ATTESTATION =
+  'I moved this dose time for every day on the calendar, and this change has been advised by our doctor.'
 
 /**
  * The four views frame `2f` puts in the header.
@@ -200,6 +218,12 @@ export default function Calendar() {
   const escalations = useEscalations()
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()))
   const [view, setView] = useState<View>('week')
+  const queryClient = useQueryClient()
+
+  /** The dose picked up, and whether the whole series is being moved with it. */
+  const [dragging, setDragging] = useState<{ dose: UpcomingDose; series: boolean } | null>(null)
+  const [dragTarget, setDragTarget] = useState<{ slot: string; day: string } | null>(null)
+  const [moveError, setMoveError] = useState<string | null>(null)
 
   if (record.isLoading || doses.isLoading) return <LoadingBlock rows={6} />
   if (record.error) return <ErrorBlock error={record.error} onRetry={() => record.refetch()} />
@@ -221,6 +245,58 @@ export default function Calendar() {
    * it is done no dose call may be placed at all: a schedule can be signed off and
    * still be entirely dormant, which is invisible if the calendar only draws doses.
    */
+  /**
+   * Reschedule, in the two forms frame `2f` asks for.
+   *
+   * A plain drag moves one occurrence: `medications.slots` are recurring and cannot
+   * say "just this Tuesday", so it becomes a `dose_events` row keyed on the slot it
+   * came from. A shift-drag changes the medicine's slot itself, which moves every
+   * future day with it.
+   *
+   * The two are genuinely different writes and the wrong one is destructive in a way
+   * a caregiver would not notice, so the drop always says which it did.
+   */
+  async function moveDose(dose: UpcomingDose, series: boolean, toDay: Date, toSlot: string) {
+    const to = new Date(toDay)
+    const [h, m] = toSlot.split(':').map(Number)
+    to.setHours(h, m ?? 0, 0, 0)
+    if (to.getTime() === dose.at.getTime()) return
+
+    setMoveError(null)
+    try {
+      if (series) {
+        const meds = (record.data?.medications ?? []).map((m) => ({
+          id: m.id,
+          name: m.name,
+          dose: m.dose,
+          slots:
+            m.id === dose.medication.id
+              ? [...new Set(m.slots.map((sl) => (sl === dose.slot ? toSlot : sl)))].sort()
+              : m.slots,
+          with_food: m.with_food ?? 'any',
+          is_priority: m.is_priority,
+          stopped: false,
+          isNew: false,
+        }))
+        await postMedications({
+          medications: meds,
+          diff: [`${dose.medication.name} moved from ${dose.slot} to ${toSlot}, every day`],
+          consent_text: SERIES_MOVE_ATTESTATION,
+          consent_ack: true,
+        })
+      } else {
+        await postDoseMove({
+          medication_id: dose.medication.id,
+          from_slot_time: dose.at.toISOString(),
+          to_slot_time: to.toISOString(),
+        })
+      }
+      await queryClient.invalidateQueries()
+    } catch (err) {
+      setMoveError(err instanceof Error ? err.message : 'Could not move that dose.')
+    }
+  }
+
   const escalationForDose = new Map<string, Escalation>(
     (escalations.data ?? [])
       .filter((e): e is Escalation & { dose_event_id: string } => Boolean(e.dose_event_id))
@@ -649,27 +725,68 @@ export default function Calendar() {
                   const cell = bySlot[i]?.get(slot) ?? []
                   const isToday = dayKey(day) === dayKey(today)
                   const isPast = day.getTime() < today.getTime()
+                  const isTarget =
+                    dragTarget?.slot === slot && dragTarget?.day === dayKey(day)
                   return (
                     <div
                       key={dayKey(day)}
+                      onDragOver={(e) => {
+                        if (!dragging) return
+                        e.preventDefault()
+                        setDragTarget({ slot, day: dayKey(day) })
+                      }}
+                      onDragLeave={() => setDragTarget(null)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setDragTarget(null)
+                        if (!dragging) return
+                        // The modifier is read at the drop, not the pick-up: a
+                        // caregiver can change their mind mid-drag, and the badge on
+                        // the cell has been telling them which one it will be.
+                        void moveDose(dragging.dose, e.shiftKey, day, slot)
+                        setDragging(null)
+                      }}
                       className={clsx(
                         'rounded-md border p-1.5',
                         isToday ? 'border-[1.5px] border-ink bg-paper' : 'border-line-strong',
                         isPast && !isToday && 'opacity-70',
+                        isTarget && 'border-[1.5px] border-ink bg-line/30',
                       )}
                     >
                       {cell.length === 0 ? (
-                        <span className="text-[10px] text-muted">—</span>
+                        <span className="text-[10px] text-muted">
+                          {isTarget ? (dragging?.series ? 'every day' : 'just this one') : '—'}
+                        </span>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {cell.map((dose) => (
-                            <div key={dose.medication.id} className="flex flex-col gap-0.5">
-                              <span className="truncate text-[11px] font-semibold">
-                                {dose.medication.name}
-                              </span>
-                              <SlotStatus dose={dose} now={now} />
-                            </div>
-                          ))}
+                          {cell.map((dose) => {
+                            // An answered dose is history. Moving it would rewrite
+                            // what happened rather than what is going to.
+                            const movable = !dose.event || dose.event.status === 'deferred'
+                            return (
+                              <div
+                                key={dose.medication.id}
+                                draggable={movable}
+                                onDragStart={(e) => {
+                                  setDragging({ dose, series: e.shiftKey })
+                                  e.dataTransfer.effectAllowed = 'move'
+                                }}
+                                onDragEnd={() => {
+                                  setDragging(null)
+                                  setDragTarget(null)
+                                }}
+                                className={clsx(
+                                  'flex flex-col gap-0.5',
+                                  movable && 'cursor-grab active:cursor-grabbing',
+                                )}
+                              >
+                                <span className="truncate text-[11px] font-semibold">
+                                  {dose.medication.name}
+                                </span>
+                                <SlotStatus dose={dose} now={now} />
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>
@@ -681,9 +798,15 @@ export default function Calendar() {
         </div>
 
         <p className="text-[10px] text-muted">
-          Doses are shown where the prescription puts them. To move a time, change the medicine —
-          nothing on this grid can be dragged, because nothing here would save.
+          Drag a dose to another cell to move just that one. Hold <b>shift</b> as you drop to move
+          it every day instead. A dose that has already been answered cannot be moved — that is
+          history, not schedule.
         </p>
+        {moveError && (
+          <span className="text-[11px] font-semibold text-muted-strong">
+            {moveError} Nothing was moved.
+          </span>
+        )}
       </Card>
       )}
 

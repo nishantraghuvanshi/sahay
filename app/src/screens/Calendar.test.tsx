@@ -1,4 +1,5 @@
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -67,10 +68,15 @@ function mount(doses: DoseEvent[], escalations: Escalation[] = [], slots?: strin
     data: escalations, isLoading: false, error: null, refetch: vi.fn(),
   } as unknown as ReturnType<typeof useEscalations>)
 
+  // The screen invalidates queries after a reschedule, so it needs a real client
+  // even though every read is mocked. Retries off so a failure surfaces immediately.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter>
-      <Calendar />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <Calendar />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

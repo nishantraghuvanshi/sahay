@@ -421,6 +421,70 @@ def test_an_invented_dose_status_is_refused(client):
     }).json()["error"] == "bad_status"
 
 
+# ------------------------------------------------------- moving one occurrence
+
+def test_moving_one_dose_leaves_the_recurring_schedule_alone(client):
+    """`medications.slots` are recurring, so a one-off move must not rewrite them —
+    otherwise moving Tuesday's dose silently moves every other day too."""
+    med = client.get("/app/record").json()["medications"][0]
+    slots_before = med["slots"]
+
+    assert client.post("/app/doses/move", json={
+        "medication_id": med["id"],
+        "from_slot_time": "2026-09-01T08:30:00+05:30",
+        "to_slot_time": "2026-09-01T10:00:00+05:30",
+    }).json()["ok"] is True
+
+    assert client.get("/app/record").json()["medications"][0]["slots"] == slots_before
+    moved = [d for d in client.get("/app/doses").json() if d["rescheduled_to"]]
+    assert len(moved) == 1
+    assert moved[0]["status"] == "deferred"
+    assert moved[0]["slot_time"].startswith("2026-09-01T08:30")
+    assert moved[0]["rescheduled_to"].startswith("2026-09-01T10:00")
+
+
+def test_moving_the_same_occurrence_twice_updates_one_row(client):
+    """Keyed on the slot it came from, so a second move corrects the first rather
+    than stacking another row against the same slot."""
+    med = client.get("/app/record").json()["medications"][0]
+    body = {
+        "medication_id": med["id"],
+        "from_slot_time": "2026-09-01T08:30:00+05:30",
+        "to_slot_time": "2026-09-01T10:00:00+05:30",
+    }
+    client.post("/app/doses/move", json=body)
+    client.post("/app/doses/move", json={**body, "to_slot_time": "2026-09-01T11:00:00+05:30"})
+
+    moved = [d for d in client.get("/app/doses").json() if d["rescheduled_to"]]
+    assert len(moved) == 1
+    assert moved[0]["rescheduled_to"].startswith("2026-09-01T11:00")
+
+
+def test_an_answered_dose_cannot_be_moved(client):
+    """A confirmed dose is history. Rewriting its time would falsify the record of
+    what actually happened."""
+    med = client.get("/app/record").json()["medications"][0]
+    slot = "2026-09-01T08:30:00+05:30"
+    client.post("/app/doses", json={
+        "medication_id": med["id"], "slot_time": slot, "status": "confirmed"})
+
+    assert client.post("/app/doses/move", json={
+        "medication_id": med["id"], "from_slot_time": slot,
+        "to_slot_time": "2026-09-01T10:00:00+05:30",
+    }).json()["error"] == "dose_already_answered"
+
+
+def test_a_stopped_medicine_cannot_have_doses_moved(client):
+    rows = rows_from(client)
+    rows[0]["stopped"] = True
+    client.post("/app/medications", json=edit_body(rows))
+
+    assert client.post("/app/doses/move", json={
+        "medication_id": rows[0]["id"], "from_slot_time": "2026-09-01T08:30:00+05:30",
+        "to_slot_time": "2026-09-01T10:00:00+05:30",
+    }).json()["error"] == "not_found"
+
+
 def test_restarting_does_not_overwrite_a_signed_off_schedule(client):
     """Seeding runs only on an empty database."""
     client.post("/app/onboarding", json=draft())

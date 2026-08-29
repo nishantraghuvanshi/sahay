@@ -132,6 +132,11 @@ CREATE TABLE IF NOT EXISTS dose_events (
   patient_id      TEXT NOT NULL REFERENCES patients(id),
   medication_id   TEXT NOT NULL REFERENCES medications(id),
   slot_time       TEXT NOT NULL,
+  -- Where a single occurrence was moved to. `medications.slots` are recurring, so a
+  -- one-off move has nowhere else to live; the row keeps its original slot_time as
+  -- its identity and carries the new time here. Only meaningful with
+  -- status='deferred', which already means "put off to a later time, still expected".
+  rescheduled_to  TEXT,
   call_session_id TEXT REFERENCES call_sessions(id),
   -- 'unknown' is the degraded case (the agent could not reach the patient) and is
   -- deliberately distinct from 'missed', which asserts the dose was not taken.

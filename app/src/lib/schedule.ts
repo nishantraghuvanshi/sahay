@@ -26,6 +26,10 @@ function atLocal(day: Date, slot: string): Date {
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString()
 
+/** Local 'HH:MM' for a Date — the same shape `medications.slots` uses. */
+const hhmm = (d: Date) =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
 /** The dose_event written for this exact medicine + slot, if the agent has logged one. */
 function eventFor(events: DoseEvent[], medicationId: string, at: Date): DoseEvent | null {
   return (
@@ -37,27 +41,45 @@ function eventFor(events: DoseEvent[], medicationId: string, at: Date): DoseEven
   )
 }
 
-/** Every slot of every medicine expanded onto one day, in time order. */
+/**
+ * Every slot of every medicine expanded onto one day, in time order.
+ *
+ * A single occurrence can have been moved (`dose_events.rescheduled_to`), which the
+ * recurring `medications.slots` cannot express. So the day is built in two passes:
+ * the recurring occurrences that are still where the prescription puts them, and
+ * then any occurrence moved *into* this day from another. An occurrence moved away
+ * is dropped from its original day rather than drawn twice — otherwise a dose the
+ * caregiver moved would appear at both times, and the count of what is due would be
+ * wrong on both days.
+ */
 export function slotsForDay(
   medications: Medication[],
   events: DoseEvent[],
   day: Date,
 ): UpcomingDose[] {
   const today = new Date()
-  return medications
-    .flatMap((medication) =>
-      medication.slots.map((slot) => {
-        const at = atLocal(day, slot)
-        return {
-          medication,
-          slot,
-          at,
-          event: eventFor(events, medication.id, at),
-          isTomorrow: !sameDay(at, today),
-        }
-      }),
-    )
-    .sort((a, b) => a.at.getTime() - b.at.getTime())
+  const out: UpcomingDose[] = []
+
+  for (const medication of medications) {
+    for (const slot of medication.slots) {
+      const at = atLocal(day, slot)
+      const event = eventFor(events, medication.id, at)
+      // Moved off this slot; it is drawn at its new time by the pass below.
+      if (event?.rescheduled_to) continue
+      out.push({ medication, slot, at, event, isTomorrow: !sameDay(at, today) })
+    }
+  }
+
+  for (const event of events) {
+    if (!event.rescheduled_to) continue
+    const at = new Date(event.rescheduled_to)
+    if (!sameDay(at, day)) continue
+    const medication = medications.find((m) => m.id === event.medication_id)
+    if (!medication) continue
+    out.push({ medication, slot: hhmm(at), at, event, isTomorrow: !sameDay(at, today) })
+  }
+
+  return out.sort((a, b) => a.at.getTime() - b.at.getTime())
 }
 
 /**
