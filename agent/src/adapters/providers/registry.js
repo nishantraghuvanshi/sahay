@@ -52,8 +52,15 @@ const BRIDGE_ADAPTERS = {
  * is no longer enforced here.
  */
 class ProviderRegistry {
-  constructor() {
-    this.config = loadProvidersConfig();
+  /**
+   * @param {Object} [config] - A pre-loaded, already-validated providers
+   *   config. Defaults to loadProvidersConfig() (config/providers.yaml).
+   *   Overridable so the constructor's own bridge-adapter check (rule 1,
+   *   see class doc) is exercisable against a config that actually violates
+   *   it, without touching the real providers.yaml — see provider-modes.test.js.
+   */
+  constructor(config) {
+    this.config = config || loadProvidersConfig();
     this.env = process.env;
 
     const unbacked = this.findUnbackedBridgeProviders();

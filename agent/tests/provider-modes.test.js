@@ -158,6 +158,26 @@ describe('ProviderRegistry enforces the integration contract', () => {
     assert.deepStrictEqual(missing, ['stt.deepgram']);
   });
 
+  test('the constructor itself throws for a config with an unbacked bridge provider (F6)', () => {
+    // The test above only proved the QUERY (findUnbackedBridgeProviders)
+    // reports the right answer — it mutates reg.config AFTER construction,
+    // so it never exercises the constructor's own throw. Deleting that
+    // throw from ProviderRegistry would leave this test suite green while
+    // removing the one guard against a config entry you can select but
+    // cannot run. This constructs against a deliberately broken config
+    // (injected via the constructor's config param) to prove the throw
+    // itself, not just the data it would throw about.
+    const goodConfig = loadProvidersConfig();
+    const brokenConfig = {
+      ...goodConfig,
+      stt: {
+        ...goodConfig.stt,
+        deepgram: { ...goodConfig.stt.deepgram, integration: 'bridge' },
+      },
+    };
+    assert.throws(() => new ProviderRegistry(brokenConfig), /stt\.deepgram/);
+  });
+
   test('asking for a bridge adapter on a native provider fails loudly', () => {
     const reg = new ProviderRegistry();
     // deepgram is native — selecting it must not silently yield an adapter.
