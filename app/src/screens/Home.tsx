@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
-import { Phone as PhoneIcon } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
 import {
   Button,
   Card,
@@ -14,8 +14,6 @@ import {
   Row,
   SeverityChip,
   Tag,
-  QuoteBlock,
-  Thread,
 } from '../ui'
 import {
   useCalls,
@@ -59,8 +57,32 @@ export default function Home() {
   const lastCallObservation = observations.data?.find((o) => o.call_session_id === lastCall?.id)
   const lastCallDoses = events.filter((e) => e.call_session_id === lastCall?.id)
 
+  const openCount = escalations.data?.length ?? 0
+  const weekAgo = Date.now() - 7 * 86_400_000
+  const saidThisWeek = (observations.data ?? []).filter(
+    (o) => new Date(o.created_at).getTime() >= weekAgo,
+  )
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+      {/* ------------------------------------------ header (1f): who, how, ⚙ settings.
+          Desktop has the sidebar for both, so this row is phone-only. */}
+      <Row className="lg:hidden">
+        <div className="flex-1 min-w-0">
+          <div className="text-md font-bold truncate">{name}</div>
+          <div className="text-xs text-muted-strong">
+            {openCount > 0 ? `${openCount} open ${openCount === 1 ? 'alert' : 'alerts'}` : 'On track today'}
+          </div>
+        </div>
+        <Link
+          to="/settings"
+          aria-label="Settings"
+          className="grid size-11 place-items-center rounded-full text-muted-strong hover:bg-fill/60 hover:text-ink"
+        >
+          <SettingsIcon className="size-5" strokeWidth={2} />
+        </Link>
+      </Row>
+
       {/* ------------------------------------------------ needs you — leads, loud */}
       {openAlert && (
         <Card emphasis="danger" className="kv-rise gap-3">
@@ -75,7 +97,7 @@ export default function Home() {
           <div className="text-xs text-muted-strong">
             Told to {openAlert.sent_to} by {openAlert.channel} · {openAlert.delivery_status}
           </div>
-          <Row className="flex-wrap gap-2 pt-0.5">
+          <Row className="flex-col items-stretch gap-2 pt-0.5 sm:flex-row">
             <Button href={`tel:${patient.phone_e164}`} className="flex-1">
               Call {name} now
             </Button>
@@ -83,6 +105,11 @@ export default function Home() {
               Open alert
             </Button>
           </Row>
+          {openCount > 1 && (
+            <Link to="/alerts" className="text-xs font-semibold underline">
+              {openCount} open alerts ›
+            </Link>
+          )}
         </Card>
       )}
 
@@ -105,7 +132,7 @@ export default function Home() {
                   {next.slot}
                 </Tag>
               </Row>
-              <div className="font-display text-3xl leading-none font-semibold break-words">
+              <div className="font-display text-2xl leading-none font-semibold break-words sm:text-3xl">
                 {next.medication.name}{' '}
                 <span className="text-muted-strong">{next.medication.dose}</span>
                 {next.medication.is_priority && (
@@ -121,12 +148,22 @@ export default function Home() {
                     ? 'Before food'
                     : 'Any time'}
               </div>
+              {/* "Mark taken" is gated, not wired: confirming a dose by hand is a write, and
+                  the app only reads (api/hooks.ts is queries alone). A button that looks live
+                  and does nothing is worse than one that says why it cannot run — so it stays
+                  in place, warm and readable, with the reason beside it. */}
               <Row className="flex-wrap gap-2 pt-1">
-                <Button className="flex-1">Mark taken</Button>
+                <Button disabled className="flex-1">
+                  Mark taken
+                </Button>
                 <Button variant="outline" className="flex-1" href={`tel:${patient.phone_e164}`}>
                   Call {name}
                 </Button>
               </Row>
+              <span className="text-xs text-muted-strong">
+                Marking a dose by hand needs the Care API. Until then, {name} confirming it on the
+                call is what records it.
+              </span>
               <Divider />
               <span className="text-xs text-muted-strong">
                 We call {name} shortly after {next.slot} if it is still unconfirmed. Call buttons
@@ -167,6 +204,9 @@ export default function Home() {
             <div className="flex flex-col">
               {summary.data?.items.map((item, i) => <SummaryRow key={`${item.at}:${i}`} item={item} />)}
             </div>
+            <Link to="/calendar" className="text-xs font-semibold underline">
+              Open calendar ›
+            </Link>
           </Card>
         </div>
 
@@ -182,7 +222,9 @@ export default function Home() {
                     minute: '2-digit',
                   })}
                 </Label>
-                <Chip>Transcript</Chip>
+                <Link to={`/calls/${lastCall.id}`} className="text-xs font-semibold underline">
+                  Transcript ›
+                </Link>
               </Row>
               {lastCallObservation ? (
                 <>
@@ -212,6 +254,24 @@ export default function Home() {
               )}
             </Card>
           )}
+
+          {/* ------------------------------------------------- what she said (2e) */}
+          <Card className="kv-rise gap-2">
+            <Row>
+              <Label className="flex-1">What she said this week</Label>
+              <Label className="tnum">{saidThisWeek.length}</Label>
+            </Row>
+            {saidThisWeek[0] ? (
+              <blockquote lang="hi" className="text-sm leading-relaxed font-semibold break-words">
+                “{saidThisWeek[0].text}”
+              </blockquote>
+            ) : (
+              <div className="text-sm text-muted-strong">Nothing flagged this week.</div>
+            )}
+            <Link to="/observations" className="text-xs font-semibold underline">
+              View all ›
+            </Link>
+          </Card>
 
           {/* -------------------------------------------------------- care record */}
           <Card className="kv-rise gap-2.5" >

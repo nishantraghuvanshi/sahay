@@ -160,7 +160,7 @@ export default function Calendar() {
           title="Nothing is scheduled yet"
           body="The calendar is built from the prescription. Add one and every dose appears here, at the times it is due."
           action={
-            <Link to="/medicines/edit" className={BTN_PRIMARY}>
+            <Link to="/medicines/edit?tab=upload" className={BTN_PRIMARY}>
               Upload a prescription
             </Link>
           }
@@ -220,11 +220,15 @@ export default function Calendar() {
 
       {/* --------------------------------------------------------- week nav */}
       <Row className="flex-wrap gap-1.5">
-        <Chip onClick={() => setSelected(addDays(selected, -7))}>‹ Previous week</Chip>
+        <Chip onClick={() => setSelected(addDays(selected, -7))}>
+          ‹ <span className="hidden sm:inline">Previous week</span><span className="sm:hidden">Prev</span>
+        </Chip>
         <Chip on={dayKey(selected) === dayKey(today)} onClick={() => setSelected(today)}>
           Today
         </Chip>
-        <Chip onClick={() => setSelected(addDays(selected, 7))}>Next week ›</Chip>
+        <Chip onClick={() => setSelected(addDays(selected, 7))}>
+          <span className="hidden sm:inline">Next week</span><span className="sm:hidden">Next</span> ›
+        </Chip>
         <span className="ml-auto text-sm text-muted-strong">
           {weekDue.length === 0
             ? 'nothing due yet this week'
@@ -452,7 +456,7 @@ export default function Calendar() {
         <Link to="/medicines/edit" className={clsx(BTN_PRIMARY, 'flex-1')}>
           Edit these medicines
         </Link>
-        <Link to="/medicines/edit" className={clsx(BTN_OUTLINE, 'flex-1')}>
+        <Link to="/medicines/edit?tab=upload" className={clsx(BTN_OUTLINE, 'flex-1')}>
           Upload new prescription
         </Link>
       </div>
@@ -582,6 +586,7 @@ function DayChip({
             {/* the dot is dropped on the selected day: an ink dot on ink is invisible */}
             {!selected && (
               <Dot
+                className="hidden sm:block"
                 kind={
                   t.attention > 0
                     ? 'hollow'

@@ -1,26 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import clsx from 'clsx'
-import { Home, CalendarDays, Bell, Phone, FileText, MessageSquareQuote, Settings } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { useIsDesktop } from './useBreakpoint'
 import { NAV, TABS } from './nav'
 import { Wordmark } from '../ui'
 import { useCareRecord } from '../api/hooks'
+import { LogoutButton } from '../auth/LogoutButton'
 
 /**
  * One shell, two layouts: sidebar + top bar on desktop, bottom tab bar on a phone.
  * Screens are identical in both.
  */
-
-const ICONS: Record<string, LucideIcon> = {
-  '/home': Home,
-  '/calendar': CalendarDays,
-  '/alerts': Bell,
-  '/calls': Phone,
-  '/record': FileText,
-  '/observations': MessageSquareQuote,
-  '/settings': Settings,
-}
 
 export default function AppShell() {
   const isDesktop = useIsDesktop()
@@ -49,29 +38,17 @@ export default function AppShell() {
   )
 }
 
-function Wordmark() {
-  return (
-    <span className="grid size-7 place-items-center rounded-lg bg-ink text-sm font-bold text-paper">
-      K
-    </span>
-  )
-}
-
 function Sidebar() {
   return (
     <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4">
-      <div className="flex items-center gap-2.5 px-1 pb-4">
-        <Wordmark />
-        <span className="text-md font-bold tracking-tight">Kinvox</span>
+      <div className="flex items-center px-1 pb-4">
+        <Wordmark size={17} />
       </div>
 
-      <div className="mb-3 rounded-xl border border-line-strong bg-paper p-3 shadow-[var(--shadow-card)]">
-        <div className="text-sm font-semibold">Mom · 71</div>
-        <div className="text-2xs text-muted">Care line active</div>
-      </div>
+      <PatientCard />
 
       {NAV.map((item) => {
-        const Icon = ICONS[item.to] ?? Home
+        const Icon = item.icon
         return (
           <NavLink
             key={item.to}
@@ -94,14 +71,30 @@ function Sidebar() {
           </NavLink>
         )
       })}
+
+      <div className="mt-auto pt-3">
+        <LogoutButton />
+      </div>
     </aside>
   )
 }
+
 
 /** Reads the record rather than asserting an identity — the sidebar used to disagree with it. */
 function PatientCard() {
   const { data } = useCareRecord()
   const patient = data?.patient
+  return (
+    <div className="mb-3 rounded-xl border border-line-strong bg-paper p-3 shadow-[var(--shadow-card)]">
+      <div className="text-sm font-semibold">
+        {patient ? `${patient.name} · ${patient.age}` : '—'}
+      </div>
+      <div className="text-2xs text-muted">Care line active</div>
+    </div>
+  )
+}
+
+function TopBar() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface/80 px-6 backdrop-blur">
       <span className="font-display text-lg font-semibold tracking-tight">Kinvox</span>
@@ -114,7 +107,7 @@ function TabBar() {
   return (
     <nav className="flex shrink-0 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       {TABS.map((tab) => {
-        const Icon = ICONS[tab.to] ?? Home
+        const Icon = tab.icon
         return (
           <NavLink
             key={tab.to}

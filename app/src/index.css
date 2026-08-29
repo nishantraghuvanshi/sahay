@@ -73,6 +73,11 @@ body,
   height: 100%;
 }
 
+/* One overflowing child must never scroll the whole page sideways. */
+#root {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   background: var(--color-canvas);

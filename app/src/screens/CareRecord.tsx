@@ -156,7 +156,7 @@ export default function CareRecord() {
             {patient.doctor_phone ? (
               <a
                 href={`tel:${patient.doctor_phone}`}
-                className="inline-flex items-center rounded-lg border border-ink px-3 py-2 text-base font-semibold"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-ink px-3 py-2 text-base font-semibold sm:w-auto"
               >
                 Call {patient.doctor_phone}
               </a>
@@ -278,7 +278,7 @@ export default function CareRecord() {
 
         <Row className="flex-wrap gap-2">
           <span className="flex-1 text-sm text-muted-strong">Patient phone</span>
-          <a href={`tel:${patient.phone_e164}`} className="text-md font-semibold underline">
+          <a href={`tel:${patient.phone_e164}`} className="text-md font-semibold break-all underline">
             {patient.phone_e164}
           </a>
         </Row>
@@ -299,7 +299,7 @@ export default function CareRecord() {
             Caregiver{caregiver.relationship ? ` · ${caregiver.relationship}` : ''}
           </span>
           <span className="text-md font-semibold break-words">{caregiver.name}</span>
-          <a href={`tel:${caregiver.phone_e164}`} className="text-md font-semibold underline">
+          <a href={`tel:${caregiver.phone_e164}`} className="text-md font-semibold break-all underline">
             {caregiver.phone_e164}
           </a>
         </Row>

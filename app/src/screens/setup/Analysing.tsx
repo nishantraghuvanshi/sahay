@@ -92,8 +92,16 @@ export default function Analysing() {
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-3 p-3 sm:p-5">
       <Row>
+        <button
+          type="button"
+          onClick={() => navigate('/setup/prescription')}
+          aria-label="Back"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
+        >
+          ←
+        </button>
         <h1 className="flex-1 text-lg font-bold">Reading prescription…</h1>
-        <Label>step 3 / 4</Label>
+        <Label>2 / 4</Label>
       </Row>
 
       {/* Web 2c puts the page preview beside the stage log; a phone stacks them. */}
@@ -175,7 +183,7 @@ export default function Analysing() {
       )}
 
       <Button className="w-full" disabled={!allDone} onClick={() => navigate('/setup/schedule')}>
-        Continue
+        Approve schedule
       </Button>
       <p className="text-2xs text-muted">
         Enabled once matching finishes. Nothing is saved to the care record until you sign the

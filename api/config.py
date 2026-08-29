@@ -48,10 +48,36 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     resend_from: str = ""
 
+    # SMTP. Preferred over Resend when set, because Resend's shared sandbox
+    # domain only delivers to the account holder — a caregiver typing their own
+    # address would never get the code. A Gmail app password reaches anyone.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
+    # WhatsApp Cloud API. The way to real phone OTP in India today: it is not
+    # SMS, so TRAI's DLT registration does not apply and there is no multi-day
+    # wait for a sender header. TRD §9 already puts WhatsApp first on the
+    # escalation ladder, so this is the same credential that lane needs.
+    whatsapp_token: str = ""
+    whatsapp_phone_id: str = ""
+    whatsapp_otp_template: str = "otp_verification"
+    whatsapp_otp_lang: str = "en"
+    # Meta's authentication templates usually carry a copy-code button, and the
+    # button needs its own component or the send fails on a parameter-count
+    # mismatch. Flip this to match whatever template you actually got approved.
+    whatsapp_otp_has_button: bool = False
+
     # Demo fallback for un-DLT-registered Indian A2P SMS: these numbers get a
     # fixed code and no carrier hop. Every other step — hashing, expiry, attempt
     # counting, session issue — runs exactly as in production.
     dev_otp_bypass_numbers: str = ""
+    # Same escape hatch for email. Without a Resend key nothing can be
+    # delivered, and steps 3-4 gate the Continue button — so with neither key
+    # nor bypass, signup is not completable at all.
+    dev_otp_bypass_emails: str = ""
     dev_otp_bypass_code: str = "424242"
 
     @field_validator("otp_pepper")
@@ -69,12 +95,24 @@ class Settings(BaseSettings):
         return {n.strip() for n in self.dev_otp_bypass_numbers.split(",") if n.strip()}
 
     @property
+    def bypass_emails(self) -> set[str]:
+        return {e.strip().lower() for e in self.dev_otp_bypass_emails.split(",") if e.strip()}
+
+    @property
     def sms_configured(self) -> bool:
         return bool(self.twilio_account_sid and self.twilio_auth_token and self.twilio_number)
 
     @property
+    def whatsapp_configured(self) -> bool:
+        return bool(self.whatsapp_token and self.whatsapp_phone_id)
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_user and self.smtp_password)
+
+    @property
     def email_configured(self) -> bool:
-        return bool(self.resend_api_key and self.resend_from)
+        return self.smtp_configured or bool(self.resend_api_key and self.resend_from)
 
 
 @lru_cache

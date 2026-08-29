@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { LogoutButton } from '../auth/LogoutButton'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -128,7 +130,7 @@ export default function Settings() {
         <Stated
           label="Phone"
           value={
-            <a href={`tel:${patient.phone_e164}`} className="font-semibold underline">
+            <a href={`tel:${patient.phone_e164}`} className="font-semibold break-all underline">
               {patient.phone_e164}
             </a>
           }
@@ -163,9 +165,9 @@ export default function Settings() {
 
         <div className="text-sm text-muted-strong">
           The full record — conditions, allergies, every medicine —{' '}
-          <a href="/record" className="underline">
+          <Link to="/record" className="underline">
             is on the care record
-          </a>
+          </Link>
           .
         </div>
       </Card>
@@ -193,8 +195,8 @@ export default function Settings() {
               Nothing is called about until you approve the schedule.
             </div>
             <Row>
-              <Button variant="outline" href="/setup/schedule">
-                Review and sign off the schedule
+              <Button variant="outline" href="/medicines/edit">
+                Review the schedule
               </Button>
             </Row>
           </>
@@ -376,6 +378,11 @@ export default function Settings() {
         Every value on this screen is read from the care record. Apart from the pause switch
         above, which holds only while this screen is open, nothing here changes anything.
       </p>
+
+      {/* Phone has no sidebar, so this is the only way out of the session. */}
+      <div className="lg:hidden">
+        <LogoutButton className="justify-center border border-line" />
+      </div>
     </div>
   )
 }
@@ -387,7 +394,7 @@ function Stated({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Row className="flex-wrap gap-2">
       <span className="min-w-0 flex-1 text-sm text-muted-strong">{label}</span>
-      <span className="text-right text-md font-semibold break-words">{value}</span>
+      <span className="text-right text-md font-semibold break-all">{value}</span>
     </Row>
   )
 }

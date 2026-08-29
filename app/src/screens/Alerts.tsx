@@ -298,7 +298,7 @@ function AlertRow({
   const status = escalation.delivery_status
 
   return (
-    <Card emphasis={escalation.level === 'P1' ? 'alert' : 'none'} className="gap-2">
+    <Card emphasis={escalation.level === 'P1' ? 'danger' : 'none'} className="gap-2">
       <Row className="flex-wrap gap-2">
         <Tag outline={escalation.level !== 'P1'} tone={escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'}>{escalation.level}</Tag>
         <Label>why this was flagged</Label>

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { Button, Card, Chip, Divider, Label, Row, Tag } from '../../ui'
-import { useSetupDraft } from '../../setup/store'
+import { toE164, useSetupDraft } from '../../setup/store'
+import { ApiError, authApi } from '../../api/client'
 
 /**
  * Wireframe 1E.2 / 2D.2 — the last gate before anything dials.
@@ -36,12 +37,66 @@ const CONSENTS = [
 
 export default function Consent() {
   const navigate = useNavigate()
-  const { draft, patch } = useSetupDraft()
+  const { draft, patch, reset } = useSetupDraft()
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  /** Set the instant the write succeeds, so the FR-4 gate below stops applying.
+   *  reset() empties the draft, which would otherwise make `scheduleConfirmed`
+   *  false and bounce the caregiver back to the schedule they just signed off. */
+  const [submitted, setSubmitted] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  /**
+   * The moment the draft stops being a draft.
+   *
+   * Until now everything the caregiver typed has lived in localStorage — three
+   * minutes of it — and nothing had ever posted it. A failure here must leave
+   * all of that intact and offer another go; wiping the draft on a network blip
+   * would cost them the whole of onboarding.
+   */
+  const finish = async () => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await authApi.post('/app/onboarding', {
+        // The draft has no field for the caregiver's own name — screen 1b asks
+        // for the parent's, and only for the caregiver's *relation* to them.
+        // Sent empty so the API's COALESCE leaves whatever is on record alone.
+        caregiver_name: '',
+        relation: draft.relation,
+        parent_name: draft.parentName,
+        honorific: draft.honorific || null,
+        parent_phone: toE164(draft.parentPhone) ?? draft.parentPhone,
+        language: draft.language || 'hi-IN',
+        age: draft.age ? Number(draft.age) : null,
+        conditions: draft.conditions,
+        allergies: draft.allergies,
+        doctor_name: draft.doctorName || null,
+        doctor_phone: draft.doctorPhone || null,
+        address: draft.address || null,
+        meal_times: draft.mealTimes,
+        medicines: draft.medicines.map((m) => ({
+          name: m.name,
+          dose: m.dose,
+          slots: m.slots,
+          with_food: m.with_food,
+          is_priority: m.is_priority,
+        })),
+        consents: draft.consents,
+      })
+      setSubmitted(true)
+      reset()
+      navigate('/home', { replace: true })
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : 'Could not save. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // FR-4: this screen must be unreachable without a signed-off schedule — including by
   // browser Forward or a typed URL, not only by the disabled button on 1e.
-  if (!draft.scheduleConfirmed) return <Navigate to="/setup/schedule" replace />
+  if (!draft.scheduleConfirmed && !submitted) return <Navigate to="/setup/schedule" replace />
 
   const name = draft.parentName.trim() || 'your parent'
   const address = `${name}${draft.honorific ? `-${draft.honorific}` : ''}`
@@ -63,8 +118,8 @@ export default function Consent() {
         >
           &larr;
         </button>
-        <h1 className="text-xl font-bold">Before we call {name}</h1>
-        <Label className="ml-auto">last step</Label>
+        <h1 className="min-w-0 flex-1 text-lg font-bold sm:text-xl">Before we call {name}</h1>
+        <Label className="shrink-0">4 / 4</Label>
       </header>
 
       <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr] lg:items-start">
@@ -154,12 +209,17 @@ export default function Consent() {
 
           <div className="sticky bottom-0 z-10 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-14px_18px_-14px_rgb(26_23_18/0.18)]">
             <Button
-              disabled={!ready}
-              onClick={() => navigate('/home')}
+              disabled={!ready || saving}
+              onClick={() => void finish()}
               className="w-full"
             >
-              Continue on the app
+              {saving ? 'Saving…' : 'Continue on the app'}
             </Button>
+            {saveError && (
+              <p role="alert" aria-live="polite" className="text-center text-sm font-semibold">
+                {saveError}
+              </p>
+            )}
             {!ready && (
               <span className="text-center text-sm text-muted">
                 {!optionChosen
@@ -293,7 +353,7 @@ function TimeSheet({
         role="dialog"
         aria-modal="true"
         aria-label="Pick a time for the intro call"
-        className="relative flex max-h-[80vh] w-full max-w-md flex-col gap-3 overflow-auto rounded-t-2xl border border-line-strong bg-paper p-4 sm:rounded-2xl"
+        className="relative flex max-h-[80dvh] w-full max-w-md flex-col gap-3 overflow-auto rounded-t-2xl border border-line-strong bg-paper p-4 sm:rounded-2xl"
       >
         <div className="mx-auto h-1 w-8 rounded bg-line-strong sm:hidden" />
         <Row>
@@ -319,7 +379,7 @@ function TimeSheet({
             No slots left inside the call window today — try tomorrow.
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {slots.map((s) => {
               const iso = s.toISOString()
               return (

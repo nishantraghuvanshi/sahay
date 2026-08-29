@@ -153,6 +153,9 @@ export default function Observations() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+      <Link to="/home" className="text-sm font-semibold text-muted-strong lg:hidden">
+        ← Home
+      </Link>
       {/* ------------------------------------------------------ what this screen is */}
       <Card className="gap-1.5">
         <Label>What she said</Label>

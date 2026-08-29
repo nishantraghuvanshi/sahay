@@ -9,6 +9,21 @@
  */
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '/mock'
 
+/**
+ * Auth and onboarding never mock. `API_BASE` can sit on `/mock` all it likes —
+ * a login that pretends is exactly what this replaced — so these calls have
+ * their own base, empty by default so they go same-origin through the dev proxy
+ * in vite.config.ts and the session cookie stays SameSite=Lax.
+ */
+export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE ?? ''
+
+/**
+ * VITE_DEV_MODE=true fakes a signed-in caregiver, seeds the onboarding draft with
+ * dummy data and opens straight on /setup/prescription. Gated on the Vite dev
+ * build so a stray env var can never switch it on in production.
+ */
+export const DEV_MODE = import.meta.env.DEV && import.meta.env.VITE_DEV_MODE === 'true'
+
 /** Poll interval for screens that must visibly change while a call is happening. */
 export const LIVE_POLL_MS = 5000
 

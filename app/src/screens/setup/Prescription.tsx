@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { seedDevDraftOnce } from '../../setup/devSeed'
 import { Bar, Button, Card, Label, Placeholder, Row, Tag } from '../../ui'
 import { useSetupDraft } from '../../setup/store'
 import type { DraftFile } from '../../setup/store'
@@ -56,6 +57,9 @@ export default function Prescription() {
   const cameraInput = useRef<HTMLInputElement | null>(null)
   const galleryInput = useRef<HTMLInputElement | null>(null)
   const filesInput = useRef<HTMLInputElement | null>(null)
+
+  // Dev mode: fill the parent step so the flow past this screen has data to post.
+  useEffect(() => seedDevDraftOnce(patch), [patch])
 
   useEffect(() => {
     const pending = timers.current
@@ -130,18 +134,18 @@ export default function Prescription() {
   const files = draft.files
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-3 p-3 sm:p-5">
+    <section className="mx-auto flex min-h-full max-w-5xl flex-col gap-3 p-4 sm:p-5">
       <Row>
         <button
           type="button"
           onClick={() => navigate('/setup/parent')}
           aria-label="Back"
-          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-lg text-muted"
+          className="-ml-1 grid size-11 shrink-0 place-items-center rounded-md text-lg text-muted"
         >
           ←
         </button>
         <h1 className="flex-1 text-lg font-bold">Add prescription</h1>
-        <Label>2/3</Label>
+        <Label>2 / 4</Label>
       </Row>
 
       {/* Hidden inputs — the visible controls are the buttons below. `capture` asks a phone
@@ -213,7 +217,7 @@ export default function Prescription() {
           </div>
 
           {/* The three ways in the client asked for. Same queue behind each. */}
-          <Row className="gap-2">
+          <Row className="flex-wrap gap-2">
             <Button
               variant="outline"
               className="flex-1"
@@ -284,7 +288,7 @@ export default function Prescription() {
                     type="button"
                     onClick={() => removeFile(f.id)}
                     aria-label={`Remove ${f.name}`}
-                    className="grid size-7 shrink-0 place-items-center rounded-md text-base text-muted"
+                    className="grid size-11 shrink-0 place-items-center rounded-md text-base text-muted"
                   >
                     ✕
                   </button>

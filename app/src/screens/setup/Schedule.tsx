@@ -110,16 +110,14 @@ export default function Schedule() {
       <header className="flex items-center gap-2 border-b border-line bg-surface px-3 py-2.5">
         <button
           type="button"
-          onClick={() => navigate('/setup/prescription')}
+          onClick={() => navigate('/setup/analysing')}
           aria-label="Back"
           className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           ←
         </button>
         <h1 className="text-md font-bold">Review schedule</h1>
-        <span className="ml-auto">
-          <Chip>Calendar</Chip>
-        </span>
+        <Label className="ml-auto">3 / 4</Label>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">

@@ -1,0 +1,436 @@
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import clsx from 'clsx'
+import { Button, Card, Label, Row, Tag } from '../ui'
+import { isEmail, isOtp, toE164, useSetupDraft } from './store'
+import { ApiError } from '../api/client'
+import { auth } from '../auth/api'
+import { SESSION_KEY, useSession } from '../auth/SessionProvider'
+
+/**
+ * The four gated auth steps (wireframe 1a / 2a):
+ *   1 phone → 2 six-digit OTP → 3 email → 4 six-digit OTP
+ *
+ * Extracted from Login.tsx so `/login` and the landing page's 376px auth column
+ * render THE SAME machine. WIREFRAMES.md:501 specifies that the desktop landing
+ * carries "the same four step cards as 1a" — with two copies, the OTP handling,
+ * the server cooldown and the is_new routing would drift apart within a day.
+ *
+ * Real auth. The code is generated, hashed and checked by our own API
+ * (api/auth/), delivered by SMS or email, and dies on use, on expiry, or after
+ * five wrong tries. What is verified is the session cookie the server sets —
+ * not anything this component decides.
+ *
+ * Step 2 creates the session; steps 3-4 attach an email to it. That order is
+ * load-bearing: verifying an email with no session would mint a second,
+ * phoneless identity.
+ */
+
+type StepState = 'done' | 'active' | 'locked'
+
+/** What went wrong, per step. `null` clears on the next attempt. */
+type Err = string | null
+
+function message(err: unknown): string {
+  if (err instanceof ApiError) return err.message
+  return 'Something went wrong. Try again.'
+}
+
+export function AuthSteps({
+  variant = 'page',
+  onDone,
+}: {
+  /** `page` = /login, own scroll and a footer pushed to the bottom.
+   *  `inset` = the landing's auth column, sized by its container. */
+  variant?: 'page' | 'inset'
+  /** Overrides where a completed sign-in lands. Defaults to the deep-link-aware
+   *  destination below, which is what /login wants. */
+  onDone?: () => void
+}) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const queryClient = useQueryClient()
+  const session = useSession()
+  const { draft, patch } = useSetupDraft()
+
+  const [phone, setPhone] = useState(draft.phone)
+  const [phoneOtp, setPhoneOtp] = useState('')
+  const [email, setEmail] = useState(draft.email)
+  const [emailOtp, setEmailOtp] = useState('')
+
+  const [busy, setBusy] = useState<null | 'phone' | 'phoneOtp' | 'email' | 'emailOtp'>(null)
+  const [phoneErr, setPhoneErr] = useState<Err>(null)
+  const [phoneOtpErr, setPhoneOtpErr] = useState<Err>(null)
+  const [emailErr, setEmailErr] = useState<Err>(null)
+  const [emailOtpErr, setEmailOtpErr] = useState<Err>(null)
+
+  /** Cooldown the server handed back. Counting from our own constant would let
+   *  the button re-enable before the server would accept another send. */
+  const [phoneCooldown, setPhoneCooldown] = useState(0)
+  const [emailCooldown, setEmailCooldown] = useState(0)
+
+  /** Remembered from the verify response — decides onboarding vs straight in. */
+  const [isNew, setIsNew] = useState(false)
+
+  // Sent-flags live in the draft: a reload mid-verification must not force a re-send.
+  const phoneOtpSent = draft.phoneOtpSent
+  const emailOtpSent = draft.emailOtpSent
+
+  // The session is the truth about what is verified. The draft only remembers
+  // what was typed, so a reload does not cost the caregiver their progress.
+  const phoneVerified = session?.phone_verified ?? false
+  const emailVerified = session?.email_verified ?? false
+
+  const e164 = toE164(phone)
+  const phoneStep: StepState = phoneVerified ? 'done' : 'active'
+  const phoneOtpStep: StepState = phoneVerified ? 'done' : phoneOtpSent ? 'active' : 'locked'
+  const emailStep: StepState = emailVerified ? 'done' : phoneVerified ? 'active' : 'locked'
+  const emailOtpStep: StepState = emailVerified
+    ? 'done'
+    : emailOtpSent && phoneVerified
+      ? 'active'
+      : 'locked'
+
+  const allDone = phoneVerified && emailVerified
+
+  /** Where signing in should land. A deep link that bounced through the guard
+   *  comes back as `state.from`, so the alert someone opened is still the
+   *  screen they reach. */
+  const destination = () => {
+    if (isNew) return '/setup/parent'
+    const from = (location.state as { from?: string } | null)?.from
+    return from ?? '/home'
+  }
+
+  const finish = () => {
+    if (onDone) return onDone()
+    navigate(destination(), { replace: true })
+  }
+
+  // ------------------------------------------------------------------ actions
+
+  const sendPhone = async () => {
+    if (!e164) return
+    setBusy('phone')
+    setPhoneErr(null)
+    try {
+      const { resend_after_s } = await auth.start('sms', e164)
+      patch({ phone: e164, phoneOtpSent: true })
+      setPhoneCooldown(resend_after_s)
+    } catch (err) {
+      setPhoneErr(message(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const verifyPhone = async (code: string) => {
+    setBusy('phoneOtp')
+    setPhoneOtpErr(null)
+    try {
+      const res = await auth.verify('sms', toE164(draft.phone || phone)!, code)
+      setIsNew(res.is_new)
+      // Seed the cache rather than refetching: the caregiver is already in hand,
+      // and a round trip here is a visible stall on the one step that matters.
+      queryClient.setQueryData(SESSION_KEY, res.caregiver)
+    } catch (err) {
+      setPhoneOtpErr(message(err))
+      setPhoneOtp('')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const sendEmail = async () => {
+    if (!isEmail(email)) return
+    setBusy('email')
+    setEmailErr(null)
+    try {
+      const { resend_after_s } = await auth.start('email', email.trim())
+      patch({ email: email.trim(), emailOtpSent: true })
+      setEmailCooldown(resend_after_s)
+    } catch (err) {
+      setEmailErr(message(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const verifyEmail = async (code: string) => {
+    setBusy('emailOtp')
+    setEmailOtpErr(null)
+    try {
+      const res = await auth.verify('email', draft.email || email.trim(), code)
+      queryClient.setQueryData(SESSION_KEY, res.caregiver)
+    } catch (err) {
+      setEmailOtpErr(message(err))
+      setEmailOtp('')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // A fragment, not a wrapper: `page` relies on being a direct child of the
+  // screen's flex column so the footer's mt-auto reaches the bottom of the page.
+  return (
+    <>
+      <Step n={1} title="Phone number" state={phoneStep} error={phoneErr}>
+        <input
+          inputMode="tel"
+          autoComplete="tel"
+          value={phone}
+          disabled={phoneVerified}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="98765 43210"
+          aria-label="Your phone number"
+          className={inputCls}
+        />
+        {!phoneVerified && (
+          <Row>
+            <Button disabled={!e164 || busy !== null || phoneCooldown > 0} onClick={sendPhone}>
+              {busy === 'phone' ? 'Sending…' : phoneOtpSent ? 'Resend OTP' : 'Send OTP'}
+            </Button>
+            {phone && !e164 && (
+              <span className="text-sm text-muted-strong">Enter the 10-digit mobile number</span>
+            )}
+          </Row>
+        )}
+      </Step>
+
+      <Step n={2} title="Verify phone" state={phoneOtpStep} error={phoneOtpErr}>
+        <OtpInput
+          value={phoneOtp}
+          onChange={setPhoneOtp}
+          disabled={phoneOtpStep !== 'active' || busy === 'phoneOtp'}
+          invalid={phoneOtpErr !== null}
+          label={busy === 'phoneOtp' ? 'Checking…' : 'Code sent to your phone'}
+          onComplete={(code) => {
+            if (isOtp(code)) void verifyPhone(code)
+          }}
+        />
+        {phoneOtpStep === 'active' && (
+          <Resend
+            seconds={phoneCooldown}
+            busy={busy === 'phone'}
+            onResend={() => {
+              setPhoneOtp('')
+              setPhoneOtpErr(null)
+              void sendPhone()
+            }}
+          />
+        )}
+      </Step>
+
+      <Step n={3} title="Email address" state={emailStep} error={emailErr}>
+        <input
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={email}
+          disabled={emailVerified || emailStep === 'locked'}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          aria-label="Your email address"
+          className={inputCls}
+        />
+        {!emailVerified && emailStep === 'active' && (
+          <Button
+            disabled={!isEmail(email) || busy !== null || emailCooldown > 0}
+            onClick={sendEmail}
+          >
+            {busy === 'email' ? 'Sending…' : emailOtpSent ? 'Resend code' : 'Send OTP to email'}
+          </Button>
+        )}
+      </Step>
+
+      <Step n={4} title="Verify email" state={emailOtpStep} error={emailOtpErr}>
+        <OtpInput
+          value={emailOtp}
+          onChange={setEmailOtp}
+          disabled={emailOtpStep !== 'active' || busy === 'emailOtp'}
+          invalid={emailOtpErr !== null}
+          label={busy === 'emailOtp' ? 'Checking…' : 'Code sent to your email'}
+          onComplete={(code) => {
+            if (isOtp(code)) void verifyEmail(code)
+          }}
+        />
+        {emailOtpStep === 'active' && (
+          <Resend
+            seconds={emailCooldown}
+            busy={busy === 'email'}
+            onResend={() => {
+              setEmailOtp('')
+              setEmailOtpErr(null)
+              void sendEmail()
+            }}
+          />
+        )}
+      </Step>
+
+      <div className={clsx('flex flex-col gap-3', variant === 'page' ? 'mt-auto pt-4' : 'pt-1')}>
+        <p className="text-sm leading-relaxed text-muted-strong">
+          By continuing you agree to the Terms and consent to automated voice calls being placed to
+          your parent.
+        </p>
+        <Button disabled={!allDone} onClick={finish}>
+          Continue
+        </Button>
+      </div>
+    </>
+  )
+}
+
+const inputCls =
+  'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md text-ink outline-none placeholder:text-muted-strong focus:border-ink disabled:text-muted-strong'
+
+function Step({
+  n,
+  title,
+  state,
+  error,
+  children,
+}: {
+  n: number
+  title: string
+  state: StepState
+  error?: Err
+  children: React.ReactNode
+}) {
+  return (
+    <Card
+      emphasis={state === 'active' ? 'border' : 'none'}
+      className={clsx('gap-2', state === 'locked' && 'opacity-60')}
+      aria-disabled={state === 'locked'}
+    >
+      <Row>
+        {state === 'done' ? <Tag>{n}</Tag> : <Tag outline>{n}</Tag>}
+        <Label className="flex-1">{title}</Label>
+        {state === 'done' ? (
+          <span className="text-sm font-semibold">verified</span>
+        ) : state === 'locked' ? (
+          <span className="text-sm text-muted">locked</span>
+        ) : null}
+      </Row>
+      {children}
+      {error && (
+        // aria-live so the failure is announced, not just drawn — the caregiver
+        // may well be looking at their phone's lock screen, not at this.
+        <p role="alert" aria-live="polite" className="text-sm font-semibold text-ink">
+          {error}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+/** Six single-character boxes, as drawn. Paste of a whole code works too. */
+function OtpInput({
+  value,
+  onChange,
+  onComplete,
+  disabled,
+  invalid,
+  label,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onComplete: (v: string) => void
+  disabled?: boolean
+  invalid?: boolean
+  label: string
+}) {
+  const refs = useRef<(HTMLInputElement | null)[]>([])
+  const chars = value.padEnd(6, ' ').slice(0, 6).split('')
+
+  const set = (i: number, char: string) => {
+    const digits = char.replace(/\D/g, '')
+    if (!digits) return
+    const next = (value.padEnd(6, ' ').slice(0, i) + digits + value.slice(i + digits.length))
+      .replace(/\s/g, '')
+      .slice(0, 6)
+    onChange(next)
+    const focus = Math.min(i + digits.length, 5)
+    refs.current[focus]?.focus()
+    if (next.length === 6) onComplete(next)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-1.5" role="group" aria-label={label}>
+        {chars.map((c, i) => (
+          <input
+            key={i}
+            ref={(el) => {
+              refs.current[i] = el
+            }}
+            value={c.trim()}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            aria-label={`${label}, digit ${i + 1}`}
+            onChange={(e) => set(i, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Backspace') return
+              e.preventDefault()
+              if (c.trim()) {
+                // clear this box only — the digits after it survive
+                onChange((value.slice(0, i) + ' ' + value.slice(i + 1)).trimEnd())
+              } else if (i > 0) {
+                onChange((value.slice(0, i - 1) + ' ' + value.slice(i)).trimEnd())
+                refs.current[i - 1]?.focus()
+              }
+            }}
+            className={clsx(
+              'min-w-0 flex-1 rounded-md border bg-paper py-2 text-center text-lg font-semibold outline-none focus:border-ink disabled:bg-surface',
+              // A wrong code has to look wrong. Weight, not colour — the rest of
+              // this UI reads in greyscale and so must this.
+              invalid ? 'border-[1.5px] border-ink' : 'border-line-strong',
+            )}
+          />
+        ))}
+      </div>
+      <span className="text-sm text-muted-strong">{label}</span>
+    </div>
+  )
+}
+
+/** Counts down the server's own cooldown, so the two cannot drift apart. */
+function Resend({
+  seconds,
+  busy,
+  onResend,
+}: {
+  seconds: number
+  busy?: boolean
+  onResend: () => void
+}) {
+  const [left, setLeft] = useState(seconds)
+
+  useEffect(() => setLeft(seconds), [seconds])
+
+  useEffect(() => {
+    if (left <= 0) return
+    const t = setTimeout(() => setLeft((n) => n - 1), 1000)
+    return () => clearTimeout(t)
+  }, [left])
+
+  return (
+    <Row>
+      {left > 0 ? (
+        <span className="text-sm text-muted">Resend in 0:{String(left).padStart(2, '0')}</span>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          className="text-sm font-semibold underline disabled:opacity-50"
+          onClick={onResend}
+        >
+          {busy ? 'Sending…' : 'Resend code'}
+        </button>
+      )}
+    </Row>
+  )
+}

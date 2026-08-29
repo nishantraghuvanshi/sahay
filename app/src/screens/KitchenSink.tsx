@@ -90,7 +90,7 @@ export default function KitchenSink() {
       </Section>
 
       <Section title="Fields, bars, placeholder">
-        <Field value="+91 98765 43210" />
+        <Field value="98765 43210" />
         <Field placeholder="rohit@gmail.com" />
         <Bar width="80%" />
         <Bar width="200px" fill={0.42} />

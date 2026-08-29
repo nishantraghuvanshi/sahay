@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
+import { Link } from 'react-router-dom'
 import type { DoseStatus, Severity } from '../api/types'
 
 /**
@@ -13,11 +14,20 @@ import type { DoseStatus, Severity } from '../api/types'
 
 type Div = { className?: string; children?: ReactNode }
 
+export type CardEmphasis = 'none' | 'border' | 'rule' | 'danger'
+
 export function Card({
   className,
   children,
   emphasis,
-}: Div & { emphasis?: 'none' | 'border' | 'rule' | 'danger' }) {
+}: Div & { emphasis?: CardEmphasis }) {
+  /**
+   * Anything that is not one of the three emphases falls back to the default card.
+   * Without this the fallback was `!emphasis || emphasis === 'none'`, so an unrecognised
+   * value matched no branch at all and the card rendered with no ground, no border and
+   * no shadow — which is exactly what happened to the P1 alert card on /alerts.
+   */
+  const marked = emphasis === 'border' || emphasis === 'rule' || emphasis === 'danger'
   return (
     <div
       className={clsx(
@@ -27,8 +37,7 @@ export function Card({
           'border-line-strong border-l-[4px] border-l-accent bg-surface shadow-[var(--shadow-card)]',
         emphasis === 'danger' &&
           'border-danger/35 border-l-[4px] border-l-danger bg-danger-soft shadow-[var(--shadow-card)]',
-        (!emphasis || emphasis === 'none') &&
-          'border-line-strong bg-surface shadow-[var(--shadow-card)]',
+        !marked && 'border-line-strong bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
     >
@@ -67,11 +76,12 @@ export function Chip({
       {...(onClick && on !== undefined ? { 'aria-pressed': on } : {})}
       onClick={onClick}
       className={clsx(
-        'inline-flex min-h-[34px] items-center rounded-full border px-3.5 py-1 text-xs font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 ease-[var(--ease-out)]',
+        'inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 ease-[var(--ease-out)]',
         on
           ? 'border-ink bg-ink text-paper'
           : 'border-line-strong bg-paper text-ink hover:border-ink',
         onClick && 'active:scale-[0.97]',
+        onClick ? 'min-h-[40px]' : 'min-h-[34px]',
         className,
       )}
     >
@@ -125,20 +135,39 @@ export function Button({
   onClick?: () => void
   href?: string
 }) {
+  /**
+   * Warm Inert: a gated button keeps its place on a warm `fill` ground with readable
+   * `muted-strong` text, never a 40%-opacity ghost. The reason it is gated is not this
+   * component's job — it belongs beside the button, in plain text, on the screen.
+   * The transparent border lives in the base so every variant and state is the same size.
+   */
   const cls = clsx(
-    'inline-flex min-h-[44px] items-center justify-center rounded-full px-5 py-2.5 text-center text-sm font-semibold transition-[transform,background-color,box-shadow,border-color] duration-150 ease-[var(--ease-out)]',
+    // The base carries the border WIDTH only. Every branch below sets its own
+    // border-COLOR, so exactly one border-color utility is ever in play — putting a
+    // default colour here instead loses to nothing and silently erases the outline
+    // variant's ink hairline, since Tailwind resolves the conflict by stylesheet
+    // order, not by the order of these arguments.
+    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-[1.5px] px-4 py-2.5 text-center text-sm font-semibold sm:px-5 transition-[transform,background-color,box-shadow,border-color] duration-150 ease-[var(--ease-out)]',
     !disabled && 'active:scale-[0.98]',
-    variant === 'primary' && 'bg-ink text-paper hover:bg-ink-soft',
-    variant === 'accent' && 'bg-accent text-white hover:bg-accent-2',
-    variant === 'outline' && 'border-[1.5px] border-ink bg-transparent text-ink hover:bg-ink/[0.05]',
-    disabled && 'cursor-not-allowed opacity-40',
+    !disabled && variant === 'primary' && 'border-transparent bg-ink text-paper hover:bg-ink-soft',
+    !disabled && variant === 'accent' && 'border-transparent bg-accent text-white hover:bg-accent-2',
+    !disabled &&
+      variant === 'outline' &&
+      'border-ink bg-transparent text-ink hover:bg-ink/[0.05]',
+    disabled && 'cursor-not-allowed border-transparent bg-fill text-muted-strong',
     className,
   )
   if (href && !disabled) {
-    return (
+    // In-app paths go through the router; tel:/mailto:/external stay plain anchors.
+    const external = /^(https?:|tel:|mailto:)/.test(href)
+    return external ? (
       <a href={href} className={cls}>
         {children}
       </a>
+    ) : (
+      <Link to={href} className={cls}>
+        {children}
+      </Link>
     )
   }
   return (
@@ -284,8 +313,8 @@ export function SeverityChip({ severity }: { severity: Severity }) {
 }
 
 /** Upcoming / neutral dot for timeline rows. */
-export function Dot({ kind, tone = 'ink' }: { kind: 'filled' | 'hollow' | 'empty'; tone?: DotTone }) {
-  return <span className={dotClass(kind, tone)} />
+export function Dot({ kind, tone = 'ink', className }: { kind: 'filled' | 'hollow' | 'empty'; tone?: DotTone; className?: string }) {
+  return <span className={clsx(dotClass(kind, tone), className)} />
 }
 
 /* ------------------------------------------------------------ page states */

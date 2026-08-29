@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import clsx from 'clsx'
 import {
   Bar,
@@ -226,7 +226,9 @@ export default function MedicinesEdit() {
   const navigate = useNavigate()
   const record = useCareRecord()
 
-  const [tab, setTab] = useState<'edit' | 'upload'>('edit')
+  const [params] = useSearchParams()
+  // Calendar's two CTAs land here: one on the list, one on the uploader (1g).
+  const [tab, setTab] = useState<'edit' | 'upload'>(params.get('tab') === 'upload' ? 'upload' : 'edit')
 
   /** The record as it was read. The diff — and therefore the consent — is against this. */
   const [baseline, setBaseline] = useState<Medication[] | null>(null)
@@ -589,7 +591,7 @@ export default function MedicinesEdit() {
             </div>
 
             {/* The same three ways in as onboarding — one uploader behind all of them. */}
-            <Row className="gap-2">
+            <Row className="flex-wrap gap-2">
               <Button variant="outline" className="flex-1" onClick={addFile}>
                 Camera
               </Button>
@@ -656,10 +658,9 @@ export default function MedicinesEdit() {
       )}
 
       {/* ------------------------------------------------------- the gate, pinned */}
-      {/* Negative margins bleed through AppShell's <main> padding (p-3 / p-5 at 900px) so the
-          footer sits flush on the scrollport edge. The bottom padding is the safe-area max the
-          sibling screens learned the hard way — without it the CTA hides under the home bar. */}
-      <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 flex flex-col gap-2.5 border-t border-line bg-surface px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] min-[900px]:-mx-5 min-[900px]:-mb-5 min-[900px]:px-5">
+      {/* Negative margins bleed through AppShell's <main> padding (p-4, p-6 from lg) so the
+          footer sits flush on the scrollport edge. The tab bar already reserves the safe area. */}
+      <footer className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-col gap-2.5 border-t border-line bg-surface px-4 pt-3 pb-3 lg:-mx-6 lg:-mb-6 lg:px-6">
         <Card emphasis="rule">
           <div className="flex items-start gap-2.5">
             <input

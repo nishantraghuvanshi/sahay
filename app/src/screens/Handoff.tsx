@@ -139,7 +139,7 @@ function BelowFold({ title, children }: { title: string; children: ReactNode }) 
  */
 function Notice({ title, body, aside }: { title: string; body: string; aside?: string }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-[430px] flex-col justify-center bg-paper px-6 py-10">
+    <main className="mx-auto flex min-h-[100dvh] max-w-[430px] flex-col justify-center bg-paper px-6 py-10">
       <h1 className="text-[22px] leading-[28px] font-bold">{title}</h1>
       <p className="mt-3 text-[14px] leading-[21px]">{body}</p>
       {aside && <p className="mt-4 text-[11px] leading-[16px] text-muted-strong">{aside}</p>}
@@ -235,7 +235,7 @@ function Record({ view }: { view: HandoffView }) {
   const captured = Math.round(intake.completeness * 12)
 
   return (
-    <main className="mx-auto min-h-screen max-w-[430px] bg-paper px-4 pb-10 text-ink">
+    <main className="mx-auto min-h-[100dvh] max-w-[430px] bg-paper px-4 pb-10 text-ink">
       {/* Why a stranger is holding a stranger's medical record. */}
       <header className="border-b border-line py-[9px]">
         <p className="text-[10px] leading-[13px] text-muted-strong">
@@ -266,7 +266,7 @@ function Record({ view }: { view: HandoffView }) {
         </p>
       </section>
 
-      <dl className="mt-2 grid grid-cols-3 gap-x-2 rounded-md border border-line-strong px-3 py-2">
+      <dl className="mt-2 grid grid-cols-1 gap-x-2 gap-y-1 rounded-md min-[360px]:grid-cols-3 border border-line-strong px-3 py-2">
         <div>
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Started

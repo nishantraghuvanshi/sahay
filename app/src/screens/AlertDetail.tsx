@@ -290,9 +290,12 @@ export default function AlertDetail() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
       {/* -------------------------------------------------------------- header */}
-      <Row>
+      <Row className="flex-wrap gap-x-3">
         <Link to="/alerts" className="text-sm font-semibold underline">
           ‹ All alerts
+        </Link>
+        <Link to="/observations" className="ml-auto text-sm font-semibold underline">
+          What she said ›
         </Link>
       </Row>
 
@@ -503,7 +506,7 @@ export default function AlertDetail() {
               Call {name} now
             </Button>
 
-            <Row className="gap-2">
+            <Row className="flex-col items-stretch gap-2 sm:flex-row">
               <Button
                 variant="outline"
                 className="min-w-0 flex-1"
