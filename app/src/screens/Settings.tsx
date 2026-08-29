@@ -100,10 +100,10 @@ export default function Settings() {
       {/* --------------------------------------------------------------- header */}
       <Card className="gap-2">
         <Label>Settings</Label>
-        <h1 className="text-[19px] leading-tight font-bold break-words">
+        <h1 className="text-xl leading-tight font-bold break-words">
           How {spokenName}&rsquo;s calls are set up
         </h1>
-        <div className="text-[12px] text-muted-strong">
+        <div className="text-base text-muted-strong">
           This is what the care record says today. Most of it is changed in setup for now, so it
           is shown here as it stands rather than as something to edit.
         </div>
@@ -135,8 +135,8 @@ export default function Settings() {
         />
         <Divider />
         <div className="flex flex-col gap-1">
-          <span className="text-[11px] text-muted-strong">Address</span>
-          <span className="text-[13px] leading-snug break-words">
+          <span className="text-sm text-muted-strong">Address</span>
+          <span className="text-md leading-snug break-words">
             {patient.address_text ?? 'No address recorded.'}
           </span>
         </div>
@@ -161,7 +161,7 @@ export default function Settings() {
           }
         />
 
-        <div className="text-[11px] text-muted-strong">
+        <div className="text-sm text-muted-strong">
           The full record — conditions, allergies, every medicine —{' '}
           <a href="/record" className="underline">
             is on the care record
@@ -181,15 +181,15 @@ export default function Settings() {
         </Row>
 
         {signedOffAt ? (
-          <div className="text-[13px] font-semibold">
+          <div className="text-md font-semibold">
             Schedule signed off on {formatDateTime(signedOffAt)}
           </div>
         ) : (
           <>
-            <div className="text-[15px] leading-snug font-bold">
+            <div className="text-lg leading-snug font-bold">
               Not signed off — no call will be placed.
             </div>
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-sm text-muted-strong">
               Nothing is called about until you approve the schedule.
             </div>
             <Row>
@@ -205,21 +205,21 @@ export default function Settings() {
         {/* Call window — derived from the dose times, and labelled as derived. There is no
             call-window column, and inventing one would make this screen unverifiable. */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] text-muted-strong">Call window</span>
+          <span className="text-sm text-muted-strong">Call window</span>
           {windowStart ? (
             <>
               <Row className="flex-wrap gap-2">
                 <Field value={windowStart} className="w-[84px] text-center" />
-                <span className="text-[12px] text-muted">to</span>
+                <span className="text-base text-muted">to</span>
                 <Field value={windowEnd} className="w-[84px] text-center" />
               </Row>
-              <span className="text-[11px] text-muted-strong">
+              <span className="text-sm text-muted-strong">
                 Not a setting of its own — the agent calls at the dose times, so the window is the
                 first and last of them. Change a time and the window moves with it.
               </span>
             </>
           ) : (
-            <span className="text-[12px] text-muted-strong">
+            <span className="text-base text-muted-strong">
               No dose times yet, so there is nothing to call about.
             </span>
           )}
@@ -228,7 +228,7 @@ export default function Settings() {
         <Divider />
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] text-muted-strong">Meal times</span>
+          <span className="text-sm text-muted-strong">Meal times</span>
           {mealTimes.length > 0 ? (
             <Row className="flex-wrap gap-2">
               {mealTimes.map(([meal, time]) => (
@@ -238,7 +238,7 @@ export default function Settings() {
               ))}
             </Row>
           ) : (
-            <span className="text-[12px] text-muted-strong">
+            <span className="text-base text-muted-strong">
               None recorded. Before-food and after-food doses are timed from the slot alone.
             </span>
           )}
@@ -254,7 +254,7 @@ export default function Settings() {
           <Tag outline>{paused ? 'paused here' : 'calling'}</Tag>
         </Row>
 
-        <div className="text-[13px] leading-snug font-semibold">
+        <div className="text-md leading-snug font-semibold">
           {paused
             ? `We are not calling ${patient.name} while this is paused.`
             : `We call ${patient.name} at each dose time.`}
@@ -270,7 +270,7 @@ export default function Settings() {
           </Button>
         </Row>
 
-        <div className="text-[11px] leading-relaxed text-muted-strong">
+        <div className="text-sm leading-relaxed text-muted-strong">
           This switch holds only while this screen is open. It is not written to the record yet,
           so if you reload the page it goes back to{' '}
           <span className="font-semibold">
@@ -280,7 +280,7 @@ export default function Settings() {
         </div>
 
         {pauseDiffersFromRecord && (
-          <div className="text-[11px] leading-relaxed font-semibold">
+          <div className="text-sm leading-relaxed font-semibold">
             Careful: the record still says{' '}
             {storedPaused ? 'calls are paused' : 'calls are running'}. To stop calls for real
             today, tell us on the call or by phone.
@@ -289,7 +289,7 @@ export default function Settings() {
 
         <Divider />
 
-        <div className="text-[11px] leading-relaxed text-muted-strong">
+        <div className="text-sm leading-relaxed text-muted-strong">
           {spokenName} can ask us to stop on any call, and we stop straight away — no reason
           needed, no argument from the agent. You are told when that happens.
         </div>
@@ -300,16 +300,16 @@ export default function Settings() {
           words is the only honest option: an empty list would read as "nobody is told". */}
       <Card className="gap-2">
         <Label>Who gets told</Label>
-        <div className="text-[13px] font-semibold break-words">
+        <div className="text-md font-semibold break-words">
           {caregiver.name}
           {caregiver.relationship ? ` · ${caregiver.relationship}` : ''}
         </div>
         <Row className="flex-wrap gap-2">
-          <a href={`tel:${caregiver.phone_e164}`} className="text-[13px] font-semibold underline">
+          <a href={`tel:${caregiver.phone_e164}`} className="text-md font-semibold underline">
             {caregiver.phone_e164}
           </a>
         </Row>
-        <div className="text-[11px] leading-relaxed text-muted-strong">
+        <div className="text-sm leading-relaxed text-muted-strong">
           Everything goes to you. No second contact is stored yet, so nobody else is called or
           messaged when something is wrong — not a sibling, not the doctor. If someone else
           should hear about a red alert, ring them yourself for now.
@@ -350,7 +350,7 @@ export default function Settings() {
       {/* ------------------------------------------------------------- privacy */}
       <Card className="gap-2">
         <Label>Privacy</Label>
-        <div className="flex flex-col gap-2 text-[12px] leading-relaxed">
+        <div className="flex flex-col gap-2 text-base leading-relaxed">
           <div>
             <span className="font-semibold">Calls are recorded and transcribed.</span> That is how
             a dose gets marked taken and how {patient.name}&rsquo;s own words reach you unchanged.
@@ -372,7 +372,7 @@ export default function Settings() {
         </Row>
       </Card>
 
-      <p className="px-1 pb-1 text-[11px] leading-relaxed text-muted-strong">
+      <p className="px-1 pb-1 text-sm leading-relaxed text-muted-strong">
         Every value on this screen is read from the care record. Apart from the pause switch
         above, which holds only while this screen is open, nothing here changes anything.
       </p>
@@ -386,8 +386,8 @@ export default function Settings() {
 function Stated({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Row className="flex-wrap gap-2">
-      <span className="min-w-0 flex-1 text-[11px] text-muted-strong">{label}</span>
-      <span className="text-right text-[13px] font-semibold break-words">{value}</span>
+      <span className="min-w-0 flex-1 text-sm text-muted-strong">{label}</span>
+      <span className="text-right text-md font-semibold break-words">{value}</span>
     </Row>
   )
 }

@@ -136,11 +136,11 @@ export default function Prescription() {
           type="button"
           onClick={() => navigate('/setup/parent')}
           aria-label="Back"
-          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-[15px] text-muted"
+          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-lg text-muted"
         >
           ←
         </button>
-        <h1 className="flex-1 text-[15px] font-bold">Add prescription</h1>
+        <h1 className="flex-1 text-lg font-bold">Add prescription</h1>
         <Label>2/3</Label>
       </Row>
 
@@ -198,11 +198,11 @@ export default function Prescription() {
             <Placeholder
               className={`h-[180px] flex-col gap-2 border-dashed ${dragging ? 'border-ink' : ''}`}
             >
-              <span className="text-[22px] leading-none">▢</span>
-              <span className="text-[12px] font-semibold text-muted-strong">
+              <span className="text-2xl leading-none">▢</span>
+              <span className="text-base font-semibold text-muted-strong">
                 {dragging ? 'Drop to add' : 'Tap to scan, or drop a file'}
               </span>
-              <span className="text-[9px]">JPG · PNG · PDF · up to 10 MB</span>
+              <span className="text-2xs">JPG · PNG · PDF · up to 10 MB</span>
             </Placeholder>
             <button
               type="button"
@@ -237,7 +237,7 @@ export default function Prescription() {
             <Card emphasis="rule" aria-live="polite">
               <Label>Not added</Label>
               {rejected.map((r) => (
-                <span key={r} className="text-[11px] text-muted-strong">
+                <span key={r} className="text-sm text-muted-strong">
                   {r}
                 </span>
               ))}
@@ -250,7 +250,7 @@ export default function Prescription() {
 
           {files.length === 0 && (
             <Card className="border-dashed">
-              <div className="text-[11px] text-muted-strong">
+              <div className="text-sm text-muted-strong">
                 Nothing added yet. A photo of the paper is enough — we read it on the next screen.
               </div>
             </Card>
@@ -269,14 +269,14 @@ export default function Prescription() {
                       className="h-[42px] w-[34px] shrink-0 rounded-md border border-line-strong object-cover"
                     />
                   ) : (
-                    <Placeholder className="h-[42px] w-[34px] shrink-0 text-[9px]">
+                    <Placeholder className="h-[42px] w-[34px] shrink-0 text-2xs">
                       {f.type === 'application/pdf' ? 'pdf' : `pg ${i + 1}`}
                     </Placeholder>
                   )}
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <span className="truncate text-[12px] font-semibold">{f.name}</span>
+                    <span className="truncate text-base font-semibold">{f.name}</span>
                     <Bar fill={f.progress / 100} />
-                    <span className="text-[9.5px] text-muted">
+                    <span className="text-2xs text-muted">
                       {done ? `${mb(f.size)} · read ✓` : `uploading · ${f.progress}%`}
                     </span>
                   </div>
@@ -284,7 +284,7 @@ export default function Prescription() {
                     type="button"
                     onClick={() => removeFile(f.id)}
                     aria-label={`Remove ${f.name}`}
-                    className="grid size-7 shrink-0 place-items-center rounded-md text-[12px] text-muted"
+                    className="grid size-7 shrink-0 place-items-center rounded-md text-base text-muted"
                   >
                     ✕
                   </button>
@@ -296,7 +296,7 @@ export default function Prescription() {
           <Card>
             <Row>
               <Tag outline>tip</Tag>
-              <span className="flex-1 text-[11px] text-muted-strong">
+              <span className="flex-1 text-sm text-muted-strong">
                 Flatten the page and keep dosage lines in frame.
               </span>
             </Row>
@@ -312,9 +312,9 @@ export default function Prescription() {
         Analyse prescription
       </Button>
       {files.some((f) => f.progress < 100) && (
-        <p className="text-center text-[11px] text-muted">Waiting for the upload to finish…</p>
+        <p className="text-center text-sm text-muted">Waiting for the upload to finish…</p>
       )}
-      <p className="text-[10px] text-muted">
+      <p className="text-2xs text-muted">
         Three ways in — camera, gallery, files. The same uploader is reused whenever a new
         prescription arrives.
       </p>

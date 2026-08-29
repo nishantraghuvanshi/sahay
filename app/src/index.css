@@ -1,19 +1,59 @@
 @import 'tailwindcss';
 
-/* Tokens lifted from the wireframes (wireframe/*.dc.html) so the built app and the
-   grey-box frames stay the same visual language. */
+/* Kinvox visual system — "The Record".
+   Palette F (Cornflower & Cream): a cool blue accent on a warm cream ground.
+   Scale follows WIREFRAMES §2.2 — the 11px frames are proportions, not pixel
+   values ("body 11 → 14 … never render the 8.5px .lbl at 8.5px in production"). */
 @theme {
-  --color-ink: #1a1a1a;
-  --color-canvas: #f0eee9;
-  --color-surface: #fafaf8;
+  /* ---- neutrals: warm cream ramp ---- */
+  --color-ink: #1a1712;
+  --color-ink-soft: #3a342c;
+  --color-muted-strong: #5e564a;
+  --color-muted: #8a8070;
+  --color-fill-empty: #cfc3a8;
+  --color-fill: #e9dfcb;
+  --color-line-strong: #dcceb2;
+  --color-line: #eadfc9;
+  --color-canvas: #f9f0e0;
+  --color-surface: #fffcf6;
   --color-paper: #ffffff;
-  --color-line: #e4e4e0;
-  --color-line-strong: #d8d8d4;
-  --color-muted: #8d8d8d;
-  --color-muted-strong: #6d6d6d;
-  --color-fill: #dedede;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* ---- accent: one, and it is not blue by accident ---- */
+  --color-accent: #3674b5;
+  --color-accent-2: #578fca;
+  --color-accent-soft: #e2ecf6;
+
+  /* ---- status: always layered on a mark that already has shape + label ---- */
+  --color-ok: #3674b5;
+  --color-warn: #8a6100;
+  --color-warn-soft: #fdf0ce;
+  --color-danger: #cc3a63;
+  --color-danger-soft: #fbe8ed;
+  --color-highlight: #fada7a;
+
+  /* ---- type ---- */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-deva: 'IBM Plex Sans Devanagari', 'IBM Plex Sans', system-ui, sans-serif;
+
+  --text-2xs: 11px;
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+  --text-3xl: 40px;
+  --text-4xl: 56px;
+
+  /* ---- elevation: two steps, warm-tinted so shadows don't go blue on cream ---- */
+  --shadow-card: 0 1px 2px rgb(26 23 18 / 0.04), 0 4px 12px rgb(26 23 18 / 0.05);
+  --shadow-lift: 0 2px 4px rgb(26 23 18 / 0.05), 0 12px 32px rgb(26 23 18 / 0.09);
+
+  /* ---- motion: slow and settling. No spring, no bounce. ---- */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html,
@@ -27,11 +67,42 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The verbatim quote is the product. Hindi and Marathi set in the same
+   type system as everything around them, not a silent system fallback. */
+:lang(hi),
+:lang(mr) {
+  font-family: var(--font-deva);
+}
+
+/* Times, durations and counts stop jittering as they tick. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One focus ring, everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 /* Tap targets on a phone stay thumb-sized (LANE-C mobile checklist). */
 button,
 a {
   touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

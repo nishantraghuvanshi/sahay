@@ -156,10 +156,10 @@ export default function Observations() {
       {/* ------------------------------------------------------ what this screen is */}
       <Card className="gap-1.5">
         <Label>What she said</Label>
-        <div className="text-[13px] leading-snug font-bold">
+        <div className="text-md leading-snug font-bold">
           Her own words, as she said them.
         </div>
-        <div className="text-[11px] leading-relaxed text-muted-strong">
+        <div className="text-sm leading-relaxed text-muted-strong">
           Every line below is stored exactly as it was heard — nothing is translated,
           shortened, summarised or scored. The words are the record.
         </div>
@@ -252,7 +252,7 @@ function ObservationRow({
       <blockquote
         lang="hi"
         className={clsx(
-          'text-[15px] leading-relaxed break-words hyphens-none whitespace-pre-wrap sm:text-[16px]',
+          'text-lg leading-relaxed break-words hyphens-none whitespace-pre-wrap sm:text-lg',
           observation.severity === 'red' ? 'font-bold' : 'font-semibold',
         )}
       >
@@ -266,13 +266,13 @@ function ObservationRow({
             {observation.call_session_id && (
               <Link
                 to={`/calls/${observation.call_session_id}`}
-                className="text-[11px] font-semibold underline"
+                className="text-sm font-semibold underline"
               >
                 Heard on this call
               </Link>
             )}
             {escalation && (
-              <Link to={`/alerts/${escalation.id}`} className="text-[11px] font-semibold underline">
+              <Link to={`/alerts/${escalation.id}`} className="text-sm font-semibold underline">
                 Escalated to you · {escalation.level}
               </Link>
             )}

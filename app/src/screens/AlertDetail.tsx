@@ -289,26 +289,26 @@ export default function AlertDetail() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
       {/* -------------------------------------------------------------- header */}
       <Row>
-        <Link to="/alerts" className="text-[11px] font-semibold underline">
+        <Link to="/alerts" className="text-sm font-semibold underline">
           ‹ All alerts
         </Link>
       </Row>
 
       <Card emphasis="border" className="gap-2">
         <Row className="flex-wrap gap-2">
-          <Tag>{escalation.level}</Tag>
+          <Tag tone={escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'}>{escalation.level}</Tag>
           <Label className="flex-1">Alert detail</Label>
           {resolvedAt && <Tag outline>resolved</Tag>}
         </Row>
 
         <h1
           lang="hi"
-          className="text-[17px] leading-snug font-bold break-words hyphens-none sm:text-[19px]"
+          className="text-lg leading-snug font-bold break-words hyphens-none sm:text-xl"
         >
           {chiefComplaint ? `“${chiefComplaint}”` : `${escalation.level} alert raised`}
         </h1>
 
-        <div className="text-[11px] leading-relaxed text-muted-strong">
+        <div className="text-sm leading-relaxed text-muted-strong">
           {firedAt ? `${dayLabel(firedAt, now)} · ${clock(firedAt)}` : 'Not yet sent'}
           {call && ` · agent call #${callIndex + 1}`}
           {duration && ` · ${duration}`}
@@ -316,7 +316,7 @@ export default function AlertDetail() {
 
         {call && (
           <Row>
-            <Link to={`/calls/${call.id}`} className="text-[11px] font-semibold underline">
+            <Link to={`/calls/${call.id}`} className="text-sm font-semibold underline">
               Open the whole call
             </Link>
           </Row>
@@ -330,22 +330,22 @@ export default function AlertDetail() {
           <Card emphasis="rule" className="gap-2">
             <Row>
               <Label className="flex-1">Why this was flagged</Label>
-              <Tag>{escalation.level}</Tag>
+              <Tag tone={escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'}>{escalation.level}</Tag>
             </Row>
-            <div className="text-[13px] leading-relaxed font-semibold break-words sm:text-[14px]">
+            <div className="text-md leading-relaxed font-semibold break-words sm:text-md">
               {escalation.reason}
             </div>
             {intakeRecord?.priority_rule && intakeRecord.priority_rule !== escalation.reason && (
-              <div className="text-[12px] leading-relaxed break-words">
+              <div className="text-base leading-relaxed break-words">
                 {intakeRecord.priority_rule}
                 <span className="text-muted-strong"> · stored on the intake record</span>
               </div>
             )}
             <Divider />
-            <div className="text-[11px] leading-relaxed text-muted-strong">
+            <div className="text-sm leading-relaxed text-muted-strong">
               Triggered on the words {name} used. No interpretation, no diagnosis.
             </div>
-            <div className="text-[11px] leading-relaxed text-muted-strong">
+            <div className="text-sm leading-relaxed text-muted-strong">
               That sentence is a stored rule, written before the call and matched exactly as it
               reads. It is not the agent's opinion and it names no condition.
             </div>
@@ -361,7 +361,7 @@ export default function AlertDetail() {
             {intake.isLoading && <LoadingBlock rows={4} />}
 
             {!intake.isLoading && lines.length === 0 && (
-              <div className="text-[12px] text-muted-strong">
+              <div className="text-base text-muted-strong">
                 No transcript was stored for this call. The alert still stands on the rule above.
               </div>
             )}
@@ -379,9 +379,11 @@ export default function AlertDetail() {
                     <span
                       lang="hi"
                       className={clsx(
-                        'min-w-0 flex-1 rounded text-[12.5px] leading-relaxed break-words hyphens-none whitespace-pre-wrap',
+                        'min-w-0 flex-1 rounded text-base leading-relaxed break-words hyphens-none whitespace-pre-wrap',
                         line.agent && !matched && 'text-muted-strong',
-                        matched && 'bg-fill px-1.5 py-0.5 font-bold',
+                        // the line that fired the rule: marigold, with a danger marker.
+                        // was bg-fill — the same grey as a skeleton bar.
+                        matched && 'bg-highlight px-1.5 py-0.5 font-bold shadow-[inset_3px_0_0_var(--color-danger)]',
                       )}
                     >
                       {line.text}
@@ -390,7 +392,7 @@ export default function AlertDetail() {
                   {matched && (
                     <Row className="gap-1.5 pl-1">
                       <Dot kind="filled" />
-                      <span className="text-[10.5px] font-semibold">
+                      <span className="text-xs font-semibold">
                         this line is what the rule matched
                       </span>
                     </Row>
@@ -400,13 +402,13 @@ export default function AlertDetail() {
             })}
 
             {lines.length > shown.lines.length && call && (
-              <Link to={`/calls/${call.id}`} className="text-[11px] font-semibold underline">
+              <Link to={`/calls/${call.id}`} className="text-sm font-semibold underline">
                 Full transcript ›
               </Link>
             )}
 
             {lines.length > 0 && (
-              <div className="text-[10.5px] leading-relaxed text-muted-strong">
+              <div className="text-xs leading-relaxed text-muted-strong">
                 Stored word for word, in the language it was spoken. Nothing here is translated or
                 shortened.
               </div>
@@ -428,7 +430,7 @@ export default function AlertDetail() {
             {intake.isLoading && <LoadingBlock rows={4} />}
             {intake.error && <ErrorBlock error={intake.error} onRetry={() => void intake.refetch()} />}
             {!intake.isLoading && !intake.error && !intakeRecord && (
-              <div className="text-[12px] text-muted-strong">
+              <div className="text-base text-muted-strong">
                 This alert was raised without an intake record.
               </div>
             )}
@@ -436,7 +438,7 @@ export default function AlertDetail() {
             {intakeRecord && (
               <>
                 <Bar fill={intakeRecord.completeness} />
-                <div className="text-[11px] leading-relaxed text-muted-strong">
+                <div className="text-sm leading-relaxed text-muted-strong">
                   {INHERITED_COUNT} of the {INTAKE_FIELD_COUNT} fields came straight from{' '}
                   {name}'s record — the agent never had to ask for them. {ASKED_COUNT} were asked
                   on the call, and the last one is computed by the rule engine. Anyone starting
@@ -457,32 +459,32 @@ export default function AlertDetail() {
                 <Label>Share this record</Label>
                 {handoffLink ? (
                   <>
-                    <div className="text-[11px] leading-relaxed text-muted-strong">
+                    <div className="text-sm leading-relaxed text-muted-strong">
                       A read-only copy of all {INTAKE_FIELD_COUNT} fields. It opens on any phone
                       with no login and nothing to install.
                     </div>
-                    <div className="rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[11px] break-all select-all">
+                    <div className="rounded-md border border-line-strong bg-paper px-2.5 py-2 text-sm break-all select-all">
                       {handoffLink}
                     </div>
                     <Row className="flex-wrap gap-2">
                       <Button variant="outline" onClick={() => void copyHandoffLink(handoffLink)}>
                         {copyState === 'copied' ? 'Copied ✓' : 'Copy link'}
                       </Button>
-                      <span className="text-[11px] text-muted-strong">
+                      <span className="text-sm text-muted-strong">
                         {viewedAt
                           ? `Opened ${dayLabel(viewedAt, now)} ${clock(viewedAt)}`
                           : 'Not opened yet'}
                       </span>
                     </Row>
                     {copyState === 'failed' && (
-                      <div className="text-[11px] font-semibold">
+                      <div className="text-sm font-semibold">
                         This browser would not let us copy. Select the link above and copy it by
                         hand — it is the same link.
                       </div>
                     )}
                   </>
                 ) : (
-                  <div className="text-[11px] leading-relaxed text-muted-strong">
+                  <div className="text-sm leading-relaxed text-muted-strong">
                     No share link has been created for this record yet.
                   </div>
                 )}
@@ -521,7 +523,7 @@ export default function AlertDetail() {
             </Row>
 
             {!escalateNumber && (
-              <div className="text-[10.5px] text-muted-strong">
+              <div className="text-xs text-muted-strong">
                 No number on file for {escalateTo} yet.
               </div>
             )}
@@ -529,7 +531,7 @@ export default function AlertDetail() {
             {resolvedAt ? (
               <Row className="gap-2">
                 <Dot kind="filled" />
-                <span className="flex-1 text-[12px] font-semibold">
+                <span className="flex-1 text-base font-semibold">
                   Marked resolved · {clock(resolvedAt)}
                 </span>
               </Row>
@@ -540,7 +542,7 @@ export default function AlertDetail() {
             )}
 
             <Divider />
-            <div className="text-[10.5px] leading-relaxed text-muted-strong">
+            <div className="text-xs leading-relaxed text-muted-strong">
               These three open your phone's dialler with the number already in it. You press the
               green button — nothing dials on its own.
             </div>
@@ -559,14 +561,14 @@ export default function AlertDetail() {
                     <span className="pt-1">
                       <Dot kind={kind} />
                     </span>
-                    <span className="min-w-0 flex-1 text-[12px] break-words">
+                    <span className="min-w-0 flex-1 text-base break-words">
                       {d.sent_to} · {d.channel}
                     </span>
                     <Label className="shrink-0 text-right">
                       {sent ? clock(sent) : 'pending'}
                     </Label>
                   </Row>
-                  <div className="pl-4 text-[10.5px] text-muted-strong">
+                  <div className="pl-4 text-xs text-muted-strong">
                     {status}
                     {sent && ` · ${dayLabel(sent, now)}`}
                   </div>
@@ -588,8 +590,8 @@ function IntakeFieldRow({ spec, value }: { spec: FieldSpec; value: string | null
   return (
     <div className="flex flex-col gap-1 border-b border-line py-2 last:border-b-0">
       <Row className="items-start gap-2">
-        <span className="w-4 shrink-0 text-[10px] font-bold text-muted tabular-nums">{spec.n}</span>
-        <span className="min-w-0 flex-1 text-[11px] font-semibold">{spec.label}</span>
+        <span className="w-4 shrink-0 text-2xs font-bold text-muted tabular-nums">{spec.n}</span>
+        <span className="min-w-0 flex-1 text-sm font-semibold">{spec.label}</span>
         <span className="shrink-0">
           {/* Filled = the agent had to ask. Outlined = we already held it. */}
           <Tag outline={inherited || spec.provenance === 'computed'}>
@@ -602,14 +604,14 @@ function IntakeFieldRow({ spec, value }: { spec: FieldSpec; value: string | null
           <span
             lang={spec.verbatim ? 'hi' : undefined}
             className={clsx(
-              'block text-[12.5px] leading-relaxed break-words hyphens-none',
+              'block text-base leading-relaxed break-words hyphens-none',
               spec.verbatim && 'font-semibold',
             )}
           >
             {spec.verbatim ? `“${value}”` : value}
           </span>
         ) : (
-          <span className="block text-[12px] text-muted italic">not captured</span>
+          <span className="block text-base text-muted italic">not captured</span>
         )}
       </div>
     </div>
@@ -631,7 +633,7 @@ function NotLoaded({
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
       <ErrorBlock error={error} onRetry={onRetry} />
-      {hint && <div className="px-1 text-[11px] text-muted-strong">{hint}</div>}
+      {hint && <div className="px-1 text-sm text-muted-strong">{hint}</div>}
       <Row>
         <Button variant="outline" onClick={onBack}>
           Back to all alerts

@@ -38,3 +38,4 @@ CLAUDE.md
 
 # graphify knowledge graph — local tooling, rebuilt on demand
 .graphify/
+.gstack/

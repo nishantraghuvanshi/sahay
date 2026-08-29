@@ -45,15 +45,15 @@ export default function Login() {
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-md flex-col gap-3 p-5">
-      <div className="grid size-12 place-items-center rounded-xl bg-ink text-[18px] font-bold text-white">
+      <div className="grid size-12 place-items-center rounded-xl bg-ink text-xl font-bold text-white">
         K
       </div>
-      <h1 className="text-[22px] leading-tight font-bold">
+      <h1 className="text-2xl leading-tight font-bold">
         Keep an eye on
         <br />
         your parent&rsquo;s meds
       </h1>
-      <p className="text-[12px] text-muted-strong">
+      <p className="text-base text-muted-strong">
         We call them. You only hear what matters.
       </p>
 
@@ -77,7 +77,7 @@ export default function Login() {
               {phoneOtpSent ? 'Resend OTP' : 'Send OTP'}
             </Button>
             {phone && !e164 && (
-              <span className="text-[11px] text-muted-strong">
+              <span className="text-sm text-muted-strong">
                 10 digits, or start with +country code
               </span>
             )}
@@ -134,7 +134,7 @@ export default function Login() {
       </Step>
 
       <div className="mt-auto flex flex-col gap-3 pt-4">
-        <p className="text-[10px] leading-relaxed text-muted">
+        <p className="text-2xs leading-relaxed text-muted">
           By continuing you agree to the Terms and consent to automated voice calls being placed to
           your parent.
         </p>
@@ -147,7 +147,7 @@ export default function Login() {
 }
 
 const inputCls =
-  'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[13px] text-ink outline-none placeholder:text-muted focus:border-ink disabled:text-muted-strong'
+  'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md text-ink outline-none placeholder:text-muted focus:border-ink disabled:text-muted-strong'
 
 function Step({
   n,
@@ -170,9 +170,9 @@ function Step({
         {state === 'done' ? <Tag>{n}</Tag> : <Tag outline>{n}</Tag>}
         <Label className="flex-1">{title}</Label>
         {state === 'done' ? (
-          <span className="text-[11px] font-semibold">verified</span>
+          <span className="text-sm font-semibold">verified</span>
         ) : state === 'locked' ? (
-          <span className="text-[11px] text-muted">locked</span>
+          <span className="text-sm text-muted">locked</span>
         ) : null}
       </Row>
       {children}
@@ -236,11 +236,11 @@ function OtpInput({
                 refs.current[i - 1]?.focus()
               }
             }}
-            className="min-w-0 flex-1 rounded-md border border-line-strong bg-paper py-2 text-center text-[15px] font-semibold outline-none focus:border-ink disabled:bg-surface"
+            className="min-w-0 flex-1 rounded-md border border-line-strong bg-paper py-2 text-center text-lg font-semibold outline-none focus:border-ink disabled:bg-surface"
           />
         ))}
       </div>
-      <span className="text-[11px] text-muted-strong">{label}</span>
+      <span className="text-sm text-muted-strong">{label}</span>
     </div>
   )
 }
@@ -256,13 +256,13 @@ function Resend({ onResend }: { onResend: () => void }) {
   return (
     <Row>
       {left > 0 ? (
-        <span className="text-[11px] text-muted">
+        <span className="text-sm text-muted">
           Resend in 0:{String(left).padStart(2, '0')}
         </span>
       ) : (
         <button
           type="button"
-          className="text-[11px] font-semibold underline"
+          className="text-sm font-semibold underline"
           onClick={() => {
             setLeft(24)
             onResend()

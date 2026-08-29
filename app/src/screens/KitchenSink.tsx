@@ -27,8 +27,8 @@ export default function KitchenSink() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 pb-10">
       <header className="flex flex-col gap-1">
-        <h1 className="text-[18px] font-bold">Kitchen sink</h1>
-        <p className="text-[11px] text-muted-strong">
+        <h1 className="text-xl font-bold">Kitchen sink</h1>
+        <p className="text-sm text-muted-strong">
           Primitives ported from the wireframe atoms. Compare side by side with{' '}
           <code>wireframe/*.dc.html</code>. Try <code>?fail=doses</code> and <code>?empty=1</code>.
         </p>
@@ -77,15 +77,15 @@ export default function KitchenSink() {
       <Section title="Cards">
         <Card>
           <Label>Plain</Label>
-          <div className="text-[12px]">Default surface card.</div>
+          <div className="text-base">Default surface card.</div>
         </Card>
         <Card emphasis="border">
           <Label>Emphasis: border</Label>
-          <div className="text-[12px]">The one thing on screen that matters most.</div>
+          <div className="text-base">The one thing on screen that matters most.</div>
         </Card>
         <Card emphasis="rule">
           <Label>Emphasis: left rule</Label>
-          <div className="text-[12px]">Needs attention, but is not the headline.</div>
+          <div className="text-base">Needs attention, but is not the headline.</div>
         </Card>
       </Section>
 
@@ -138,18 +138,18 @@ function MockReadout() {
   return (
     <Card>
       <Row>
-        <span className="text-[13px] font-bold">
+        <span className="text-md font-bold">
           {p.name}
           {p.honorific ? `-${p.honorific}` : ''} · {p.age}
         </span>
         <Tag outline>{p.language}</Tag>
         {p.schedule_signed_off_at ? <Tag>signed off</Tag> : <Tag>not signed off</Tag>}
       </Row>
-      <div className="text-[11px] text-muted-strong">
+      <div className="text-sm text-muted-strong">
         {p.conditions.join(' · ')} — allergies: {p.allergies.join(', ') || 'none recorded'}
       </div>
       <Divider />
-      <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
         <Stat label="medicines" value={record.data!.medications.length} />
         <Stat label="dose events" value={doses.data?.length ?? '…'} />
         <Stat label="observations" value={observations.data?.length ?? '…'} />
@@ -164,13 +164,13 @@ function MockReadout() {
         <>
           <Divider />
           <Label>Escalation reason, rendered literally</Label>
-          <div className="text-[12px] font-semibold">{escalations.data[0].reason}</div>
+          <div className="text-base font-semibold">{escalations.data[0].reason}</div>
         </>
       )}
       {observations.data?.[0] && (
         <>
           <Label>Newest observation, verbatim</Label>
-          <div className="text-[12px]">“{observations.data[0].text}”</div>
+          <div className="text-base">“{observations.data[0].text}”</div>
         </>
       )}
     </Card>
@@ -180,7 +180,7 @@ function MockReadout() {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-md border border-line bg-paper px-2 py-1.5">
-      <div className="text-[15px] font-bold">{value}</div>
+      <div className="text-lg font-bold">{value}</div>
       <Label>{label}</Label>
     </div>
   )

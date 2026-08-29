@@ -225,7 +225,7 @@ export default function Calendar() {
           Today
         </Chip>
         <Chip onClick={() => setSelected(addDays(selected, 7))}>Next week ›</Chip>
-        <span className="ml-auto text-[11px] text-muted-strong">
+        <span className="ml-auto text-sm text-muted-strong">
           {weekDue.length === 0
             ? 'nothing due yet this week'
             : `${weekConfirmed} of ${weekDue.length} confirmed so far this week`}
@@ -247,7 +247,7 @@ export default function Calendar() {
             />
           ))}
         </div>
-        <p className="px-1 text-[10px] text-muted">
+        <p className="px-1 text-2xs text-muted">
           Tap a day to see it below. The figure under each day counts confirmed doses out of the
           doses due that day.
         </p>
@@ -258,12 +258,12 @@ export default function Calendar() {
           out of the grid above it. */}
       <Card className="gap-2">
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-[13px] font-bold">{selectedHeading}</span>
-          <span className="text-[11px] text-muted-strong">
+          <span className="text-md font-bold">{selectedHeading}</span>
+          <span className="text-sm text-muted-strong">
             {selected.toLocaleDateString([], { day: 'numeric', month: 'short' })}
           </span>
           {dayKey(selected) === dayKey(today) && <Tag outline>today</Tag>}
-          <span className="ml-auto text-[11px] font-semibold">
+          <span className="ml-auto text-sm font-semibold">
             {dayTally.total === 0
               ? 'nothing scheduled'
               : dayTally.recorded === 0
@@ -275,7 +275,7 @@ export default function Calendar() {
         <Divider />
 
         {timeline.length === 0 ? (
-          <p className="py-2 text-[12px] text-muted-strong">
+          <p className="py-2 text-base text-muted-strong">
             No doses are scheduled on this day.
           </p>
         ) : (
@@ -283,7 +283,7 @@ export default function Calendar() {
             <div key={group.slot}>
               {i > 0 && <Divider />}
               <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 py-2">
-                <span className="pt-2 text-[10px] font-bold tracking-wide text-muted">
+                <span className="pt-2 text-2xs font-bold tracking-wide text-muted">
                   {slotLabel(group.slot)}
                 </span>
                 <div className="flex min-w-0 flex-col gap-1.5">
@@ -294,8 +294,8 @@ export default function Calendar() {
                       emphasis={group.slot === nextPendingSlot ? 'border' : 'none'}
                     >
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="text-[13px] font-semibold">{dose.medication.name}</span>
-                        <span className="text-[12px] text-muted-strong">{dose.medication.dose}</span>
+                        <span className="text-md font-semibold">{dose.medication.name}</span>
+                        <span className="text-base text-muted-strong">{dose.medication.dose}</span>
                         {dose.medication.is_priority && <Tag>priority</Tag>}
                         {group.slot === nextPendingSlot && <Tag outline>next</Tag>}
                         <span className="ml-auto shrink-0">
@@ -303,7 +303,7 @@ export default function Calendar() {
                         </span>
                       </div>
                       {dose.medication.with_food && dose.medication.with_food !== 'any' && (
-                        <div className="text-[11px] text-muted-strong">
+                        <div className="text-sm text-muted-strong">
                           {dose.medication.with_food === 'after' ? 'After food' : 'Before food'}
                         </div>
                       )}
@@ -315,7 +315,7 @@ export default function Calendar() {
           ))
         )}
 
-        <div className="text-[10px] text-muted">
+        <div className="text-2xs text-muted">
           What was said on the call, and any note against a dose, is on the{' '}
           <Link to="/doses" className="font-semibold underline">
             dose history
@@ -330,7 +330,7 @@ export default function Calendar() {
       <Card className="hidden gap-2 sm:flex">
         <Row className="items-baseline gap-2">
           <Label className="flex-1">The week · every dose at every time</Label>
-          <span className="text-[10px] text-muted">days already past are dimmed</span>
+          <span className="text-2xs text-muted">days already past are dimmed</span>
         </Row>
 
         <div className="-mx-1 overflow-x-auto px-1">
@@ -356,13 +356,13 @@ export default function Calendar() {
                   >
                     <div
                       className={clsx(
-                        'text-[9px] font-bold tracking-[0.09em] uppercase',
+                        'text-2xs font-bold tracking-[0.09em] uppercase',
                         isToday ? 'text-white/70' : 'text-muted',
                       )}
                     >
                       {day.toLocaleDateString([], { weekday: 'short' })}
                     </div>
-                    <div className={clsx('text-[13px]', isToday ? 'font-bold' : 'font-semibold')}>
+                    <div className={clsx('text-md', isToday ? 'font-bold' : 'font-semibold')}>
                       {day.getDate()}
                     </div>
                   </button>
@@ -376,7 +376,7 @@ export default function Calendar() {
                 key={slot}
                 className="grid grid-cols-[3.75rem_repeat(7,minmax(0,1fr))] items-stretch gap-x-1.5 border-b border-line py-1.5"
               >
-                <span className="pt-2 text-[10px] font-bold tracking-wide text-muted">{slot}</span>
+                <span className="pt-2 text-2xs font-bold tracking-wide text-muted">{slot}</span>
                 {week.map((day, i) => {
                   const cell = bySlot[i]?.get(slot) ?? []
                   const isToday = dayKey(day) === dayKey(today)
@@ -391,12 +391,12 @@ export default function Calendar() {
                       )}
                     >
                       {cell.length === 0 ? (
-                        <span className="text-[10px] text-muted">—</span>
+                        <span className="text-2xs text-muted">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {cell.map((dose) => (
                             <div key={dose.medication.id} className="flex flex-col gap-0.5">
-                              <span className="truncate text-[11px] font-semibold">
+                              <span className="truncate text-sm font-semibold">
                                 {dose.medication.name}
                               </span>
                               <SlotStatus dose={dose} now={now} />
@@ -412,7 +412,7 @@ export default function Calendar() {
           </div>
         </div>
 
-        <p className="text-[10px] text-muted">
+        <p className="text-2xs text-muted">
           Doses are shown where the prescription puts them. To move a time, change the medicine —
           nothing on this grid can be dragged, because nothing here would save.
         </p>
@@ -426,19 +426,19 @@ export default function Calendar() {
             <span className="w-[6.75rem] shrink-0 pt-px">
               <DoseStatusChip status={status} />
             </span>
-            <span className="min-w-0 flex-1 text-[11px] break-words text-muted-strong">
+            <span className="min-w-0 flex-1 text-sm break-words text-muted-strong">
               {MEANING[status]}
             </span>
           </Row>
         ))}
         <Row className="items-start gap-2">
           <span className="w-[6.75rem] shrink-0 pt-px">
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-strong">
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted-strong">
               <Dot kind="empty" />
               upcoming
             </span>
           </span>
-          <span className="min-w-0 flex-1 text-[11px] break-words text-muted-strong">
+          <span className="min-w-0 flex-1 text-sm break-words text-muted-strong">
             Due, and nothing written against it yet. A slot in the past with no record reads “no
             record yet” — not missed, because nobody has said either way.
           </span>
@@ -464,7 +464,7 @@ export default function Calendar() {
 
 /** Same shape as the `Button` primitive, as a router link so the tab bar state survives. */
 const BTN_BASE =
-  'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-[12px] font-semibold'
+  'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-base font-semibold'
 const BTN_PRIMARY = `${BTN_BASE} bg-ink text-white`
 const BTN_OUTLINE = `${BTN_BASE} border border-ink bg-transparent text-ink`
 
@@ -486,10 +486,10 @@ function Header({
   return (
     <div className="flex flex-col gap-1">
       <Row className="items-baseline gap-2">
-        <h1 className="flex-1 text-[17px] font-bold">{monthTitle}</h1>
+        <h1 className="flex-1 text-lg font-bold">{monthTitle}</h1>
         <Label>{range}</Label>
       </Row>
-      <p className="text-[11px] text-muted-strong">
+      <p className="text-sm text-muted-strong">
         Every dose {name} is due to take, and how each one went. The times come from the
         prescription — change them in the medicine editor.
       </p>
@@ -507,7 +507,7 @@ function SlotStatus({ dose, now }: { dose: UpcomingDose; now: Date }) {
   if (dose.event) return <DoseStatusChip status={dose.event.status} />
   const due = dose.at.getTime() <= now.getTime()
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-strong">
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-strong">
       <Dot kind="empty" />
       {due ? 'no record yet' : 'upcoming'}
     </span>
@@ -567,13 +567,13 @@ function DayChip({
     >
       <span
         className={clsx(
-          'text-[9px] font-bold tracking-[0.09em] uppercase',
+          'text-2xs font-bold tracking-[0.09em] uppercase',
           selected ? 'text-white/70' : 'text-muted',
         )}
       >
         {day.toLocaleDateString([], { weekday: 'narrow' })}
       </span>
-      <span className={clsx('text-[13px]', isToday ? 'font-bold' : 'font-semibold')}>
+      <span className={clsx('text-md', isToday ? 'font-bold' : 'font-semibold')}>
         {day.getDate()}
       </span>
       <span className="flex h-3 items-center gap-1">
@@ -591,7 +591,7 @@ function DayChip({
                 }
               />
             )}
-            <span className="text-[9px] tabular-nums">
+            <span className="text-2xs tabular-nums">
               {t.confirmed}/{t.total}
             </span>
           </>

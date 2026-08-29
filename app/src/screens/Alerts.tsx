@@ -182,12 +182,12 @@ export default function Alerts() {
       {/* ------------------------------------------------------- what this screen is */}
       <div className="flex flex-col gap-1">
         <Row className="items-baseline gap-2">
-          <h1 className="flex-1 text-[17px] font-bold">Alerts</h1>
+          <h1 className="flex-1 text-lg font-bold">Alerts</h1>
           <Label>
             {all.length} {all.length === 1 ? 'alert' : 'alerts'}
           </Label>
         </Row>
-        <p className="text-[11px] leading-relaxed text-muted-strong">
+        <p className="text-sm leading-relaxed text-muted-strong">
           Each alert leads with the rule that raised it, written out in full. Nothing here is a
           diagnosis — the rule is the reason, and you can check it against what she said.
         </p>
@@ -230,10 +230,10 @@ export default function Alerts() {
         /* Deliberately different from the above: the record is not empty, this view is. */
         <Card emphasis="border" className="items-start gap-2">
           <Label>Nothing in this view</Label>
-          <div className="text-[13px] font-bold">
+          <div className="text-md font-bold">
             No {level === 'all' ? '' : `${level} `}alerts {windowWord}.
           </div>
-          <p className="text-[11px] leading-relaxed text-muted-strong">
+          <p className="text-sm leading-relaxed text-muted-strong">
             The record is not empty — {all.length} {all.length === 1 ? 'alert has' : 'alerts have'}{' '}
             been raised in total. Widen the range to see {all.length === 1 ? 'it' : 'them'}.
           </p>
@@ -267,7 +267,7 @@ export default function Alerts() {
               <span className="w-8 shrink-0 pt-px">
                 <Tag outline={p !== 'P1'}>{p}</Tag>
               </span>
-              <span className="min-w-0 flex-1 text-[11px] break-words text-muted-strong">
+              <span className="min-w-0 flex-1 text-sm break-words text-muted-strong">
                 {LEVEL_MEANING[p]}
               </span>
             </Row>
@@ -298,9 +298,9 @@ function AlertRow({
   const status = escalation.delivery_status
 
   return (
-    <Card emphasis={escalation.level === 'P1' ? 'rule' : 'none'} className="gap-2">
+    <Card emphasis={escalation.level === 'P1' ? 'alert' : 'none'} className="gap-2">
       <Row className="flex-wrap gap-2">
-        <Tag outline={escalation.level !== 'P1'}>{escalation.level}</Tag>
+        <Tag outline={escalation.level !== 'P1'} tone={escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'}>{escalation.level}</Tag>
         <Label>why this was flagged</Label>
         <Label className="ml-auto text-right">
           {at ? `${absoluteLabel(at, now)} · ${relativeHint(at, now)}` : 'not sent yet'}
@@ -310,14 +310,14 @@ function AlertRow({
       {/* PR-3 — the literal rule text, verbatim from the row, dominant on the card. */}
       <p
         className={clsx(
-          'text-[15px] leading-snug break-words hyphens-none whitespace-pre-wrap sm:text-[17px]',
+          'text-lg leading-snug break-words hyphens-none whitespace-pre-wrap sm:text-lg',
           escalation.level === 'P1' ? 'font-bold' : 'font-semibold',
         )}
       >
         {escalation.reason}
       </p>
 
-      <p className="text-[10px] leading-relaxed text-muted-strong">
+      <p className="text-2xs leading-relaxed text-muted-strong">
         Triggered on the words she used. No interpretation, no diagnosis.
       </p>
 
@@ -328,7 +328,7 @@ function AlertRow({
           </span>
           <blockquote
             lang="hi"
-            className="min-w-0 flex-1 border-l-2 border-line-strong pl-2 text-[12px] leading-relaxed break-words"
+            className="min-w-0 flex-1 border-l-2 border-line-strong pl-2 text-base leading-relaxed break-words"
           >
             “{quote.text}”
           </blockquote>
@@ -338,7 +338,7 @@ function AlertRow({
       <Divider />
 
       {/* Told to — plain sentence, no icon to decode. */}
-      <div className="text-[11px] leading-relaxed break-words">
+      <div className="text-sm leading-relaxed break-words">
         <span className="font-semibold">
           {at ? 'Told to' : 'Queued for'} {escalation.sent_to}
         </span>{' '}
@@ -350,7 +350,7 @@ function AlertRow({
         </span>
       </div>
 
-      <Link to={`/alerts/${escalation.id}`} className="text-[11px] font-semibold underline">
+      <Link to={`/alerts/${escalation.id}`} className="text-sm font-semibold underline">
         {escalation.intake_record_id ? 'Open the intake record' : 'Open this alert'} ›
       </Link>
     </Card>

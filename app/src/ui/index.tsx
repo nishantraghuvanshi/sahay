@@ -9,7 +9,30 @@ import type { DoseStatus, Severity } from '../api/types'
  * Rule carried over from the wireframes: status is never colour-only. Every Dot renders
  * a text label beside it, so the screen survives a greyscale screen recording and a
  * colour-blind viewer (LANE-C demo readiness).
+ *
+ * Palette F adds hue ON TOP of those marks — it never replaces the shape or the label.
+ * Verify with DevTools > Rendering > Emulate vision deficiency > Achromatopsia: every
+ * dose status, severity and step state must still be distinguishable.
  */
+
+/** Status hue. `ink` is the default; the rest are layered onto an existing mark. */
+export type Tone = 'ink' | 'accent' | 'ok' | 'warn' | 'danger'
+
+const TONE_FILL: Record<Tone, string> = {
+  ink: 'bg-ink text-white',
+  accent: 'bg-accent text-white',
+  ok: 'bg-ok text-white',
+  warn: 'bg-warn text-white',
+  danger: 'bg-danger text-white',
+}
+
+const TONE_OUTLINE: Record<Tone, string> = {
+  ink: 'border-ink bg-paper text-ink',
+  accent: 'border-accent bg-accent-soft text-accent',
+  ok: 'border-ok bg-accent-soft text-ok',
+  warn: 'border-warn bg-warn-soft text-warn',
+  danger: 'border-danger bg-danger-soft text-danger',
+}
 
 type Div = { className?: string; children?: ReactNode }
 
@@ -17,13 +40,14 @@ export function Card({
   className,
   children,
   emphasis,
-}: Div & { emphasis?: 'none' | 'border' | 'rule' }) {
+}: Div & { emphasis?: 'none' | 'border' | 'rule' | 'alert' }) {
   return (
     <div
       className={clsx(
-        'flex flex-col gap-2 rounded-lg border bg-surface p-3',
+        'flex flex-col gap-2 rounded-lg border bg-surface p-3 shadow-card',
         emphasis === 'border' && 'border-[1.5px] border-ink bg-paper',
         emphasis === 'rule' && 'border-line-strong border-l-[3px] border-l-ink',
+        emphasis === 'alert' && 'border-line-strong border-l-[3px] border-l-danger bg-danger-soft',
         (!emphasis || emphasis === 'none') && 'border-line-strong',
         className,
       )}
@@ -39,7 +63,7 @@ export function Row({ className, children }: Div) {
 
 export function Label({ className, children }: Div) {
   return (
-    <div className={clsx('text-[11px] font-bold tracking-[0.08em] text-muted-strong uppercase', className)}>
+    <div className={clsx('text-2xs font-bold tracking-[0.09em] text-muted uppercase', className)}>
       {children}
     </div>
   )
@@ -58,8 +82,11 @@ export function Chip({
       {...(onClick && on !== undefined ? { 'aria-pressed': on } : {})}
       onClick={onClick}
       className={clsx(
-        'inline-flex min-h-[32px] items-center rounded-full border px-3 py-1.5 text-[11px] whitespace-nowrap',
-        on ? 'border-ink bg-ink text-white' : 'border-line-strong bg-paper text-ink',
+        'inline-flex min-h-[32px] items-center rounded-full border px-3 py-1.5 text-sm whitespace-nowrap',
+        onClick && 'cursor-pointer transition-colors duration-150 ease-out',
+        on
+          ? 'border-ink bg-ink text-white'
+          : clsx('border-line-strong bg-paper text-ink', onClick && 'hover:border-ink hover:bg-line'),
         className,
       )}
     >
@@ -68,12 +95,17 @@ export function Chip({
   )
 }
 
-export function Tag({ children, outline, className }: Div & { outline?: boolean }) {
+export function Tag({
+  children,
+  outline,
+  tone = 'ink',
+  className,
+}: Div & { outline?: boolean; tone?: Tone }) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded px-2 py-1 text-[10px] font-extrabold tracking-wide',
-        outline ? 'border border-ink bg-paper text-ink' : 'bg-ink text-white',
+        'inline-flex items-center rounded px-2 py-1 text-2xs font-extrabold tracking-wide',
+        outline ? clsx('border', TONE_OUTLINE[tone]) : TONE_FILL[tone],
         className,
       )}
     >
@@ -90,14 +122,18 @@ export function Button({
   href,
   className,
 }: Div & {
-  variant?: 'primary' | 'outline'
+  variant?: 'primary' | 'outline' | 'quiet' | 'accent'
   disabled?: boolean
   onClick?: () => void
   href?: string
 }) {
   const cls = clsx(
-    'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-[12px] font-semibold',
-    variant === 'primary' ? 'bg-ink text-white' : 'border border-ink bg-transparent text-ink',
+    'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-base font-semibold',
+    'transition-colors duration-150 ease-out',
+    variant === 'primary' && 'bg-ink text-white hover:bg-ink-soft active:bg-ink',
+    variant === 'accent' && 'bg-accent text-white hover:brightness-110 active:brightness-95',
+    variant === 'outline' && 'border border-ink bg-transparent text-ink hover:bg-line',
+    variant === 'quiet' && 'bg-transparent font-medium text-muted-strong hover:bg-line hover:text-ink',
     disabled && 'pointer-events-none opacity-40',
     className,
   )
@@ -127,7 +163,7 @@ export function Field({
   return (
     <div
       className={clsx(
-        'rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[12px]',
+        'rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base',
         value ? 'text-ink' : 'text-muted',
         className,
       )}
@@ -135,6 +171,28 @@ export function Field({
       {value ?? placeholder}
     </div>
   )
+}
+
+/**
+ * The one text control. Before this, the same class string was retyped in eight places
+ * at three different font sizes with inconsistent focus rings (Login, Parent, Schedule,
+ * MedicinesEdit). `Field` above is its read-only twin.
+ */
+export function Input({
+  as = 'input',
+  className,
+  ...rest
+}: { as?: 'input' | 'textarea'; className?: string } & React.ComponentPropsWithoutRef<'input'> &
+  React.ComponentPropsWithoutRef<'textarea'>) {
+  const cls = clsx(
+    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink',
+    'transition-colors duration-150 ease-out outline-none placeholder:text-muted',
+    'focus:border-accent focus:ring-[3px] focus:ring-accent-soft',
+    'disabled:pointer-events-none disabled:opacity-50',
+    className,
+  )
+  if (as === 'textarea') return <textarea className={cls} {...rest} />
+  return <input className={cls} {...rest} />
 }
 
 /** Skeleton bar (.g) — also used as a meter when `fill` is set. */
@@ -153,12 +211,12 @@ export function Placeholder({ className, children }: Div) {
   return (
     <div
       className={clsx(
-        'flex items-center justify-center rounded-md border border-line-strong text-center text-[11px] text-muted',
+        'flex items-center justify-center rounded-md border border-line-strong text-center text-sm text-muted',
         className,
       )}
       style={{
         backgroundImage:
-          'repeating-linear-gradient(45deg,#f1f1ef,#f1f1ef 6px,#e6e6e2 6px,#e6e6e2 12px)',
+          'repeating-linear-gradient(45deg,#f4ecdd,#f4ecdd 6px,#e8dcc6 6px,#e8dcc6 12px)',
       }}
     >
       {children}
@@ -185,22 +243,35 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   red: 'red',
 }
 
-function dotClass(kind: 'filled' | 'hollow' | 'empty') {
+function dotClass(kind: 'filled' | 'hollow' | 'empty', tone: Tone = 'ink') {
   return clsx(
     'inline-block size-2 shrink-0 rounded-full',
-    kind === 'filled' && 'bg-ink',
-    kind === 'hollow' && 'border-[1.5px] border-ink bg-paper',
-    kind === 'empty' && 'bg-[#c9c9c3]',
+    kind === 'filled' && (tone === 'ink' ? 'bg-ink' : 'bg-ok'),
+    kind === 'hollow' &&
+      clsx(
+        'border-[1.5px] bg-paper',
+        tone === 'warn' ? 'border-warn' : tone === 'danger' ? 'border-danger' : 'border-ink',
+      ),
+    kind === 'empty' && 'bg-fill-empty',
   )
 }
 
 /** Four dose states, never colour alone — the label always renders. */
 export function DoseStatusChip({ status }: { status: DoseStatus }) {
   const kind = status === 'confirmed' ? 'filled' : status === 'deferred' ? 'empty' : 'hollow'
+  // `no_answer` is warn, not danger: unreachable is `unknown`, never `missed` (WIREFRAMES §8.13).
+  const tone: Tone =
+    status === 'confirmed' ? 'ok' : status === 'missed' ? 'danger' : status === 'no_answer' ? 'warn' : 'ink'
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px]">
-      <span className={dotClass(kind)} />
-      <span className={clsx(status === 'missed' || status === 'no_answer' ? 'font-semibold' : 'text-muted-strong')}>
+    <span className="inline-flex items-center gap-1.5 text-sm">
+      <span className={dotClass(kind, tone)} />
+      <span
+        className={clsx(
+          status === 'missed' && 'font-semibold text-danger',
+          status === 'no_answer' && 'font-semibold text-warn',
+          (status === 'confirmed' || status === 'deferred') && 'text-muted-strong',
+        )}
+      >
         {DOSE_LABEL[status]}
       </span>
     </span>
@@ -208,14 +279,14 @@ export function DoseStatusChip({ status }: { status: DoseStatus }) {
 }
 
 export function SeverityChip({ severity }: { severity: Severity }) {
-  if (severity === 'red') return <Tag>red</Tag>
-  if (severity === 'watch') return <Tag outline>watch</Tag>
+  if (severity === 'red') return <Tag tone="danger">red</Tag>
+  if (severity === 'watch') return <Tag outline tone="warn">watch</Tag>
   return <Label>{SEVERITY_LABEL.none}</Label>
 }
 
 /** Upcoming / neutral dot for timeline rows. */
-export function Dot({ kind }: { kind: 'filled' | 'hollow' | 'empty' }) {
-  return <span className={dotClass(kind)} />
+export function Dot({ kind, tone }: { kind: 'filled' | 'hollow' | 'empty'; tone?: Tone }) {
+  return <span className={dotClass(kind, tone)} />
 }
 
 /* ------------------------------------------------------------ page states */
@@ -236,8 +307,8 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
   return (
     <Card emphasis="rule">
       <Label>Not loaded</Label>
-      <div className="text-[12px] font-semibold">{message}</div>
-      <div className="text-[11px] text-muted-strong">
+      <div className="text-base font-semibold">{message}</div>
+      <div className="text-sm text-muted-strong">
         Nothing has been lost — the record is on our servers. This screen just could not read it.
       </div>
       {onRetry && (
@@ -254,9 +325,12 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
 export function EmptyBlock({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
     <Card className="items-center gap-2 border-dashed py-8 text-center">
-      <div className="text-[13px] font-bold">{title}</div>
-      <div className="max-w-xs text-[11px] text-muted-strong">{body}</div>
+      <div className="text-md font-bold">{title}</div>
+      <div className="max-w-xs text-sm text-muted-strong">{body}</div>
       {action}
     </Card>
   )
 }
+
+/* Signature components live in their own file; re-exported so screens keep one import. */
+export * from './signature'

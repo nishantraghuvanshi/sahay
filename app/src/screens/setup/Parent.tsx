@@ -40,14 +40,14 @@ export default function Parent() {
           type="button"
           aria-label="Back"
           onClick={() => navigate('/login')}
-          className="-ml-1 grid size-11 place-items-center text-[16px] text-muted-strong"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           &larr;
         </button>
-        <h1 className="text-[18px] font-bold">Who are we caring for?</h1>
+        <h1 className="text-xl font-bold">Who are we caring for?</h1>
         <Label className="ml-auto">1 / 3</Label>
       </header>
-      <p className="-mt-1 text-[12px] text-muted-strong">
+      <p className="-mt-1 text-base text-muted-strong">
         Everything here shapes what the agent says on a call.
       </p>
 
@@ -126,7 +126,7 @@ export default function Parent() {
             </Chip>
           ))}
         </Row>
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           They can switch language mid-sentence; the agent follows.
         </p>
       </Card>
@@ -174,7 +174,7 @@ export default function Parent() {
             ))}
             <AddChip label="allergy" onAdd={(v) => patch({ allergies: [...draft.allergies, v] })} />
           </Row>
-          <p className="text-[11px] text-muted-strong">
+          <p className="text-sm text-muted-strong">
             The agent will never name a medicine that conflicts with these.
           </p>
         </Card>
@@ -206,7 +206,7 @@ export default function Parent() {
           onChange={(e) => patch({ notes: e.target.value })}
           rows={3}
           placeholder='Hard of hearing on the left ear · gets confused after 9 PM · call them "Amma"'
-          className="w-full resize-none rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted focus:border-ink"
+          className="w-full resize-none rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base leading-relaxed outline-none placeholder:text-muted focus:border-ink"
         />
       </Card>
 
@@ -218,10 +218,10 @@ export default function Parent() {
             onChange={(e) => patch({ callsEnabled: e.target.checked })}
             className="size-4 accent-[#1a1a1a]"
           />
-          <span className="flex-1 text-[13px] font-semibold">Allow agent check-in calls</span>
-          <span className="text-[11px] text-muted">{draft.callsEnabled ? 'on' : 'off'}</span>
+          <span className="flex-1 text-md font-semibold">Allow agent check-in calls</span>
+          <span className="text-sm text-muted">{draft.callsEnabled ? 'on' : 'off'}</span>
         </label>
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           Turn this off and we set everything up but place no calls. You can switch it on later.
         </p>
         <Divider />
@@ -262,8 +262,8 @@ export default function Parent() {
         </Row>
         {draft.escalation.map((c, i) => (
           <Row key={i}>
-            <span className="flex-1 text-[12px] font-semibold">{c.name}</span>
-            <span className="text-[11px] text-muted">
+            <span className="flex-1 text-base font-semibold">{c.name}</span>
+            <span className="text-sm text-muted">
               {c.relationship} · after {c.after}
             </span>
             <button
@@ -279,7 +279,7 @@ export default function Parent() {
         <AddContact
           onAdd={(contact) => patch({ escalation: [...draft.escalation, contact] })}
         />
-        <p className="text-[11px] text-muted-strong">Skip this — you can add people later.</p>
+        <p className="text-sm text-muted-strong">Skip this — you can add people later.</p>
       </Card>
 
       <div className="sticky bottom-0 mt-2 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -323,14 +323,14 @@ function AddContact({ onAdd }: { onAdd: (c: { name: string; relationship: string
           onChange={(e) => setName(e.target.value)}
           placeholder="Name"
           aria-label="Contact name"
-          className="rounded-md border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-ink"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
         />
         <input
           value={relationship}
           onChange={(e) => setRelationship(e.target.value)}
           placeholder="Sister, doctor, neighbour…"
           aria-label="Relationship to your parent"
-          className="rounded-md border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-ink"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
         />
         <input
           value={phone}
@@ -338,11 +338,11 @@ function AddContact({ onAdd }: { onAdd: (c: { name: string; relationship: string
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+91 98765 43210"
           aria-label="Contact phone number"
-          className="rounded-md border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-ink"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
         />
       </div>
       <Row>
-        <span className="flex-1 text-[11px] text-muted-strong">
+        <span className="flex-1 text-sm text-muted-strong">
           We only call someone we have a number for.
         </span>
         <Chip onClick={() => setOpen(false)}>Cancel</Chip>
@@ -387,7 +387,7 @@ function AddChip({ label, onAdd }: { label: string; onAdd: (value: string) => vo
           if (e.key === 'Escape') setOpen(false)
         }}
         onBlur={commit}
-        className="w-32 rounded-full border border-ink bg-paper px-2.5 py-1 text-[11px] outline-none"
+        className="w-32 rounded-full border border-ink bg-paper px-2.5 py-1 text-sm outline-none"
       />
     </span>
   )
@@ -429,9 +429,9 @@ function FieldInput({
         placeholder={placeholder}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[13px] outline-none placeholder:text-muted focus:border-ink"
+        className="w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md outline-none placeholder:text-muted focus:border-ink"
       />
-      {hint && <span className="text-[10px] text-muted-strong">{hint}</span>}
+      {hint && <span className="text-2xs text-muted-strong">{hint}</span>}
     </div>
   )
   return card ? <Card>{body}</Card> : body
@@ -447,13 +447,13 @@ function TimeInput({
   onChange: (v: string) => void
 }) {
   return (
-    <label className="flex items-center gap-2 text-[11px] text-muted-strong">
+    <label className="flex items-center gap-2 text-sm text-muted-strong">
       {label}
       <input
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-line-strong bg-paper px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"
+        className="rounded-md border border-line-strong bg-paper px-2 py-1.5 text-base text-ink outline-none focus:border-ink"
       />
     </label>
   )

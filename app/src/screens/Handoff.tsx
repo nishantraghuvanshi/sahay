@@ -11,6 +11,12 @@ import type { HandoffView } from '../api/types'
  * No login, no install, no navigation into the caregiver app — the reader is not a user
  * of this product and must never be offered one thing to tap that is not the phone number.
  *
+ * NOTE (design system, Aug 30): this screen is deliberately EXEMPT from the app-wide
+ * type scale in index.css. The pixel budget below is measured against these exact sizes,
+ * so the sizes stay literal here. It still inherits the palette for free, because every
+ * colour is read through a Tailwind token class (bg-paper, text-muted-strong, border-line).
+ * No webfont is loaded for this screen either: it assumes one bar of signal.
+ *
  * Three rules drive every layout decision below:
  *
  *  1. 🔑 The P1 block fits ONE 390×844 screen with no scrolling. Measured budget,

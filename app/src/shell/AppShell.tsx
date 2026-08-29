@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import clsx from 'clsx'
 import { useIsDesktop } from './useBreakpoint'
 import { NAV, TABS } from './nav'
+import { Wordmark } from '../ui'
 import { useCareRecord } from '../api/hooks'
 
 /**
@@ -39,10 +40,7 @@ function Sidebar() {
   return (
     <aside className="flex w-[186px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-3">
       <div className="flex items-center gap-2 px-2 pb-3">
-        <span className="grid size-6 place-items-center rounded-md bg-ink text-[11px] font-bold text-white">
-          K
-        </span>
-        <span className="text-[13px] font-bold">Kinvox</span>
+        <Wordmark size={19} />
       </div>
 
       <PatientCard />
@@ -53,11 +51,14 @@ function Sidebar() {
           to={item.to}
           className={({ isActive }) =>
             clsx(
-              'rounded-lg px-3 py-2 text-[12px]',
-              isActive ? 'bg-ink font-bold text-white' : 'text-muted-strong hover:bg-line/50',
+              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-base transition-colors duration-150 ease-out',
+              isActive
+                ? 'bg-accent-soft font-semibold text-accent'
+                : 'text-muted-strong hover:bg-line/60 hover:text-ink',
             )
           }
         >
+          <item.icon size={17} strokeWidth={2} aria-hidden="true" />
           {item.label}
         </NavLink>
       ))}
@@ -71,11 +72,11 @@ function PatientCard() {
   const patient = data?.patient
   return (
     <div className="mb-2 rounded-lg border border-line-strong bg-paper p-2">
-      <div className="text-[12px] font-semibold">
+      <div className="text-base font-semibold">
         {patient ? `${patient.name}${patient.honorific ? `-${patient.honorific}` : ''}` : '—'}
         {patient?.age != null && ` · ${patient.age}`}
       </div>
-      <div className="text-[10px] text-muted-strong">
+      <div className="text-2xs text-muted-strong">
         {patient?.calls_paused
           ? 'Calls paused'
           : patient?.schedule_signed_off_at
@@ -89,7 +90,7 @@ function PatientCard() {
 function TopBar() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-5">
-      <span className="text-[15px] font-bold">Kinvox</span>
+      <Wordmark size={21} />
     </header>
   )
 }
@@ -103,18 +104,18 @@ function TabBar() {
           to={tab.to}
           className={({ isActive }) =>
             clsx(
-              'flex flex-1 flex-col items-center gap-1 py-2 text-[10px]',
-              isActive ? 'font-bold text-ink' : 'text-muted-strong',
+              'flex flex-1 flex-col items-center gap-1 py-2 text-2xs transition-colors duration-150 ease-out',
+              isActive ? 'font-bold text-accent' : 'text-muted-strong',
             )
           }
         >
           {({ isActive }) => (
             <>
-              <span
-                className={clsx(
-                  'size-4 rounded border',
-                  isActive ? 'border-ink bg-ink' : 'border-line-strong',
-                )}
+              <tab.icon
+                size={19}
+                strokeWidth={isActive ? 2.4 : 1.9}
+                aria-hidden="true"
+                className="transition-colors duration-150 ease-out"
               />
               {tab.label}
             </>

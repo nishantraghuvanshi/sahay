@@ -59,21 +59,21 @@ export default function Consent() {
           type="button"
           aria-label="Back"
           onClick={() => navigate('/setup/schedule')}
-          className="-ml-1 grid size-11 place-items-center text-[16px] text-muted-strong"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           &larr;
         </button>
-        <h1 className="text-[18px] font-bold">Before we call {name}</h1>
+        <h1 className="text-xl font-bold">Before we call {name}</h1>
         <Label className="ml-auto">last step</Label>
       </header>
 
       <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr] lg:items-start">
         <div className="flex flex-col gap-3">
           <Card emphasis="none" className="gap-1.5">
-            <div className="text-[15px] leading-snug font-bold">
+            <div className="text-lg leading-snug font-bold">
               First we ring {address} once, just to introduce ourselves
             </div>
-            <p className="text-[12px] leading-relaxed text-muted-strong">
+            <p className="text-base leading-relaxed text-muted-strong">
               No medicines on this call. We say who we are, that you set this up, and ask whether
               they are happy to be called. Dose calls begin only if they say yes.
             </p>
@@ -108,7 +108,7 @@ export default function Consent() {
           <Card className="gap-1.5">
             <Row>
               <Tag outline>note</Tag>
-              <span className="flex-1 text-[12px] leading-relaxed text-muted-strong">
+              <span className="flex-1 text-base leading-relaxed text-muted-strong">
                 We call {name} from our end — nothing dials from your phone.
               </span>
             </Row>
@@ -131,11 +131,11 @@ export default function Consent() {
                   }
                   className="mt-0.5 size-4 shrink-0 accent-[#1a1a1a]"
                 />
-                <span className="text-[12px] leading-relaxed">{c.text(name)}</span>
+                <span className="text-base leading-relaxed">{c.text(name)}</span>
               </label>
             ))}
             <Divider />
-            <p className="text-[11px] text-muted-strong">
+            <p className="text-sm text-muted-strong">
               All three are required. {address} can ask us to stop on any call, and we stop.
             </p>
           </Card>
@@ -147,7 +147,7 @@ export default function Consent() {
             <StepLine text="Dose calls begin from the next slot" />
           </Card>
 
-          <p className="text-[11px] leading-relaxed text-muted-strong">
+          <p className="text-sm leading-relaxed text-muted-strong">
             All calling functionality begins only after this intro call and a final approval from
             {' '}{name}.
           </p>
@@ -161,7 +161,7 @@ export default function Consent() {
               Continue on the app
             </Button>
             {!ready && (
-              <span className="text-center text-[11px] text-muted">
+              <span className="text-center text-sm text-muted">
                 {!optionChosen
                   ? 'Choose when we should call first'
                   : `${remaining} consent${remaining === 1 ? '' : 's'} left`}
@@ -211,8 +211,8 @@ function Option({
           className="mt-0.5 size-4 shrink-0 accent-[#1a1a1a]"
         />
         <span className="flex-1">
-          <span className="block text-[13px] font-semibold">{title}</span>
-          <span className="block text-[11px] leading-relaxed text-muted-strong">{body}</span>
+          <span className="block text-md font-semibold">{title}</span>
+          <span className="block text-sm leading-relaxed text-muted-strong">{body}</span>
         </span>
       </label>
       {children}
@@ -229,7 +229,7 @@ function StepLine({ text, done }: { text: string; done?: boolean }) {
           done ? 'bg-ink' : 'border-[1.5px] border-line-strong bg-paper',
         )}
       />
-      <span className="flex-1 text-[11px] text-muted-strong">{text}</span>
+      <span className="flex-1 text-sm text-muted-strong">{text}</span>
     </Row>
   )
 }
@@ -297,7 +297,7 @@ function TimeSheet({
       >
         <div className="mx-auto h-1 w-8 rounded bg-line-strong sm:hidden" />
         <Row>
-          <span className="flex-1 text-[14px] font-bold">When are they usually free?</span>
+          <span className="flex-1 text-md font-bold">When are they usually free?</span>
           <button type="button" aria-label="Close" onClick={onClose} className="px-1 text-muted">
             ✕
           </button>
@@ -315,7 +315,7 @@ function TimeSheet({
 
         <Label>Time</Label>
         {slots.length === 0 ? (
-          <p className="text-[12px] text-muted-strong">
+          <p className="text-base text-muted-strong">
             No slots left inside the call window today — try tomorrow.
           </p>
         ) : (
@@ -334,11 +334,11 @@ function TimeSheet({
         <Card className="gap-1">
           <Row>
             <Label className="flex-1">Their call window</Label>
-            <span className="text-[11px] text-muted-strong">
+            <span className="text-sm text-muted-strong">
               {from} – {to}
             </span>
           </Row>
-          <p className="text-[10px] text-muted">Times outside the window are not offered.</p>
+          <p className="text-2xs text-muted">Times outside the window are not offered.</p>
         </Card>
 
         <Button disabled={!picked} onClick={() => picked && onPick(picked)} className="w-full">

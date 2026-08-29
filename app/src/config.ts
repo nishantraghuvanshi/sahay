@@ -13,4 +13,6 @@ export const API_BASE = import.meta.env.VITE_API_BASE ?? '/mock'
 export const LIVE_POLL_MS = 5000
 
 /** Breakpoint where the phone layout (tab bar) becomes the desktop layout (sidebar). */
-export const DESKTOP_MIN_PX = 900
+// Must match Tailwind's `lg:` (1024px). At 900 the shell switched to the desktop
+// sidebar while screens were still rendering their single-column mobile layout.
+export const DESKTOP_MIN_PX = 1024

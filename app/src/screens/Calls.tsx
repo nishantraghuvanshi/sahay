@@ -126,19 +126,19 @@ export default function Calls() {
       {/* ------------------------------------------------------------- header */}
       <div className="flex flex-col gap-1">
         <Row className="items-baseline gap-2">
-          <h1 className="flex-1 text-[17px] font-bold">Calls</h1>
+          <h1 className="flex-1 text-lg font-bold">Calls</h1>
           <Label>
             {all.length} {all.length === 1 ? 'call' : 'calls'}
           </Label>
         </Row>
-        <p className="text-[11px] leading-relaxed text-muted-strong">
+        <p className="text-sm leading-relaxed text-muted-strong">
           Every call {who ? `with ${who} ` : ''}is kept: what was said, what it changed in the
           record, and whether the agent stayed inside its safety rules. Newest first.
         </p>
       </div>
 
       {(doses.error || observations.error) && (
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           The counts of what each call produced could not be loaded just now. The calls below are
           unchanged — open one to see its record.
         </p>
@@ -168,7 +168,7 @@ export default function Calls() {
         />
       ) : rows.length === 0 ? (
         <Card className="py-6 text-center">
-          <div className="text-[12px] text-muted-strong">
+          <div className="text-base text-muted-strong">
             No calls in that view. {all.length} in total.
           </div>
         </Card>
@@ -182,7 +182,7 @@ export default function Calls() {
       {all.length > 0 && (
         <Card className="gap-1.5">
           <Label>Why every row says “safety check”</Label>
-          <p className="text-[11px] leading-relaxed text-muted-strong">
+          <p className="text-sm leading-relaxed text-muted-strong">
             The agent is not allowed to diagnose, to change a dose, or to talk a worrying symptom
             down. Each call is checked against those rules and the verdict is stored with it — in
             words, so it survives a greyscale recording. A call with no transcript still carries a
@@ -241,9 +241,9 @@ function CallRow({
         {/* direction · when · how long */}
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
           {inbound ? <Tag>they called</Tag> : <Tag outline>we called</Tag>}
-          <span className="text-[13px] font-bold">{absoluteLabel(at, now)}</span>
-          <span className="text-[11px] text-muted">{relativeHint(at, now)}</span>
-          <span className="ml-auto shrink-0 text-[11px] font-semibold">
+          <span className="text-md font-bold">{absoluteLabel(at, now)}</span>
+          <span className="text-sm text-muted">{relativeHint(at, now)}</span>
+          <span className="ml-auto shrink-0 text-sm font-semibold">
             {!wasAnswered ? 'no answer' : ms !== null ? spanWords(ms) : 'still open'}
           </span>
         </Row>
@@ -251,7 +251,7 @@ function CallRow({
         {/* the sentence — what actually happened, in words */}
         <div
           className={clsx(
-            'text-[12px] leading-snug break-words',
+            'text-base leading-snug break-words',
             inbound ? 'font-semibold' : 'text-muted-strong',
           )}
         >
@@ -264,7 +264,7 @@ function CallRow({
 
         {/* honest about the ring: this is time the line was open, not time anyone spoke */}
         {!wasAnswered && ms !== null && (
-          <div className="text-[11px] text-muted">
+          <div className="text-sm text-muted">
             The line was open {spanWords(ms)} — ringing, not talking.
           </div>
         )}
@@ -275,11 +275,11 @@ function CallRow({
         <div className="flex flex-col gap-1">
           <Row className="flex-wrap gap-x-2 gap-y-1">
             <Label>Produced</Label>
-            <span className="min-w-0 flex-1 text-[11px] break-words">{producedWords}</span>
+            <span className="min-w-0 flex-1 text-sm break-words">{producedWords}</span>
           </Row>
           <Row className="flex-wrap gap-x-2 gap-y-1">
             <Label>Transcript</Label>
-            <span className="min-w-0 flex-1 text-[11px] break-words">
+            <span className="min-w-0 flex-1 text-sm break-words">
               {call.transcript === null
                 ? 'none stored — there was no conversation'
                 : 'stored, word for word'}
@@ -289,7 +289,7 @@ function CallRow({
             <Label>Safety check</Label>
             <span
               className={clsx(
-                'min-w-0 flex-1 text-[11px] break-words',
+                'min-w-0 flex-1 text-sm break-words',
                 call.safety_pass === false && 'font-bold',
               )}
             >
@@ -298,11 +298,11 @@ function CallRow({
           </Row>
           <Row className="flex-wrap gap-x-2 gap-y-1">
             <Label>Status</Label>
-            <span className="min-w-0 flex-1 text-[11px] break-words">{statusWord(call)}</span>
+            <span className="min-w-0 flex-1 text-sm break-words">{statusWord(call)}</span>
           </Row>
         </div>
 
-        <span className="text-[11px] font-semibold underline">Open this call</span>
+        <span className="text-sm font-semibold underline">Open this call</span>
       </Card>
     </Link>
   )

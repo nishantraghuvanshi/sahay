@@ -112,11 +112,11 @@ export default function Schedule() {
           type="button"
           onClick={() => navigate('/setup/prescription')}
           aria-label="Back"
-          className="-ml-1 grid size-11 place-items-center text-[16px] text-muted-strong"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           ←
         </button>
-        <h1 className="text-[14px] font-bold">Review schedule</h1>
+        <h1 className="text-md font-bold">Review schedule</h1>
         <span className="ml-auto">
           <Chip>Calendar</Chip>
         </span>
@@ -128,7 +128,7 @@ export default function Schedule() {
             <Card className="bg-paper">
               <Row className="flex-wrap">
                 <Tag>check</Tag>
-                <span className="flex-1 text-[12px] text-muted-strong">
+                <span className="flex-1 text-base text-muted-strong">
                   {unclear} {unclear === 1 ? 'row' : 'rows'} unclear — fix these before you sign off
                 </span>
               </Row>
@@ -174,7 +174,7 @@ export default function Schedule() {
 
               <Row className="flex-wrap">
                 <Chip onClick={addMedicine}>+ Add medicine</Chip>
-                <span className="text-[10.5px] text-muted">
+                <span className="text-xs text-muted">
                   Priority is the one dose the agent chases hardest — only one may hold it.
                 </span>
               </Row>
@@ -197,12 +197,12 @@ export default function Schedule() {
                 className="mt-0.5 size-4 shrink-0 accent-ink disabled:opacity-40"
               />
               <label htmlFor="schedule-signoff" className="flex-1 leading-snug">
-                <span className="text-[12px] font-semibold">
+                <span className="text-base font-semibold">
                   I confirm these {meds.length} {meds.length === 1 ? 'medicine' : 'medicines'}, doses and
                   timings are correct
                 </span>
                 <br />
-                <span className="text-[10.5px] text-muted-strong">
+                <span className="text-xs text-muted-strong">
                   Nothing is called about until you tick this.
                   {!canSignOff &&
                     (meds.length === 0
@@ -252,7 +252,7 @@ function MedicineRow({
   onRemove: () => void
 }) {
   const input =
-    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[12px] text-ink placeholder:text-muted'
+    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink placeholder:text-muted'
 
   return (
     <Card emphasis={med.unclear ? 'rule' : 'none'} className={clsx('gap-2.5', GRID)}>
@@ -287,7 +287,7 @@ function MedicineRow({
       {/* frequency — derived, never typed */}
       <div className="flex flex-col gap-1">
         <Label className="sm:hidden">Frequency</Label>
-        <div className="py-2 text-[12px] whitespace-nowrap">{med.slots.length}× daily</div>
+        <div className="py-2 text-base whitespace-nowrap">{med.slots.length}× daily</div>
       </div>
 
       {/* times */}
@@ -307,14 +307,14 @@ function MedicineRow({
                     onChange={(e) => onSetSlot(i, e.target.value)}
                     onBlur={() => onEditSlot(null)}
                     onKeyDown={(e) => e.key === 'Enter' && onEditSlot(null)}
-                    className="rounded-full border border-ink bg-paper px-2 py-0.5 text-[11px]"
+                    className="rounded-full border border-ink bg-paper px-2 py-0.5 text-sm"
                   />
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemoveSlot(i)}
                     aria-label={`Remove time ${slot}`}
-                    className="text-[11px] text-muted"
+                    className="text-sm text-muted"
                   >
                     ✕
                   </button>
@@ -352,7 +352,7 @@ function MedicineRow({
       <div className="flex flex-col gap-1.5">
         <Divider className="sm:hidden" />
         <Row className="flex-wrap gap-2">
-          <label className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+          <label className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
             <input
               type="checkbox"
               checked={med.is_priority}
@@ -366,7 +366,7 @@ function MedicineRow({
             type="button"
             onClick={onRemove}
             aria-label={`Remove ${med.name || 'medicine'}`}
-            className="ml-auto grid size-11 place-items-center text-[14px] text-muted-strong"
+            className="ml-auto grid size-11 place-items-center text-md text-muted-strong"
           >
             ✕
           </button>
