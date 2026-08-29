@@ -34,22 +34,83 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
     return 'medication-adherence';
   }
 
-  buildSystemPrompt(variables) {
-    // Substitute variables into system prompt
-    let prompt = this.config.system_prompt;
-    for (const [key, value] of Object.entries(variables || {})) {
-      prompt = prompt.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
-    }
-    return prompt;
+  /** @returns {string[]} Entry modes this strategy supports. */
+  getModes() {
+    return ['outbound', ...Object.keys(this.config.modes || {})];
   }
 
-  buildFirstMessage(variables) {
-    let message = this.config.first_message;
-    const vars = { ...this.config.variables, ...variables };
-    for (const [key, value] of Object.entries(vars)) {
-      message = message.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  /**
+   * The raw prompt block for a mode, before composition.
+   *
+   * `outbound` lives at the top level of the config rather than under
+   * `modes:` so the shape stays backward compatible with single-mode configs.
+   *
+   * @param {string} mode - outbound | inbound | resume
+   * @returns {{system_prompt: string, first_message: string}}
+   */
+  getModeBlock(mode) {
+    if (mode === 'outbound') {
+      return {
+        system_prompt: this.config.system_prompt,
+        first_message: this.config.first_message,
+      };
     }
-    return message;
+    const block = this.config.modes && this.config.modes[mode];
+    if (!block) {
+      throw new Error(
+        `Unknown mode: "${mode}". Available: ${this.getModes().join(', ')}`
+      );
+    }
+    return block;
+  }
+
+  /**
+   * Compose the system prompt for a mode.
+   *
+   * Order is deliberate: mode block, then shared rules, then guardrails LAST,
+   * so the non-negotiable rules are the most recent instruction in context.
+   * Guardrails are stored once and never duplicated into a mode — three modes
+   * each carrying their own copy is three copies that drift, and the one that
+   * drifts is the one that gives medical advice at 3am.
+   *
+   * @param {Object} variables - Per-call variable values
+   * @param {string} [mode=outbound]
+   * @returns {string}
+   */
+  buildSystemPrompt(variables, mode = 'outbound') {
+    const composed = [
+      this.getModeBlock(mode).system_prompt,
+      this.config.shared_rules,
+      this.config.guardrails,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    return this._substitute(composed, { ...this.config.variables, ...variables });
+  }
+
+  /**
+   * @param {Object} variables - Per-call variable values
+   * @param {string} [mode=outbound]
+   * @returns {string}
+   */
+  buildFirstMessage(variables, mode = 'outbound') {
+    return this._substitute(this.getModeBlock(mode).first_message, {
+      ...this.config.variables,
+      ...variables,
+    });
+  }
+
+  /**
+   * Replace {placeholder} tokens.
+   * @private
+   */
+  _substitute(text, vars) {
+    let out = text;
+    for (const [key, value] of Object.entries(vars || {})) {
+      out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), value ?? '');
+    }
+    return out;
   }
 
   getTools() {

@@ -136,6 +136,9 @@ describe('engine ordering — alert stamps must survive persistence', () => {
     assert.strictEqual(row.outcome_label, 'ESCALATED_SYMPTOM');
     assert.strictEqual(row.alert_channel, 'telegram', 'alert stamp was lost — save() ran after the alert');
     assert.ok(row.alert_sent_at, 'alert_sent_at not recorded');
-    assert.strictEqual(row.prompt_version, '2');
+    // Asserted against the strategy rather than a literal: the point is that
+    // the version is persisted at all, and the version changes whenever the
+    // prompt does. A hardcoded number turns every prompt edit into a red suite.
+    assert.strictEqual(row.prompt_version, String(new Strategy().getPromptVersion()));
   });
 });
