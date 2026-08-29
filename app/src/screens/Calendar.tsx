@@ -39,6 +39,17 @@ import type { DoseStatus, Escalation } from '../api/types'
  * buttons at the foot go to.
  */
 
+/**
+ * How close a slot has to be before it counts as happening *now*.
+ *
+ * 45 minutes, the same window the design doc (§5.2) uses to collapse nearby doses
+ * into one call — if two doses would be called about together they are the same
+ * moment as far as the patient is concerned. Bounded on both sides deliberately:
+ * without an upper bound the chip lands on the next unanswered slot whenever it is,
+ * so a dose six hours away would be labelled "now".
+ */
+const NOW_WINDOW_MS = 45 * 60_000
+
 const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer', 'unknown']
 
 /** Said in words, because the four are exactly what a caregiver must not have to guess at. */
@@ -223,11 +234,19 @@ export default function Calendar() {
   const weekConfirmed = weekDue.filter((d) => d.event?.status === 'confirmed').length
 
   // The next slot still waiting on an answer today — drawn emphasised, as in both frames.
-  const nextPendingSlot =
+  /**
+   * The slot happening right now — frame `1g` gives it a `now` chip and a heavier
+   * border. "Now" rather than "next" is the distinction the frame draws: it is the
+   * dose currently due and still unanswered, not simply the one that comes after
+   * this. Only ever set on today.
+   */
+  const nowSlot =
     dayKey(selected) === dayKey(today)
       ? (timeline.find(
           (g) =>
-            g.at.getTime() >= now.getTime() - 60_000 && g.doses.some((d) => d.event === null),
+            g.at.getTime() >= now.getTime() - 60_000 &&
+            g.at.getTime() <= now.getTime() + NOW_WINDOW_MS &&
+            g.doses.some((d) => d.event === null),
         )?.slot ?? null)
       : null
 
@@ -368,7 +387,7 @@ export default function Calendar() {
                       emphasis={
                         dose.event?.status === 'unknown'
                           ? 'rule'
-                          : group.slot === nextPendingSlot
+                          : group.slot === nowSlot
                             ? 'border'
                             : 'none'
                       }
@@ -377,7 +396,7 @@ export default function Calendar() {
                         <span className="text-[13px] font-semibold">{dose.medication.name}</span>
                         <span className="text-[12px] text-muted-strong">{dose.medication.dose}</span>
                         {dose.medication.is_priority && <Tag>priority</Tag>}
-                        {group.slot === nextPendingSlot && <Tag outline>next</Tag>}
+                        {group.slot === nowSlot && <Tag outline>now</Tag>}
                         <span className="ml-auto shrink-0">
                           <SlotStatus dose={dose} now={now} />
                         </span>

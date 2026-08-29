@@ -50,9 +50,14 @@ const LINKED_ALERT: Escalation = {
   channel: 'whatsapp', sent_to: 'Son', sent_at: at(9, 6), delivery_status: 'delivered',
 }
 
-function mount(doses: DoseEvent[], escalations: Escalation[] = []) {
+function mount(doses: DoseEvent[], escalations: Escalation[] = [], slots?: string[]) {
+  // Built fresh per call. Mutating a shared fixture leaks into every later test.
+  const record: CareRecord = {
+    ...RECORD,
+    medications: RECORD.medications.map((m) => ({ ...m, slots: slots ?? m.slots })),
+  }
   vi.mocked(useCareRecord).mockReturnValue({
-    data: RECORD, isLoading: false, error: null, refetch: vi.fn(),
+    data: record, isLoading: false, error: null, refetch: vi.fn(),
   } as unknown as ReturnType<typeof useCareRecord>)
   vi.mocked(useDoseHistory).mockReturnValue({
     data: doses, isLoading: false, error: null, refetch: vi.fn(),
@@ -67,6 +72,23 @@ function mount(doses: DoseEvent[], escalations: Escalation[] = []) {
     </MemoryRouter>,
   )
 }
+
+const hhmm = (d: Date) =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+describe('the now chip', () => {
+  it('marks a slot that is actually happening now', () => {
+    mount([], [], [hhmm(new Date(Date.now() + 10 * 60_000))])
+    expect(screen.getAllByText('now').length).toBeGreaterThan(0)
+  })
+
+  it('does not call a dose hours away "now"', () => {
+    // Without an upper bound the chip landed on the next unanswered slot whenever
+    // it was, so a dose six hours out was labelled as happening right now.
+    mount([], [], [hhmm(new Date(Date.now() + 6 * 60 * 60_000))])
+    expect(screen.queryByText('now')).not.toBeInTheDocument()
+  })
+})
 
 describe('a dose that was taken', () => {
   it('shows when it was confirmed, not only that it was', () => {
