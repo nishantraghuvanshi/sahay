@@ -14,10 +14,10 @@ import {
   Row,
   Tag,
 } from '../ui'
-import { useCareRecord, useDoseHistory } from '../api/hooks'
+import { useCareRecord, useDoseHistory, useEscalations } from '../api/hooks'
 import { slotsForDay } from '../lib/schedule'
 import type { UpcomingDose } from '../lib/schedule'
-import type { DoseStatus } from '../api/types'
+import type { DoseStatus, Escalation } from '../api/types'
 
 /**
  * FR-25 · wireframe `1g` (phone: day timeline under a week strip) / `2f` (desktop: week grid,
@@ -39,7 +39,7 @@ import type { DoseStatus } from '../api/types'
  * buttons at the foot go to.
  */
 
-const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer']
+const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer', 'unknown']
 
 /** Said in words, because the four are exactly what a caregiver must not have to guess at. */
 const MEANING: Record<DoseStatus, string> = {
@@ -47,6 +47,7 @@ const MEANING: Record<DoseStatus, string> = {
   deferred: 'Put off to a later time, and still expected.',
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
+  unknown: 'We could not reach them at all. This is not a missed dose — nothing is known about it.',
 }
 
 /* ------------------------------------------------------------------ dates */
@@ -118,7 +119,12 @@ interface DayTally {
 function tally(doses: UpcomingDose[]): DayTally {
   return {
     confirmed: doses.filter((d) => d.event?.status === 'confirmed').length,
-    attention: doses.filter((d) => d.event?.status === 'missed' || d.event?.status === 'no_answer')
+    attention: doses.filter(
+      (d) =>
+        d.event?.status === 'missed' ||
+        d.event?.status === 'no_answer' ||
+        d.event?.status === 'unknown',
+    )
       .length,
     recorded: doses.filter((d) => d.event !== null).length,
     total: doses.length,
@@ -130,6 +136,9 @@ function tally(doses: UpcomingDose[]): DayTally {
 export default function Calendar() {
   const record = useCareRecord()
   const doses = useDoseHistory()
+  // Only used to name the alert beside a dose that could not be established.
+  // A failure here must not blank the calendar, so it is read without an error gate.
+  const escalations = useEscalations()
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()))
 
   if (record.isLoading || doses.isLoading) return <LoadingBlock rows={6} />
@@ -152,6 +161,12 @@ export default function Calendar() {
    * it is done no dose call may be placed at all: a schedule can be signed off and
    * still be entirely dormant, which is invisible if the calendar only draws doses.
    */
+  const escalationForDose = new Map<string, Escalation>(
+    (escalations.data ?? [])
+      .filter((e): e is Escalation & { dose_event_id: string } => Boolean(e.dose_event_id))
+      .map((e) => [e.dose_event_id, e]),
+  )
+
   const introAt = patient?.intro_call_at ? new Date(patient.intro_call_at) : null
   const introPending = patient?.intro_call_status === 'pending'
   const introOnSelected = introAt && dayKey(introAt) === dayKey(selected) ? introAt : null
@@ -350,7 +365,13 @@ export default function Calendar() {
                     <Card
                       key={dose.medication.id + dose.slot}
                       className="gap-1 px-2.5 py-2"
-                      emphasis={group.slot === nextPendingSlot ? 'border' : 'none'}
+                      emphasis={
+                        dose.event?.status === 'unknown'
+                          ? 'rule'
+                          : group.slot === nextPendingSlot
+                            ? 'border'
+                            : 'none'
+                      }
                     >
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <span className="text-[13px] font-semibold">{dose.medication.name}</span>
@@ -365,6 +386,14 @@ export default function Calendar() {
                         <div className="text-[11px] text-muted-strong">
                           {dose.medication.with_food === 'after' ? 'After food' : 'Before food'}
                         </div>
+                      )}
+                      {dose.event?.status === 'unknown' && (
+                        <Unreachable
+                          note={dose.event.note}
+                          escalation={escalationForDose.get(dose.event.id) ?? null}
+                          name={name}
+                          phone={patient?.phone_e164 ?? null}
+                        />
                       )}
                     </Card>
                   ))}
@@ -525,6 +554,8 @@ export default function Calendar() {
 const BTN_BASE =
   'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-[12px] font-semibold'
 const BTN_PRIMARY = `${BTN_BASE} bg-ink text-white`
+const BTN_SMALL =
+  'inline-flex items-center rounded-md border border-ink px-2 py-1 text-[10.5px] font-semibold'
 const BTN_OUTLINE = `${BTN_BASE} border border-ink bg-transparent text-ink`
 
 function Header({
@@ -562,6 +593,65 @@ function Header({
  * differently. Anything that has been answered renders through `DoseStatusChip`, so the four
  * recorded states look the same here as everywhere else in the app.
  */
+/**
+ * What a caregiver is shown when a dose could not be established.
+ *
+ * The point of this block is that it never says the dose was missed. It says we
+ * could not reach the parent, names the alert that fired if one did, and hands over
+ * the three things a person can actually do about it.
+ *
+ * Two of those three are disabled, and visibly so. `medications`/`escalation_contacts`
+ * hold no second number and no neighbour (SCHEMA-GAPS §5), and a button that looks
+ * dialable but silently does nothing is worse than one that says why it cannot.
+ */
+function Unreachable({
+  note,
+  escalation,
+  name,
+  phone,
+}: {
+  note: string | null
+  escalation: Escalation | null
+  name: string
+  phone: string | null
+}) {
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 border-t border-line pt-1.5">
+      <span className="text-[11px] leading-relaxed text-muted-strong">
+        We could not reach {name} for this dose, so whether it was taken is not known. It is
+        not recorded as missed.
+      </span>
+      {note && <span className="text-[10.5px] text-muted">{note}</span>}
+      {escalation && (
+        <Row className="flex-wrap gap-1.5">
+          <Tag outline>{escalation.level}</Tag>
+          <span className="flex-1 text-[10.5px] text-muted-strong">
+            Alert sent to {escalation.sent_to} — {escalation.reason}
+          </span>
+        </Row>
+      )}
+      <Row className="flex-wrap gap-1.5">
+        {phone ? (
+          <a href={`tel:${phone}`} className={BTN_SMALL}>
+            Call {name} yourself
+          </a>
+        ) : (
+          <span className={clsx(BTN_SMALL, 'opacity-40')}>No number on file</span>
+        )}
+        <span className={clsx(BTN_SMALL, 'opacity-40')} title="No second number is stored yet">
+          Try another number
+        </span>
+        <span className={clsx(BTN_SMALL, 'opacity-40')} title="No neighbour contact is stored yet">
+          Ask a neighbour
+        </span>
+      </Row>
+      <span className="text-[10px] text-muted">
+        The other two need a second contact number, which onboarding does not collect yet.
+      </span>
+    </div>
+  )
+}
+
 function SlotStatus({ dose, now }: { dose: UpcomingDose; now: Date }) {
   if (dose.event) return <DoseStatusChip status={dose.event.status} />
   const due = dose.at.getTime() <= now.getTime()

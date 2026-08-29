@@ -6,6 +6,7 @@ as an empty screen.
 """
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from api import db, main as api_main
+from api import db, main as api_main, routes_app
 
 
 @pytest.fixture
@@ -85,6 +86,58 @@ def test_missing_intake_returns_a_code_the_client_can_humanise(client):
 
 def test_unknown_handoff_token_is_not_found(client):
     assert client.get("/h/nosuchtoken").json()["error"] == "not_found"
+
+
+def test_unknown_is_carried_as_its_own_dose_status(client):
+    """The degraded case — the agent could not reach the patient. It must survive to
+    the app as `unknown` and never be flattened into `missed`, which would assert the
+    dose was not taken when nothing was established either way."""
+    statuses = {d["status"] for d in client.get("/app/doses").json()}
+    assert "unknown" in statuses
+    assert "missed" in statuses  # still distinct, not replaced
+
+
+def test_the_summary_never_calls_an_unreachable_dose_missed(client, monkeypatch):
+    """The summary window is [06:00 today, now], so this test pins the clock to
+    midday. Run at 03:00 the window is legitimately empty and the assertion would
+    pass for the wrong reason — a test that only holds at certain hours is not one."""
+    IST = timezone(timedelta(hours=5, minutes=30))
+    frozen = datetime(2026, 8, 30, 14, 0, tzinfo=IST)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen.astimezone(tz) if tz else frozen
+
+    monkeypatch.setattr(routes_app, "datetime", FixedDatetime)
+
+    con = db.connect()
+    try:
+        row = con.execute("SELECT * FROM dose_events WHERE status = 'unknown'").fetchone()
+        assert row is not None
+        con.execute(
+            "UPDATE dose_events SET slot_time = ? WHERE id = ?",
+            (datetime(2026, 8, 30, 10, 0, tzinfo=IST).isoformat(), row["id"]),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    texts = [i["text"] for i in client.get("/app/summary").json()["items"]]
+    unreachable = [t for t in texts if "could not reach" in t]
+    assert unreachable, texts
+    assert not any("missed" in t for t in unreachable)
+
+
+def test_an_escalation_can_name_the_dose_it_fired_about(client):
+    """Without the link, "the escalation that fired" can only be guessed at from
+    timestamps, and a guess presented as a link is worse than no link."""
+    escalations = client.get("/app/escalations").json()
+    linked = [e for e in escalations if e["dose_event_id"]]
+    assert linked, "no escalation is linked to a dose"
+
+    unknown = [d for d in client.get("/app/doses").json() if d["status"] == "unknown"]
+    assert linked[0]["dose_event_id"] in {d["id"] for d in unknown}
 
 
 # ------------------------------------------------------------ onboarding gate

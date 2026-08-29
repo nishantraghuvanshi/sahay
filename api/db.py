@@ -12,7 +12,7 @@ what stops a dose drifting a day when the server and the phone disagree about zo
 import json
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -52,9 +52,14 @@ def connect() -> sqlite3.Connection:
 
 
 def _day_shift() -> int:
-    anchor = datetime.fromisoformat(f"{FIXTURE_ANCHOR}T00:00:00+00:00")
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    return round((today - anchor).total_seconds() / 86_400)
+    """Whole days between the fixture's anchor date and today, in LOCAL time.
+
+    Local, not UTC, and compared as dates rather than instants. At 03:00 IST the
+    UTC date is still yesterday, so a UTC comparison shifts the whole fixture back
+    a day — and app/src/api/mock.ts rebases against local midnight, so the mock and
+    the live API would disagree about which day a dose belongs to.
+    """
+    return (datetime.now().astimezone().date() - date.fromisoformat(FIXTURE_ANCHOR)).days
 
 
 def _rebase(value, shift: int):

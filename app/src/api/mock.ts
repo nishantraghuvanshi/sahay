@@ -123,7 +123,9 @@ export const mock = {
                     ? `${medName(d.medication_id)} missed${d.note ? ` — ${d.note}` : ''}`
                     : d.status === 'no_answer'
                       ? `${medName(d.medication_id)} — no answer`
-                      : `${medName(d.medication_id)} deferred`,
+                      : d.status === 'unknown'
+                        ? `${medName(d.medication_id)} — could not reach them`
+                        : `${medName(d.medication_id)} deferred`,
               href: '/doses',
             })),
           ...db.call_sessions

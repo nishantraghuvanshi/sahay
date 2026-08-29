@@ -93,6 +93,8 @@
 - [x] Reconciles with `dose_events` — no derived or smoothed numbers
 - [x] Reason text shown where captured ("strip not found")
 - [ ] `unknown` renders as its own status, never as `missed` (`2o` degraded state)
+      ↳ built — `unknown` is the fifth value in `DoseStatus`, in `TRD §3`'s `dose_events.status`
+      comment, and in the seed. It prints "not known" and is filterable on the history screen
 
 ---
 
@@ -279,7 +281,10 @@
       ↳ `?fail=<key>` forces any single query to fail; `{ok:false}` is thrown, never rendered as data
 - [x] **Loading is a skeleton, never a spinner** — layout stable before data lands
 - [ ] Degraded state: agent cannot reach the parent → doses read `unknown`, the escalation
-      ↳ ⛔ not built — `unknown` is not a value in the DoseStatus union (TRD §3 has four). Needs a schema decision first
+      ↳ built — the schema decision was taken: `unknown` is a fifth `DoseStatus`, and
+      `escalations.dose_event_id` links the alert to the slot it fired about, so it can be
+      named rather than guessed at from timestamps. Two of the three offered actions render
+      disabled with their reason: no second number and no neighbour are stored (gap 5)
       that fired is named, and the caregiver is offered `Call Mom yourself` /
       `Try another number` / `Ask neighbour`
 - [ ] OCR failure offers a manual path — `Retake` / `Crop & retry` / **`Type it in`**

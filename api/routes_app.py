@@ -197,6 +197,8 @@ def get_summary():
                 f"{name} confirmed" if status == "confirmed"
                 else f"{name} missed" + (f" — {d['note']}" if d["note"] else "") if status == "missed"
                 else f"{name} — no answer" if status == "no_answer"
+                # Never "missed": nothing was established about this dose.
+                else f"{name} — could not reach them" if status == "unknown"
                 else f"{name} deferred"
             )
             items.append({"at": d["slot_time"], "kind": "dose", "status": status,

@@ -3,7 +3,13 @@
  * sees the schema. Do not rename fields to be "nicer" — the record must match the DB.
  */
 
-export type DoseStatus = 'confirmed' | 'deferred' | 'missed' | 'no_answer'
+/**
+ * `unknown` is not a softer `missed`. It is the degraded case — the agent could not
+ * reach the parent at all — and it asserts nothing about whether the dose was taken.
+ * Rendering it as `missed` would state a fact nobody established, which is the same
+ * failure as reading a model refusal as "no medicines on the page".
+ */
+export type DoseStatus = 'confirmed' | 'deferred' | 'missed' | 'no_answer' | 'unknown'
 export type Severity = 'none' | 'watch' | 'red'
 export type Priority = 'P1' | 'P2' | 'P3'
 export type ObservationKind = 'symptom' | 'mood' | 'note'
@@ -133,6 +139,8 @@ export interface Escalation {
   id: string
   patient_id: string
   intake_record_id: string | null
+  /** Set when the alert was raised about a specific dose slot. */
+  dose_event_id?: string | null
   level: Priority
   /** The cited rule — rendered literally in the feed. */
   reason: string

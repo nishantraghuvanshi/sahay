@@ -63,9 +63,11 @@ export function slotsForDay(
 /**
  * The next slot still waiting on an answer.
  *
- * A `missed` or `no_answer` slot in the past is deliberately NOT "next": it is history, and
- * the alerts feed owns it. Surfacing it here would make the home card show a dose the
- * caregiver can no longer do anything about, in the position reserved for the one they can.
+ * A slot that already has any dose_event against it — including `unknown` — is deliberately
+ * NOT "next": it is history, and the alerts feed owns it. Surfacing it here would make the
+ * home card show a dose the caregiver can no longer do anything about, in the position
+ * reserved for the one they can. `unknown` counts as settled for this purpose even though
+ * nothing is known about the dose: the slot has been attempted and will not be retried.
  */
 export function nextDose(
   medications: Medication[],
@@ -76,7 +78,8 @@ export function nextDose(
     d.event?.status === 'confirmed' ||
     d.event?.status === 'deferred' ||
     d.event?.status === 'missed' ||
-    d.event?.status === 'no_answer'
+    d.event?.status === 'no_answer' ||
+    d.event?.status === 'unknown'
 
   const today = slotsForDay(medications, events, now).filter((d) => !settled(d))
   const ahead = today.find((d) => d.at.getTime() >= now.getTime() - 60_000)

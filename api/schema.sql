@@ -128,7 +128,9 @@ CREATE TABLE IF NOT EXISTS dose_events (
   medication_id   TEXT NOT NULL REFERENCES medications(id),
   slot_time       TEXT NOT NULL,
   call_session_id TEXT REFERENCES call_sessions(id),
-  status          TEXT NOT NULL,          -- 'confirmed'|'deferred'|'missed'|'no_answer'
+  -- 'unknown' is the degraded case (the agent could not reach the patient) and is
+  -- deliberately distinct from 'missed', which asserts the dose was not taken.
+  status          TEXT NOT NULL,          -- 'confirmed'|'deferred'|'missed'|'no_answer'|'unknown'
   note            TEXT,
   created_at      TEXT NOT NULL
 );
@@ -165,6 +167,10 @@ CREATE TABLE IF NOT EXISTS escalations (
   id               TEXT PRIMARY KEY,
   patient_id       TEXT NOT NULL REFERENCES patients(id),
   intake_record_id TEXT REFERENCES intake_records(id),
+  -- Which dose this alert was raised about, when it was raised because a slot
+  -- could not be established. Without it "the escalation that fired" cannot be
+  -- named next to the dose, only guessed at from timestamps.
+  dose_event_id    TEXT REFERENCES dose_events(id),
   level            TEXT NOT NULL,
   reason           TEXT NOT NULL,
   channel          TEXT NOT NULL,

@@ -177,6 +177,7 @@ const DOSE_LABEL: Record<DoseStatus, string> = {
   deferred: 'deferred',
   missed: 'missed',
   no_answer: 'no answer',
+  unknown: 'not known',
 }
 
 const SEVERITY_LABEL: Record<Severity, string> = {
@@ -194,13 +195,19 @@ function dotClass(kind: 'filled' | 'hollow' | 'empty') {
   )
 }
 
-/** Four dose states, never colour alone — the label always renders. */
+/** Five dose states, never colour alone — the label always renders. */
 export function DoseStatusChip({ status }: { status: DoseStatus }) {
   const kind = status === 'confirmed' ? 'filled' : status === 'deferred' ? 'empty' : 'hollow'
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px]">
       <span className={dotClass(kind)} />
-      <span className={clsx(status === 'missed' || status === 'no_answer' ? 'font-semibold' : 'text-muted-strong')}>
+      <span
+        className={clsx(
+          status === 'missed' || status === 'no_answer' || status === 'unknown'
+            ? 'font-semibold'
+            : 'text-muted-strong',
+        )}
+      >
         {DOSE_LABEL[status]}
       </span>
     </span>

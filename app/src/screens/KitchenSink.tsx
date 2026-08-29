@@ -63,6 +63,7 @@ export default function KitchenSink() {
           <DoseStatusChip status="deferred" />
           <DoseStatusChip status="missed" />
           <DoseStatusChip status="no_answer" />
+          <DoseStatusChip status="unknown" />
         </Row>
         <Row className="flex-wrap gap-4">
           <SeverityChip severity="none" />

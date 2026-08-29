@@ -35,18 +35,21 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'missed', label: 'Missed' },
   { key: 'no_answer', label: 'No answer' },
+  { key: 'unknown', label: 'Not known' },
   { key: 'deferred', label: 'Deferred' },
 ]
 
 /**
- * `missed` and `no_answer` are the two rows a caregiver must never confuse: one means the
- * dose was not taken, the other means we do not know. Said in words on the row itself.
+ * `missed` is the only status that asserts the dose was not taken. `no_answer` and `unknown`
+ * both mean we do not know, and must never be read as `missed` — one is "we called and nobody
+ * picked up", the other "we could not reach them at all". Said in words on the row itself.
  */
 const MEANING: Record<DoseStatus, string> = {
   confirmed: 'Taken — confirmed on a check-in call.',
   deferred: 'Put off to a later time, and still expected.',
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
+  unknown: 'We could not reach them at all. This is not a missed dose — nothing is known about it.',
 }
 
 /** Local calendar day, never UTC — a 21:00 IST dose must not land on the previous day. */
@@ -224,7 +227,7 @@ export default function DoseHistory() {
       {events.length > 0 && (
         <Card className="gap-2">
           <Label>What the four statuses mean</Label>
-          {(['confirmed', 'deferred', 'missed', 'no_answer'] as DoseStatus[]).map((status) => (
+          {(['confirmed', 'deferred', 'missed', 'no_answer', 'unknown'] as DoseStatus[]).map((status) => (
             <Row key={status} className="items-start gap-2">
               <span className="w-[6.75rem] shrink-0 pt-px">
                 <DoseStatusChip status={status} />
@@ -262,11 +265,11 @@ function DoseRow({ event, medication }: { event: DoseEvent; medication: Medicati
           </span>
         </div>
 
-        {(event.status === 'missed' || event.status === 'no_answer') && (
+        {(event.status === 'missed' || event.status === 'no_answer' || event.status === 'unknown') && (
           <div
             className={clsx(
               'text-[11px] break-words',
-              event.status === 'no_answer' ? 'text-muted-strong' : 'font-semibold',
+              event.status === 'missed' ? 'font-semibold' : 'text-muted-strong',
             )}
           >
             {MEANING[event.status]}
