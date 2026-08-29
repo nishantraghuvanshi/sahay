@@ -331,12 +331,19 @@ class TurnManager {
    * Stop the conversation and clean up all timers.
    *
    * Can be called from any state. After stop(), all other methods are no-ops.
+   *
+   * Returns whatever onEndConversation returns (a Promise, if the caller's
+   * callback is async) so a caller that needs to know the session is fully
+   * closed before proceeding — see PlaygroundConversation.stop() — can await
+   * it. Idempotent stop() (this.ended already true) resolves immediately.
+   *
+   * @returns {*|undefined}
    */
   stop() {
     if (this.ended) {
       return; // Already ended — idempotent.
     }
-    this._end({ label: 'STOPPED', source: 'manual', reason: 'stop_called' });
+    return this._end({ label: 'STOPPED', source: 'manual', reason: 'stop_called' });
   }
 
   /**
@@ -392,6 +399,7 @@ class TurnManager {
    * End the conversation: clean up timers, cancel any active modality,
    * transition to IDLE, and notify the caller.
    * @param {Object} [outcome] - Conversation outcome
+   * @returns {*|undefined} Whatever onEndConversation returns, propagated so stop() can await it
    * @private
    */
   _end(outcome) {
@@ -406,7 +414,7 @@ class TurnManager {
     }
 
     this._transition(STATE.IDLE);
-    this.onEndConversation(outcome);
+    return this.onEndConversation(outcome);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

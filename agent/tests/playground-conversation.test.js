@@ -194,6 +194,47 @@ describe('PlaygroundConversation — session close on conversation end', () => {
     assert.strictEqual(session.status, 'dropped');
   });
 
+  test('stop() actually awaits the session close before resolving (F4)', async () => {
+    // The test above passes even with a fire-and-forget close, because the
+    // fake repository's writes are synchronous under the hood and happen to
+    // settle before the assertion runs. That's exactly the gap: a
+    // disconnect immediately followed by process shutdown wouldn't get that
+    // lucky. This makes the close artificially slow and proves stop()'s own
+    // promise does not resolve until it does — a browser disconnect must
+    // never be able to leave a session 'active' (unresumable) because the
+    // process moved on before the write landed.
+    const repo = freshRepo();
+    await repo.upsertPatient(PATIENT);
+
+    const { conversation } = buildConversation({ repo, llmResponses: [{ content: '', tool_calls: [] }] });
+
+    await conversation.start();
+    const sessionId = conversation.sessionId;
+
+    const originalEndSession = repo.endSession.bind(repo);
+    let releaseClose;
+    const closeGate = new Promise((resolve) => { releaseClose = resolve; });
+    repo.endSession = async (...args) => {
+      await closeGate;
+      return originalEndSession(...args);
+    };
+
+    let stopResolved = false;
+    const stopPromise = conversation.stop().then(() => { stopResolved = true; });
+
+    // Let every fire-and-forget microtask that would run anyway have its
+    // turn. If stop() didn't await the close, it would have resolved by now.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(stopResolved, false, 'stop() must not resolve before the session close completes');
+    assert.strictEqual((await repo.getSession(sessionId)).status, 'active', 'the close is still pending');
+
+    releaseClose();
+    await stopPromise;
+
+    assert.strictEqual(stopResolved, true);
+    assert.strictEqual((await repo.getSession(sessionId)).status, 'dropped');
+  });
+
   test('a session closed as dropped resumes on the next playground conversation for the same patient', async () => {
     const repo = freshRepo();
     await repo.upsertPatient(PATIENT);
@@ -218,5 +259,71 @@ describe('PlaygroundConversation — session close on conversation end', () => {
     assert.strictEqual(resolvedMode, 'resume');
 
     await second.conversation.stop(); // release the turn manager's pending timers
+  });
+});
+
+describe('PlaygroundConversation — TTS adapter identity (F7)', () => {
+  test('the same TTS adapter instance is reused for the life of a conversation', async () => {
+    // ProviderRegistry.getPlaygroundAdapter() mints a NEW adapter instance
+    // on every call (correctly — it's a singleton shared by every concurrent
+    // playground conversation, and must not let one leak into another's).
+    // But onCancelTTS, _speak, _processUserSpeech and stop() all need to
+    // reach the SAME instance within one conversation, or a streaming
+    // adapter's disconnectStream() acts on an instance that was never
+    // connected — barge-in silently does nothing. This fakes the registry
+    // exactly as reported (a fresh object per call) and asserts
+    // PlaygroundConversation caches its own reference rather than trusting
+    // the registry to hand back the same one.
+    const repo = freshRepo();
+    await repo.upsertPatient(PATIENT);
+
+    let instancesCreated = 0;
+    const registry = {
+      getActiveSTT: () => ({ init: async () => {}, transcribe: async () => {}, dispose: async () => {} }),
+      getSTTConfig: () => ({}),
+      getActiveLLM: () => ({
+        chatCompletionStream: async (body, config, env, onToken) => {
+          onToken('');
+          return { content: '', tool_calls: [] };
+        },
+      }),
+      getLLMConfig: () => ({}),
+      getTTSConfig: () => ({}),
+      getActivePlaygroundTTS: () => {
+        instancesCreated++;
+        return { synthesize: async () => Buffer.from([0, 0]) };
+      },
+    };
+
+    const transport = new PlaygroundTransportAdapter(null);
+    transport.repository = repo;
+
+    const conversation = new PlaygroundConversation({
+      providerRegistry: registry,
+      strategy: new MedicationAdherenceStrategy('hi'),
+      transport,
+      language: 'hi',
+      phone: PATIENT.phone,
+      direction: 'inbound',
+      onAudio: () => {},
+      onAgentResponse: () => {},
+      onError: (err) => { throw err; },
+    });
+
+    // First fetch happens as part of speaking the first message (start()).
+    await conversation.start();
+    await waitFor(() => conversation.turn.getState() === 'listening');
+
+    // Drive one more turn (fetches the adapter again in _processUserSpeech),
+    // then simulate a browser disconnect (fetches it again in stop()).
+    conversation.turn.userTranscript('नमस्ते', true);
+    await waitFor(() => conversation.turn.getState() === 'listening');
+    await conversation.stop();
+
+    assert.strictEqual(
+      instancesCreated,
+      1,
+      'the registry should be asked for the TTS adapter exactly once per conversation, not once per call site'
+    );
   });
 });

@@ -68,6 +68,12 @@ class PlaygroundConversation {
     // Conversation state
     this.messages = [];
     this.sttAdapter = null;
+    // Lazily created and cached for the life of this conversation — see
+    // _getTtsAdapter(). ProviderRegistry.getPlaygroundAdapter() mints a new
+    // adapter instance on every call; caching one here per conversation is
+    // what makes onCancelTTS's disconnectStream() actually reach the
+    // instance that is streaming, instead of a fresh, never-connected one.
+    this.ttsAdapter = null;
     this.ended = false;
     /** This session's id, minted by transport.openSession(); null until start() resolves. */
     this.sessionId = null;
@@ -97,7 +103,7 @@ class PlaygroundConversation {
       onCancelTTS: () => {
         // Cancel streaming TTS: set flag and disconnect WebSocket to stop generation
         this._cancelTTS = true;
-        const ttsAdapter = this.providerRegistry.getActivePlaygroundTTS();
+        const ttsAdapter = this._getTtsAdapter();
         if (ttsAdapter && ttsAdapter.isStreamConnected) {
           ttsAdapter.disconnectStream().catch(() => {});
         }
@@ -111,14 +117,20 @@ class PlaygroundConversation {
       onProcessUserSpeech: (transcript) => {
         this._processUserSpeech(transcript);
       },
-      onEndConversation: (outcome) => {
+      onEndConversation: async (outcome) => {
         // A real report_outcome tool call ends the session as completed;
         // anything else (manual stop, silence timeout, a browser disconnect
         // routed through stop()) closes it as dropped, so the next
         // playground session for this patient resumes — the same rule
         // terminalStatusFor applies on the phone path.
+        //
+        // Returned (as a Promise, since this callback is async) so
+        // TurnManager.stop() can propagate it and PlaygroundConversation's
+        // own stop() can await it — otherwise a disconnect immediately
+        // followed by process shutdown could leave the session 'active'
+        // instead of 'dropped', which would make it unresumable.
         const endedReason = outcome && outcome.source === 'tool_call' ? 'customer-ended-call' : undefined;
-        this._closeSession(endedReason);
+        await this._closeSession(endedReason);
         this.onOutcome(outcome);
       },
       onError: (err) => {
@@ -276,7 +288,7 @@ class PlaygroundConversation {
 
       // --- Streaming pipeline ---
       // 1. Connect TTS (streaming adapters only — see _synthesizeSentence)
-      const ttsAdapter = this.providerRegistry.getActivePlaygroundTTS();
+      const ttsAdapter = this._getTtsAdapter();
       const ttsConfig = this.providerRegistry.getTTSConfig();
       const ttsOverrides = this._ttsOverrides();
 
@@ -361,7 +373,7 @@ class PlaygroundConversation {
     try {
       this.onAgentResponse(text);
 
-      const ttsAdapter = this.providerRegistry.getActivePlaygroundTTS();
+      const ttsAdapter = this._getTtsAdapter();
       const ttsConfig = this.providerRegistry.getTTSConfig();
       const ttsOverrides = this._ttsOverrides();
 
@@ -459,6 +471,30 @@ class PlaygroundConversation {
   }
 
   /**
+   * The active TTS adapter for this conversation, created once and reused.
+   *
+   * ProviderRegistry.getPlaygroundAdapter() (getActivePlaygroundTTS) hands
+   * back a fresh adapter instance on every call — correct for the registry,
+   * which is a singleton shared by every concurrent playground conversation
+   * and must not let one session's adapter leak into another's. But within
+   * ONE conversation, every call site (onCancelTTS, _speak,
+   * _processUserSpeech, stop()) needs the SAME instance: a streaming
+   * adapter's connection state (isStreamConnected/connectStream/
+   * disconnectStream) lives on the instance, so fetching a new one to
+   * cancel makes onCancelTTS's disconnectStream() act on an adapter that
+   * was never connected — barge-in silently does nothing.
+   *
+   * @returns {Object}
+   * @private
+   */
+  _getTtsAdapter() {
+    if (!this.ttsAdapter) {
+      this.ttsAdapter = this.providerRegistry.getActivePlaygroundTTS();
+    }
+    return this.ttsAdapter;
+  }
+
+  /**
    * Language-driven TTS overrides shared by _speak and _processUserSpeech.
    * @private
    */
@@ -506,11 +542,14 @@ class PlaygroundConversation {
     // turn.stop() triggers onEndConversation with a non-tool_call outcome,
     // which _closeSession maps to 'dropped' — this is what makes a browser
     // disconnect (ws-handler calls stop() on 'close') or an explicit Stop
-    // click resumable on the next playground session.
-    this.turn.stop();
+    // click resumable on the next playground session. Awaited so the
+    // session is actually closed before this method returns — turn.stop()
+    // is idempotent (a no-op if already ended, e.g. a normally-completed
+    // conversation), so this never re-closes an already-closed session.
+    await this.turn.stop();
 
     // Disconnect TTS streaming WebSocket, if this adapter has one
-    const ttsAdapter = this.providerRegistry.getActivePlaygroundTTS();
+    const ttsAdapter = this._getTtsAdapter();
     if (_isStreamingTTS(ttsAdapter)) {
       try { await ttsAdapter.disconnectStream(); } catch (e) { /* ignore */ }
     }
