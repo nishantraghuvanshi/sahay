@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './shell/AppShell'
 import Placeholder from './screens/Placeholder'
+import KitchenSink from './screens/KitchenSink'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -38,6 +39,8 @@ export default function App() {
         <Route path="/doses" element={<Placeholder title="Dose history" frame="FR-24" />} />
         <Route path="/observations" element={<Placeholder title="What Mom said" frame="1s / 2j" />} />
         <Route path="/settings" element={<Placeholder title="Settings" frame="1m / 2k" />} />
+        {/* dev-only review surface, removed before the freeze */}
+        <Route path="/kitchen-sink" element={<KitchenSink />} />
       </Route>
 
       <Route path="*" element={<Placeholder title="Not found" frame="404" />} />
