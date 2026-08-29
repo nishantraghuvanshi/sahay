@@ -170,4 +170,64 @@ describe('PlaygroundTransportAdapter', () => {
     assert.strictEqual(jsonBody.patients.length, 1);
     assert.strictEqual(jsonBody.patients[0].phone_e164, PATIENT.phone);
   });
+
+  describe('openSession — no session row must never be silent (F1)', () => {
+    // openCall already returns { session: null } for these cases (see
+    // lifecycle.js) so the phone path can tolerate them — a real call is
+    // already under way regardless of bookkeeping. The playground has no
+    // call underneath it: a session-less "success" here would let a full
+    // conversation run, log healthily at every turn, and persist nothing.
+    // openSession must surface that instead of returning as if all is well.
+
+    test('outbound to an unmatched phone throws rather than minting a working-looking session', async () => {
+      const repo = freshRepo();
+      const adapter = new PlaygroundTransportAdapter(null);
+      adapter.repository = repo;
+
+      await assert.rejects(
+        () => adapter.openSession({ phone: '+919999999999', direction: 'outbound' }),
+        /Could not open a session/
+      );
+
+      const sessions = await repo.listSessions();
+      assert.strictEqual(sessions.length, 0);
+    });
+
+    test('a DB error while opening an outbound session also throws, not just logs', async () => {
+      const repo = freshRepo();
+      await repo.upsertPatient(PATIENT);
+      repo.createSession = async () => {
+        throw new Error('boom');
+      };
+      const adapter = new PlaygroundTransportAdapter(null);
+      adapter.repository = repo;
+
+      await assert.rejects(
+        () => adapter.openSession({ phone: PATIENT.phone, direction: 'outbound' }),
+        /Could not open a session/
+      );
+    });
+
+    test('a normal inbound open for a known patient still succeeds', async () => {
+      const repo = freshRepo();
+      await repo.upsertPatient(PATIENT);
+      const adapter = new PlaygroundTransportAdapter(null);
+      adapter.repository = repo;
+
+      const opened = await adapter.openSession({ phone: PATIENT.phone, direction: 'inbound' });
+      assert.ok(opened.sessionId);
+      assert.ok(opened.session, 'a session row must exist for a successful open');
+    });
+
+    test('a normal outbound open for a known patient still succeeds', async () => {
+      const repo = freshRepo();
+      await repo.upsertPatient(PATIENT);
+      const adapter = new PlaygroundTransportAdapter(null);
+      adapter.repository = repo;
+
+      const opened = await adapter.openSession({ phone: PATIENT.phone, direction: 'outbound' });
+      assert.ok(opened.sessionId);
+      assert.ok(opened.session, 'a session row must exist for a successful open');
+    });
+  });
 });

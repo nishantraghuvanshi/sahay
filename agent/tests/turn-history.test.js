@@ -227,6 +227,7 @@ describe('webhook — transcript and tool-call events write turn history', () =>
 describe('PlaygroundTransportAdapter.recordTurn', () => {
   test('routes a turn through the shared lifecycle module', async () => {
     const repo = freshRepo();
+    await repo.upsertPatient({ phone: '+919876500014', name: 'Kiran-ji', drugName: 'Amlodipine', language: 'hi' });
     const transport = new PlaygroundTransportAdapter({});
     await transport.start(null, null, { repository: repo, strategy: {} });
 

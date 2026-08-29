@@ -69,10 +69,22 @@ class PlaygroundTransportAdapter extends TransportPort {
    * lifecycle module, same mode resolution, so an inbound simulated call for
    * a patient with a dropped session opens in `resume` mode too.
    *
+   * A playground conversation, unlike a phone call, is entirely mediated by
+   * this server — there is no live call already under way that a missing
+   * session merely fails to bookkeep for. So unlike the phone path (where
+   * openCall's tolerant `session: null` is fine — the call already
+   * happened), here a null session means the conversation about to run
+   * would persist nothing while looking identical to one that does. Rather
+   * than let that happen quietly, this throws, and the caller (the browser,
+   * via PlaygroundConversation.start()'s existing error path) is told
+   * before a single turn is spoken.
+   *
    * @param {Object} args
    * @param {string} args.phone - The picked patient's E.164 phone
    * @param {'inbound'|'outbound'} args.direction
    * @returns {Promise<Object>} { sessionId, mode, patient, session, fieldsSoFar, lastCalls, isNewPatient }
+   * @throws {Error} If no session row was opened for this call — an
+   *   unmatched outbound number, or a resolution/persistence failure.
    */
   async openSession({ phone, direction }) {
     const sessionId = _mintSessionId();
@@ -82,6 +94,18 @@ class PlaygroundTransportAdapter extends TransportPort {
       direction,
       callId: sessionId,
     });
+
+    if (!resolution.session) {
+      logger.log('playground_session_open_failed', { phone, direction, sessionId });
+      throw new Error(
+        `Could not open a session for this ${direction} call — ` +
+          (resolution.patient
+            ? 'a database error prevented the session from being created.'
+            : 'no matching patient was found.') +
+          ' Nothing would be recorded, so the conversation was not started.'
+      );
+    }
+
     return { sessionId, ...resolution };
   }
 
