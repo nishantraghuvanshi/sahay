@@ -1,9 +1,13 @@
 'use strict';
 
+const { INTAKE_FIELDS } = require('./inbound-context');
+
 /**
  * Function tool definitions for the medication adherence use case.
  *
  * report_outcome: LLM calls this once when the user's intent is clear.
+ * capture_field: LLM calls this per-turn, as soon as an intake field is
+ * answered — this is what makes fields_so_far non-empty for a resumed call.
  * end_call: Uses Vapi's native endCall tool (no custom definition needed).
  */
 
@@ -36,6 +40,33 @@ const TOOLS = [
           },
         },
         required: ['outcome', 'reason'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    async: false,
+    function: {
+      name: 'capture_field',
+      description: [
+        'Call this IMMEDIATELY after every turn in which the caller answers one',
+        'of the intake questions — never batch captures to the end of the call.',
+        "Pass the caller's words VERBATIM: do not paraphrase, translate, or tidy them up.",
+      ].join(' '),
+      parameters: {
+        type: 'object',
+        properties: {
+          field: {
+            type: 'string',
+            enum: INTAKE_FIELDS.map((f) => f.key),
+            description: 'Which intake field this answer is for',
+          },
+          value: {
+            type: 'string',
+            description: "The caller's answer, verbatim",
+          },
+        },
+        required: ['field', 'value'],
       },
     },
   },

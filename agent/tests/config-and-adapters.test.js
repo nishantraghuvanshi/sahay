@@ -112,8 +112,7 @@ describe('MedicationAdherenceStrategy config loading', () => {
   test('getTools returns report_outcome tool', () => {
     const strategy = new MedicationAdherenceStrategy();
     const tools = strategy.getTools();
-    assert.strictEqual(tools.length, 1);
-    assert.strictEqual(tools[0].function.name, 'report_outcome');
+    assert.ok(tools.some((t) => t.function.name === 'report_outcome'));
   });
 
   test('shouldEscalate returns true for ESCALATED_SYMPTOM', () => {

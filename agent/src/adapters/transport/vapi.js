@@ -4,6 +4,7 @@ const TransportPort = require('../../core/ports/transport');
 const { resolveInboundCall } = require('../../core/inbound/resolve-caller');
 const {
   buildInboundVariables,
+  INTAKE_FIELDS,
 } = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
 const { terminalStatusFor } = require('../../core/inbound/session-status');
@@ -152,13 +153,22 @@ class VapiTransportAdapter extends TransportPort {
             });
             break;
 
-          case 'tool-call':
+          case 'tool-call': {
+            const callId = message.call?.id;
+            const toolName = message.tool?.name;
+            const args = message.tool?.arguments || {};
+
             await eventBus.emit(EVENT_TYPES.TOOL_CALLED, {
-              callId: message.call?.id,
-              tool: message.tool?.name,
-              args: message.tool?.arguments,
+              callId,
+              tool: toolName,
+              args,
             });
+
+            if (toolName === 'capture_field') {
+              await this._captureField(callId, args);
+            }
             break;
+          }
 
           case 'end-of-call-report': {
             const callData = message.call || {};
@@ -214,6 +224,39 @@ class VapiTransportAdapter extends TransportPort {
     });
 
     logger.log('transport_started', { transport: 'vapi', webhookUrl: this.webhookUrl });
+  }
+
+  /**
+   * Write a captured intake field to the session, turn by turn.
+   *
+   * This is what makes fields_so_far non-empty before the call ends, so a
+   * resumed call opens holding what was already said instead of nothing.
+   *
+   * A field name the model invented is logged and dropped rather than
+   * written — models emit arbitrary strings, and INTAKE_FIELDS is the only
+   * source of truth for what a session may hold. A callId with no matching
+   * session is checked for up front (rather than caught from
+   * updateSessionFields's throw) so a real persistence failure still
+   * surfaces instead of being swallowed alongside the expected case.
+   *
+   * @param {string} callId
+   * @param {Object} args - { field, value } from the tool call
+   * @private
+   */
+  async _captureField(callId, args) {
+    const { field, value } = args;
+
+    if (!INTAKE_FIELDS.some((f) => f.key === field)) {
+      logger.log('capture_field_unknown_field', { callId, field });
+      return;
+    }
+
+    if (!callId || !(await this.repository.getSession(callId))) {
+      logger.log('capture_field_unknown_session', { callId, field });
+      return;
+    }
+
+    await this.repository.updateSessionFields(callId, { [field]: value });
   }
 
   /**

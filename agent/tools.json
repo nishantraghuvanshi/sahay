@@ -34,6 +34,37 @@
           ]
         }
       }
+    },
+    {
+      "type": "function",
+      "async": false,
+      "function": {
+        "name": "capture_field",
+        "description": "Call this IMMEDIATELY after every turn in which the caller answers one of the intake questions — never batch captures to the end of the call. Pass the caller's words VERBATIM: do not paraphrase, translate, or tidy them up.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "enum": [
+                "chief_complaint",
+                "onset",
+                "breathing",
+                "who_is_with_you"
+              ],
+              "description": "Which intake field this answer is for"
+            },
+            "value": {
+              "type": "string",
+              "description": "The caller's answer, verbatim"
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ]
+        }
+      }
     }
   ]
 }
