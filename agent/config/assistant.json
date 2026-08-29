@@ -3,13 +3,13 @@
   "transcriber": {
     "provider": "custom-transcriber",
     "server": {
-      "url": "wss://alias-coating-argued-vocal.trycloudflare.com/api/stt"
+      "url": "wss://producers-exposed-pure-percentage.trycloudflare.com/api/stt"
     }
   },
   "model": {
     "provider": "custom-llm",
     "model": "gpt-4o-mini",
-    "url": "https://alias-coating-argued-vocal.trycloudflare.com/llm/chat/completions",
+    "url": "https://producers-exposed-pure-percentage.trycloudflare.com/llm/chat/completions",
     "messages": [
       {
         "role": "system",
@@ -120,7 +120,7 @@
     ]
   },
   "server": {
-    "url": "https://alias-coating-argued-vocal.trycloudflare.com/webhook"
+    "url": "https://producers-exposed-pure-percentage.trycloudflare.com/webhook"
   },
   "artifactPlan": {
     "recordingEnabled": true
