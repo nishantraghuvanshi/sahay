@@ -469,7 +469,7 @@ class VapiTransportAdapter extends TransportPort {
       voice,
       firstMessage,
       firstMessageInterruptionsEnabled: false,  // Don't let user interrupt the greeting
-      voicemailMessage: 'नमस्ते, मैं स्वास्थ्य सहायक से बोल रहा हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
+      voicemailMessage: 'नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
       silenceTimeoutSeconds: strategyConfig.silenceTimeoutSeconds,
       maxDurationSeconds: strategyConfig.maxDurationSeconds,
       maxIdleSeconds: strategyConfig.maxIdleSeconds,
