@@ -38,17 +38,25 @@ Capture, never interpret. No diagnosis, no dosing guidance, no symptom interpret
 and never a claim that help has been dispatched. Every transcript is automatically
 scored against those rules; a violation is a failed run, not a warning.
 
-## Repository layout
+## Repository layout and lane ownership
 
-| Path | Contents |
-|---|---|
-| `agent/` | Prompts, tool definitions, voice settings |
-| `api/` | FastAPI — 7 tools, priority rules, escalation, safety scorer, scheduler |
-| `app/` | Caregiver app |
-| `handoff/` | Read-only `/h/{token}` view |
-| `scripts/` | Mock API, seed loader, cold-run scripts, scoring sheet |
-| `evidence/` | Recordings, transcripts, scores, unit economics, payment proof |
-| `docs/` | PRD, TRD, execution plan, build checklists |
+Each lane owns its directories exclusively. Git only fights you when two people edit the
+same file — four people on one branch stays painless as long as nobody writes outside
+their lane. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+| Path | Contents | Owner |
+|---|---|---|
+| `agent/` | Prompts, tool definitions, voice settings | **Lane A — Voice** |
+| `api/` | 7 tools, priority rules, escalation, safety scorer, scheduler | **Lane B — Memory & API** |
+| `scripts/mock_api.py`, `scripts/seed.py` | Mock contract server, seed loader | **Lane B** |
+| `app/` | Caregiver app | **Lane C — App & handoff** |
+| `handoff/` | Read-only `/h/{token}` view | **Lane C** |
+| `evidence/` | Recordings, transcripts, scores, unit economics, payment proof | **Lane D — Evidence & revenue** |
+| `scripts/cold-runs/` | The three cold-run scripts and the scoring sheet | **Lane D** |
+| `README.md`, `docs/GTM.md` | Submission-facing writing | **Lane D** |
+| `agent/tools.json` | **The frozen tool contract** — Lane B edits, only before the freeze | **Shared** |
+| `docs/` | PRD, TRD, execution plan, build checklists | Anyone |
+| `docs/DECISIONS.md` | Append-only decision log | Everyone writes |
 
 ## Build
 
@@ -70,6 +78,8 @@ The Care API must be reachable over public HTTPS for the voice agent to call its
 | [`docs/IDEA_SCOPE.md`](docs/IDEA_SCOPE.md) | Who, when, what proof |
 | [`docs/checklists/END-TO-END.md`](docs/checklists/END-TO-END.md) | The whole system, walked through |
 | [`docs/checklists/MASTER-CHECKLIST.md`](docs/checklists/MASTER-CHECKLIST.md) | Every task, in clock order |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How we work together |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | What was decided, and why |
 
 ## Note on origin
 
