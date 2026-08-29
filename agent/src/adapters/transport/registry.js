@@ -2,6 +2,7 @@
 
 const { loadProvidersConfig } = require('../../core/config/loader');
 const VapiTransportAdapter = require('./vapi');
+const PlaygroundTransportAdapter = require('./playground');
 
 /**
  * Transport name → adapter class.
@@ -11,9 +12,16 @@ const VapiTransportAdapter = require('./vapi');
  *   2. Add it here
  *   3. Add a config block under `transport:` in config/providers.yaml
  *   4. Set active.transport to its name
+ *
+ * `playground` is registered here but is never `active.transport` — it is
+ * not a phone orchestrator to swap in, it is TransportRegistry's second
+ * real implementation, always available alongside whichever transport is
+ * active, and instantiated directly by server.js for the /playground
+ * WebSocket route.
  */
 const TRANSPORT_ADAPTERS = {
   vapi: VapiTransportAdapter,
+  playground: PlaygroundTransportAdapter,
 };
 
 /**

@@ -9,7 +9,7 @@
  *
  * Message protocol (browser → server):
  *   JSON text frames:
- *     { type: "start", language: "hi"|"en", variables: {...} }
+ *     { type: "start", language: "hi"|"en", phone, direction: "inbound"|"outbound" }
  *     { type: "stop" }
  *     { type: "barge-in" }           — User interrupted during agent speech
  *     { type: "speech-detected" }    — VAD detected speech (resets silence timer)
@@ -19,14 +19,16 @@
  *
  * Message protocol (server → browser):
  *   { type: "status", state: "idle"|"listening"|"thinking"|"speaking" }
+ *   { type: "mode", mode: "outbound"|"inbound"|"resume" }
  *   { type: "transcript", text, isFinal }
  *   { type: "agent_response", text }
  *   { type: "audio", data: "<base64 PCM>" }
  *   { type: "outcome", label, reason }
  *   { type: "error", message }
  *
- * The playground bypasses Vapi entirely — it talks directly to Sarvam
- * through the existing adapter layer.
+ * The playground bypasses Vapi entirely — it talks directly to the
+ * provider adapters — but drives the same session lifecycle a phone call
+ * does via PlaygroundTransportAdapter (see src/adapters/transport/playground.js).
  */
 
 const logger = require('../utils/logger');
@@ -38,9 +40,10 @@ const logger = require('../utils/logger');
  * @param {Object} deps - Dependencies
  * @param {Object} deps.providerRegistry - ProviderRegistry instance
  * @param {Object} deps.strategy - Active ConversationStrategy
+ * @param {Object} deps.transport - PlaygroundTransportAdapter instance
  */
 function handlePlaygroundConnection(ws, deps) {
-  const { providerRegistry, strategy } = deps;
+  const { providerRegistry, strategy, transport } = deps;
 
   let conversation = null;
 
@@ -72,8 +75,10 @@ function handlePlaygroundConnection(ws, deps) {
             conversation = new PlaygroundConversation({
               providerRegistry,
               strategy,
+              transport,
               language: message.language || 'hi',
-              variables: message.variables || {},
+              phone: message.phone || null,
+              direction: message.direction === 'outbound' ? 'outbound' : 'inbound',
               onTranscript: (text, isFinal) => {
                 send({ type: 'transcript', text, isFinal });
               },
@@ -91,6 +96,9 @@ function handlePlaygroundConnection(ws, deps) {
               },
               onStateChange: (oldState, newState) => {
                 send({ type: 'status', state: newState });
+              },
+              onModeResolved: (mode) => {
+                send({ type: 'mode', mode });
               },
               onError: (err) => {
                 send({ type: 'error', message: err.message });

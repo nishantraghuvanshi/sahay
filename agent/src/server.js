@@ -73,6 +73,11 @@ const providerRegistry = new ProviderRegistry();
 const transportRegistry = new TransportRegistry(providerRegistry);
 const transport = transportRegistry.getActiveTransport();
 
+// 8b. The playground is TransportRegistry's second real implementation —
+// always instantiated alongside whichever transport is active, never itself
+// "active.transport" (see registry.js).
+const playgroundTransport = transportRegistry.getTransport('playground');
+
 // --- Server ---
 
 const app = express();
@@ -103,13 +108,17 @@ transport.start(server, engine, {
   webhookUrl: process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`,
 });
 
+// Wires the patient-picker route and stashes the repository/strategy the
+// playground's lifecycle calls need.
+playgroundTransport.start(server, engine, { app, repository, strategy });
+
 // --- Playground WebSocket endpoint ---
 playgroundWss.on('connection', (ws, req) => {
   if (!authenticateWebSocket(req)) {
     ws.close(4001, 'Unauthorized: invalid or missing API key');
     return;
   }
-  handlePlaygroundConnection(ws, { providerRegistry, strategy });
+  handlePlaygroundConnection(ws, { providerRegistry, strategy, transport: playgroundTransport });
 });
 
 // --- Routes ---
