@@ -16,7 +16,7 @@ const PluginRegistry = require('./core/plugins/registry');
 
 // Adapters
 const ProviderRegistry = require('./adapters/providers/registry');
-const VapiTransportAdapter = require('./adapters/transport/vapi');
+const TransportRegistry = require('./adapters/transport/registry');
 const ConsoleRepository = require('./adapters/persistence/console');
 const SqliteRepository = require('./adapters/persistence/sqlite');
 
@@ -63,8 +63,9 @@ const engine = new ConversationEngine({
 // 7. Create provider registry
 const providerRegistry = new ProviderRegistry();
 
-// 8. Create transport adapter (Vapi)
-const transport = new VapiTransportAdapter(providerRegistry);
+// 8. Create transport adapter (selected by active.transport in providers.yaml)
+const transportRegistry = new TransportRegistry(providerRegistry);
+const transport = transportRegistry.getActiveTransport();
 
 // --- Server ---
 

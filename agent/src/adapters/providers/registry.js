@@ -1,19 +1,29 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const yaml = require('js-yaml');
+const {
+  loadProvidersConfig,
+  PROVIDER_TYPES,
+} = require('../../core/config/loader');
 
 // Adapter implementations
 const SarvamSTTAdapter = require('./stt/sarvam');
 const SarvamLLMAdapter = require('./llm/sarvam');
 const GroqLLMAdapter = require('./llm/groq');
+const OpenAILLMAdapter = require('./llm/openai');
 const SarvamTTSAdapter = require('./tts/sarvam');
 
-// Provider name → adapter class mapping
-const STT_ADAPTERS = { sarvam: SarvamSTTAdapter };
-const LLM_ADAPTERS = { sarvam: SarvamLLMAdapter, groq: GroqLLMAdapter };
-const TTS_ADAPTERS = { sarvam: SarvamTTSAdapter };
+/**
+ * Provider name → adapter class, per type.
+ *
+ * Only `bridge` providers appear here. A `native` provider is run by the
+ * orchestrator itself, so registering an adapter for one would be a lie —
+ * ProviderRegistry checks both directions at construction.
+ */
+const BRIDGE_ADAPTERS = {
+  stt: { sarvam: SarvamSTTAdapter },
+  llm: { sarvam: SarvamLLMAdapter, groq: GroqLLMAdapter, openai: OpenAILLMAdapter },
+  tts: { sarvam: SarvamTTSAdapter },
+};
 
 /**
  * Provider Registry
@@ -21,44 +31,107 @@ const TTS_ADAPTERS = { sarvam: SarvamTTSAdapter };
  * Reads providers.yaml and instantiates the active STT/LLM/TTS adapters.
  * This is the bridge between config-driven provider selection and
  * the hexagonal port/adapter architecture.
+ *
+ * It also enforces the integration contract, at construction, in both
+ * directions: every `bridge` provider must have an adapter, and no `native`
+ * provider may have one. Previously the config advertised deepgram, openai and
+ * elevenlabs with no adapter behind any of them — selectable in config, fatal
+ * at boot, and green in the test suite.
  */
 class ProviderRegistry {
   constructor() {
-    this.config = this._loadConfig();
+    this.config = loadProvidersConfig();
     this.env = process.env;
+
+    const unbacked = this.findUnbackedBridgeProviders();
+    if (unbacked.length > 0) {
+      throw new Error(
+        `providers.yaml declares bridge providers with no adapter: ${unbacked.join(', ')}. ` +
+          `Either implement the adapter or mark them integration: native.`
+      );
+    }
+
+    const stray = this.findNativeProvidersWithAdapters();
+    if (stray.length > 0) {
+      throw new Error(
+        `providers.yaml marks these native but an adapter is registered: ${stray.join(', ')}. ` +
+          `Native providers are run by the orchestrator and must not be bridged.`
+      );
+    }
   }
 
-  _loadConfig() {
-    const configPath = path.join(__dirname, '../../../config/providers.yaml');
-    const raw = fs.readFileSync(configPath, 'utf8');
-    return yaml.load(raw);
+  /**
+   * Bridge providers in config that have no registered adapter.
+   * @returns {string[]} e.g. ["stt.deepgram"]
+   */
+  findUnbackedBridgeProviders() {
+    const missing = [];
+    for (const type of PROVIDER_TYPES) {
+      for (const [name, entry] of Object.entries(this.config[type])) {
+        if (entry.integration === 'bridge' && !BRIDGE_ADAPTERS[type][name]) {
+          missing.push(`${type}.${name}`);
+        }
+      }
+    }
+    return missing;
+  }
+
+  /**
+   * Native providers in config that nonetheless have a registered adapter.
+   * @returns {string[]}
+   */
+  findNativeProvidersWithAdapters() {
+    const stray = [];
+    for (const type of PROVIDER_TYPES) {
+      for (const [name, entry] of Object.entries(this.config[type])) {
+        if (entry.integration === 'native' && BRIDGE_ADAPTERS[type][name]) {
+          stray.push(`${type}.${name}`);
+        }
+      }
+    }
+    return stray;
+  }
+
+  /**
+   * Whether the active provider of a type runs through this server.
+   * @param {string} type - stt | llm | tts
+   * @returns {boolean}
+   */
+  isBridged(type) {
+    return this.config[type][this.config.active[type]].integration === 'bridge';
+  }
+
+  /**
+   * Instantiate a named bridge adapter.
+   * @param {string} type - stt | llm | tts
+   * @param {string} name - Provider name
+   * @returns {Object} Adapter instance
+   */
+  getBridgeAdapter(type, name) {
+    const entry = this.config[type]?.[name];
+    if (!entry) {
+      throw new Error(
+        `Unknown ${type} provider: "${name}". Available: ${Object.keys(this.config[type] || {}).join(', ')}`
+      );
+    }
+    if (entry.integration === 'native') {
+      throw new Error(
+        `${type}.${name} is integration: native — it is run by the orchestrator and has no bridge adapter.`
+      );
+    }
+    return new BRIDGE_ADAPTERS[type][name]();
   }
 
   getActiveSTT() {
-    const name = this.config.active.stt;
-    const AdapterClass = STT_ADAPTERS[name];
-    if (!AdapterClass) {
-      throw new Error(`Unknown STT provider: "${name}". Available: ${Object.keys(STT_ADAPTERS).join(', ')}`);
-    }
-    return new AdapterClass();
+    return this.getBridgeAdapter('stt', this.config.active.stt);
   }
 
   getActiveLLM() {
-    const name = this.config.active.llm;
-    const AdapterClass = LLM_ADAPTERS[name];
-    if (!AdapterClass) {
-      throw new Error(`Unknown LLM provider: "${name}". Available: ${Object.keys(LLM_ADAPTERS).join(', ')}`);
-    }
-    return new AdapterClass();
+    return this.getBridgeAdapter('llm', this.config.active.llm);
   }
 
   getActiveTTS() {
-    const name = this.config.active.tts;
-    const AdapterClass = TTS_ADAPTERS[name];
-    if (!AdapterClass) {
-      throw new Error(`Unknown TTS provider: "${name}". Available: ${Object.keys(TTS_ADAPTERS).join(', ')}`);
-    }
-    return new AdapterClass();
+    return this.getBridgeAdapter('tts', this.config.active.tts);
   }
 
   getActiveProviderNames() {
@@ -79,3 +152,4 @@ class ProviderRegistry {
 }
 
 module.exports = ProviderRegistry;
+module.exports.BRIDGE_ADAPTERS = BRIDGE_ADAPTERS;

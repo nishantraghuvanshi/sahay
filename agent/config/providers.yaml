@@ -1,24 +1,48 @@
 # Provider Configuration
 # =====================
-# Swap any STT/TTS/LLM provider by changing the "active" section below.
-# No code changes needed — the bridge server reads this file at startup.
+# Swap the orchestrator or any STT/TTS/LLM provider by changing "active" below.
+# No code changes needed — the server reads this file at startup.
 #
-# To add a new provider:
-#   1. Create a new file in src/providers/<type>/<name>.js
-#   2. Implement the interface in src/providers/<type>/base.js
-#   3. Register it in src/providers/registry.js
-#   4. Add its config below
-#   5. Set the active provider name
+# Every provider declares an `integration`, because these are two different
+# architectures and not two providers:
+#
+#   bridge — audio/tokens flow through THIS server. Requires an adapter under
+#            src/adapters/providers/<type>/<name>.js. Higher latency, but the
+#            provider stays swappable from this file and testable in /playground.
+#   native — the orchestrator talks to the provider directly. No adapter, no
+#            route. Lower latency, but not A/B-able from here.
+#
+# ProviderRegistry enforces this at boot in both directions: a bridge provider
+# with no adapter, or a native provider with one, fails fast and says which.
+#
+# To add a bridge provider:
+#   1. Create src/adapters/providers/<type>/<name>.js implementing the port
+#      in src/core/ports/<type>.js
+#   2. Register it in src/adapters/providers/registry.js (BRIDGE_ADAPTERS)
+#   3. Add its config below with `integration: bridge`
+#   4. Point active.<type> at it
+#
+# To add a transport (orchestrator), see src/adapters/transport/registry.js.
 
 active:
+  transport: vapi
   stt: sarvam
   llm: sarvam
   tts: sarvam
+
+# ── Transport (call orchestrator) ─────────────────────────────────
+
+transport:
+  vapi:
+    api_key_env: "VAPI_PRIVATE_KEY"
+    assistant_id_env: "VAPI_ASSISTANT_ID"
+    # Inbound routing is configured by scripts/setup-inbound.js
 
 # ── STT (Speech-to-Text) ──────────────────────────────────────────
 
 stt:
   sarvam:
+    integration: bridge
     model: "saaras:v3"
     language: "hi-IN"          # hi-IN, en-IN, ta-IN, etc. Use "unknown" for auto-detect
     mode: "transcribe"         # "transcribe" (same language) or "translate" (to English)
@@ -28,18 +52,20 @@ stt:
     # Bridge server route: /api/stt/sarvam (WebSocket)
 
   deepgram:
+    integration: native        # Vapi runs Deepgram itself; we serve no STT route
     model: "nova-3"
     language: "hi"
     smart_format: true
     endpointing: 300           # ms of silence to trigger endpoint
     api_key_env: "DEEPGRAM_API_KEY"
-    # Native Vapi provider — no bridge server route needed
-    # To use: set active.stt to "deepgram" and remove custom-transcriber from assistant.json
+    # To use: set active.stt to "deepgram" and remove custom-transcriber
+    # from assistant.json — Vapi transcribes and never calls this server.
 
 # ── LLM (Language Model) ──────────────────────────────────────────
 
 llm:
   sarvam:
+    integration: bridge
     model: "sarvam-105b"
     base_url: "https://api.sarvam.ai/v1"
     temperature: 0.3
@@ -48,6 +74,7 @@ llm:
     # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
 
   groq:
+    integration: bridge
     model: "llama-3.3-70b-versatile"
     base_url: "https://api.groq.com/openai/v1"
     temperature: 0.3
@@ -56,17 +83,19 @@ llm:
     # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
 
   openai:
+    integration: bridge
     model: "gpt-4o-mini"
     base_url: "https://api.openai.com/v1"
     temperature: 0.3
     max_tokens: 250
     api_key_env: "OPENAI_API_KEY"
-    # Native Vapi provider — no bridge server route needed
+    # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
 
 # ── TTS (Text-to-Speech) ──────────────────────────────────────────
 
 tts:
   sarvam:
+    integration: bridge
     model: "bulbul:v3"
     speaker: "shubh"            # Male voices: shubh, aditya, rahul, etc.
     target_language_code: "hi-IN"
@@ -77,9 +106,11 @@ tts:
     # Bridge server route: /api/tts/sarvam (HTTP webhook)
 
   elevenlabs:
+    integration: native        # no bridge adapter exists; Vapi runs it
     model: "eleven_turbo_v2_5"
     voice_id: "pNoyz6rXpT7jW"
     stability: 0.5
     similarity_boost: 0.75
     api_key_env: "ELEVENLABS_API_KEY"
-    # Bridge server route: /api/tts/elevenlabs (HTTP webhook)
+    # No bridge route — mark integration: bridge and add an adapter if you
+    # want ElevenLabs A/B-able against Sarvam from this file.
