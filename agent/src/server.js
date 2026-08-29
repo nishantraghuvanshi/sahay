@@ -94,9 +94,39 @@ app.use('/webhook', createWebhookCapture(process.env.CAPTURE_WEBHOOKS));
 
 const server = http.createServer(app);
 
-// WebSocket servers — one for Vapi STT, one for playground
-const sttWss = new WebSocketServer({ server, path: '/api/stt' });
-const playgroundWss = new WebSocketServer({ server, path: '/playground' });
+// WebSocket servers — one for Vapi STT, one for playground.
+//
+// Both use noServer and share ONE upgrade listener below. They must not be
+// constructed with { server, path }: the ws library attaches its own 'upgrade'
+// listener per instance, every listener fires for every upgrade, and an
+// instance whose path does not match calls abortHandshake(socket, 400) —
+// destroying the socket instead of ignoring it. With two path-scoped servers
+// on one http server, whichever was constructed first killed every connection
+// intended for the other. That is silent: nothing reaches either handler, so
+// nothing is logged, and the browser only sees "could not connect".
+const sttWss = new WebSocketServer({ noServer: true });
+const playgroundWss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  let pathname;
+  try {
+    pathname = new URL(req.url, 'http://localhost').pathname;
+  } catch {
+    socket.destroy();
+    return;
+  }
+
+  const target =
+    pathname === '/api/stt' ? sttWss : pathname === '/playground' ? playgroundWss : null;
+
+  if (!target) {
+    console.log(JSON.stringify({ event: 'ws_upgrade_rejected', pathname, timestamp: new Date().toISOString() }));
+    socket.destroy();
+    return;
+  }
+
+  target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
+});
 
 // Start transport (sets up Vapi routes: /llm/chat/completions, /api/tts/:provider, /webhook)
 transport.start(server, engine, {
