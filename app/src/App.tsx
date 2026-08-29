@@ -17,6 +17,8 @@ import Handoff from './screens/Handoff'
 import AlertDetail from './screens/AlertDetail'
 import Calls from './screens/Calls'
 import CallDetail from './screens/CallDetail'
+import Calendar from './screens/Calendar'
+import MedicinesEdit from './screens/MedicinesEdit'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -44,8 +46,8 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/home" replace />} />
         <Route path="/home" element={<Home />} />
-        <Route path="/calendar" element={<Placeholder title="Calendar" frame="1g / 2f" />} />
-        <Route path="/medicines/edit" element={<Placeholder title="Change medicines" frame="1G.2 / 2F.2" />} />
+        <Route path="/calendar" element={<Calendar />} />
+        <Route path="/medicines/edit" element={<MedicinesEdit />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/alerts/:id" element={<AlertDetail />} />
         <Route path="/calls" element={<Calls />} />

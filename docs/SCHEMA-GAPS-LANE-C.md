@@ -62,7 +62,34 @@ Either add it, or drop it from the checklist so the two stop disagreeing:
 ALTER TABLE medications ADD COLUMN end_date DATE;
 ```
 
-## 5. `stock_count` cannot round-trip through onboarding
+## 5. The escalation ladder has no contacts table
+
+`escalations.sent_to` is free text — a name, no number. So when the caregiver does not respond
+and the app offers "Escalate to Priya", **there is no phone number to dial**. Lane C refuses to
+invent one: the button renders disabled rather than guessing, which is why the demo currently
+reads "Escalate to Shubh" (the caregiver themself, the one contact with a stored number) instead
+of a second contact.
+
+Onboarding already collects these people — name, relationship, and after-how-long — and drops
+them on the floor for the same reason.
+
+```sql
+CREATE TABLE escalation_contacts (
+  id            UUID PRIMARY KEY,
+  patient_id    UUID NOT NULL REFERENCES patients(id),
+  name          TEXT NOT NULL,
+  relationship  TEXT,
+  phone_e164    TEXT NOT NULL,
+  after_minutes INT,          -- NULL = critical only
+  rank          INT NOT NULL
+);
+```
+
+Cheap to add, and it is the difference between the escalation ladder being real and being a
+label. `PRD §12.1` describes the ladder as product behaviour, so today the docs promise something
+the schema cannot do.
+
+## 6. `stock_count` cannot round-trip through onboarding
 
 `medications.stock_count` exists in the schema and in the seed, but nothing in the onboarding
 flow collects it and the draft has no field for it, so a schedule created in the app posts

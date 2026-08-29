@@ -24,6 +24,8 @@ export interface DraftFile {
   name: string
   size: number
   progress: number
+  /** MIME type of the file the caregiver actually picked — drives the PDF vs image tile. */
+  type?: string
 }
 
 export interface SetupDraft {
