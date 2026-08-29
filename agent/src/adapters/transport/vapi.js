@@ -665,20 +665,21 @@ class VapiTransportAdapter extends TransportPort {
       // `schema`) — the previous field names matched neither documented
       // shape, so both sub-plans were silently dropped.
       analysisPlan: {
-        summaryPlan: {
-          summaryPrompt: 'Summarize the call in 1-2 sentences.',
-        },
-        structuredDataPlan: {
-          structuredDataSchema: {
-            type: 'object',
-            properties: {
-              outcome: {
-                type: 'string',
-                description:
-                  'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
-              },
-              reason: { type: 'string', description: 'Brief reason for the outcome' },
+        // Flat fields. Vapi rejects summaryPlan/structuredDataPlan wrappers
+        // ("property summaryPrompt should not exist") — these live directly on
+        // analysisPlan. https://docs.vapi.ai/assistants/call-analysis
+        summaryPrompt: 'Summarize the call in 1-2 sentences.',
+        structuredDataPrompt:
+          'Extract the call outcome and a brief reason from the transcript.',
+        structuredDataSchema: {
+          type: 'object',
+          properties: {
+            outcome: {
+              type: 'string',
+              description:
+                'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
             },
+            reason: { type: 'string', description: 'Brief reason for the outcome' },
           },
         },
       },
@@ -696,6 +697,13 @@ class VapiTransportAdapter extends TransportPort {
   async createCall(assistantId, phoneNumber, variables = {}) {
     const apiKey = process.env.VAPI_PRIVATE_KEY;
     if (!apiKey) throw new Error('Missing env var: VAPI_PRIVATE_KEY');
+    if (!process.env.VAPI_PHONE_NUMBER_ID) {
+      throw new Error(
+        'Missing env var: VAPI_PHONE_NUMBER_ID. Import a Twilio number into ' +
+          'Vapi (POST /phone-number) and set its id here — outbound calls are ' +
+          'rejected without a number to call from.'
+      );
+    }
 
     const response = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
@@ -705,6 +713,11 @@ class VapiTransportAdapter extends TransportPort {
       },
       body: JSON.stringify({
         assistantId,
+        // REQUIRED for outbound: Vapi needs to know which number to call FROM.
+        // https://docs.vapi.ai/calls/outbound-calling — a call without it is
+        // rejected, and free Vapi numbers cannot place outbound calls at all,
+        // so this must be an imported Twilio/Vonage/Telnyx number.
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
         customer: { number: phoneNumber },
         assistantOverrides: { variableValues: variables },
       }),

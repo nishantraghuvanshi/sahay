@@ -131,6 +131,7 @@ describe('createCall opens a session (T3-gap)', () => {
   let adapter;
   let originalFetch;
   let originalApiKey;
+  let originalPhoneNumberId;
 
   beforeEach(() => {
     repo = freshRepo();
@@ -138,11 +139,16 @@ describe('createCall opens a session (T3-gap)', () => {
     originalFetch = global.fetch;
     originalApiKey = process.env.VAPI_PRIVATE_KEY;
     process.env.VAPI_PRIVATE_KEY = 'test-key';
+    // createCall refuses to dial without a number to call FROM; Vapi rejects
+    // an outbound call that omits phoneNumberId.
+    originalPhoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
+    process.env.VAPI_PHONE_NUMBER_ID = 'test-phone-number-id';
   });
 
   after(() => {
     global.fetch = originalFetch;
     process.env.VAPI_PRIVATE_KEY = originalApiKey;
+    process.env.VAPI_PHONE_NUMBER_ID = originalPhoneNumberId;
   });
 
   test('a known patient gets a session row after createCall dispatches', async () => {
