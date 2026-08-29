@@ -38,6 +38,17 @@ export interface Patient {
   schedule_signed_off_at: string | null
   /** SR-5 — the parent asked us to stop. */
   calls_paused: boolean
+
+  /**
+   * The one-off consent call (FR-5). `intro_call_status` is load-bearing rather
+   * than informational: no dose slot may be dialled until it is 'done', or the
+   * product rings a parent who never agreed to be rung.
+   */
+  intro_call_at: string | null
+  intro_call_status: 'pending' | 'done' | 'declined' | null
+  /** Stored with their text, not as bare booleans — SR-5. */
+  consents: { id: string; agreed: boolean; agreed_at: string | null }[] | null
+
   created_at: string
 }
 

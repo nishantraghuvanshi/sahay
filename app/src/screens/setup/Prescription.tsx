@@ -1,38 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bar, Button, Card, Label, Placeholder, Row, Tag } from '../../ui'
+import { Button, Card, Label, Placeholder, Row, Tag } from '../../ui'
 import { useSetupDraft } from '../../setup/store'
 import type { DraftFile } from '../../setup/store'
+import { dropFile, previewUrl, putFile } from '../../setup/files'
 
 /**
  * Wireframe 1c (mobile) / 2c left column (web) — "Add prescription", step 2 of 3.
  *
  * The three entry points open real pickers — camera, gallery, files — and the drop zone
  * takes real drops, so the names, sizes and thumbnails in the queue are the caregiver's
- * own. What is still fake is the *transfer*: there is no upload endpoint in this build,
- * so the progress bar is a timer rather than bytes on a wire.
+ * own.
+ *
+ * Nothing is transferred from this screen. The photograph is staged in memory and sent
+ * once, on 1d, as part of the extraction request — so there is no progress bar here,
+ * because there is no transfer to report. An animated one would have been describing a
+ * network call that never happened.
+ *
+ * The accepted types are narrower than a picker would allow: the extractor reads JPEG
+ * and PNG, and its mime sniffer silently falls back to JPEG for anything else, so a PDF
+ * would be handed to the model as a broken image. Better to say no here than to let a
+ * confident misreading of garbage reach a schedule.
  */
 
 const MAX_BYTES = 10 * 1_048_576
-const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'
-
-const UPLOAD_MS = 1200
-const TICK_MS = 80
-
-/**
- * Object URLs for the picked images, keyed by draft-file id. Blobs cannot live in
- * localStorage, so this map — not the draft — is what a thumbnail reads. It is module
- * scope rather than a ref so stepping forward to 1d and back keeps the previews; a full
- * reload empties it and the tiles fall back to the page number, same as before.
- */
-const previews = new Map<string, string>()
+const ACCEPT = 'image/jpeg,image/png'
 
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`
 
 const isAccepted = (file: File) =>
-  file.type.startsWith('image/') ||
-  file.type === 'application/pdf' ||
-  /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(file.name)
+  file.type === 'image/jpeg' || file.type === 'image/png' || /\.(jpe?g|png)$/i.test(file.name)
 
 export default function Prescription() {
   const navigate = useNavigate()
@@ -46,7 +43,6 @@ export default function Prescription() {
   const filesRef = useRef<DraftFile[]>(draft.files)
   filesRef.current = draft.files
 
-  const timers = useRef<number[]>([])
   const seq = useRef(0)
 
   /** Files the picker handed back that we will not take — shown, not swallowed. */
@@ -56,11 +52,6 @@ export default function Prescription() {
   const cameraInput = useRef<HTMLInputElement | null>(null)
   const galleryInput = useRef<HTMLInputElement | null>(null)
   const filesInput = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    const pending = timers.current
-    return () => pending.forEach(window.clearInterval)
-  }, [])
 
   const writeFiles = useCallback(
     (next: DraftFile[]) => {
@@ -80,7 +71,7 @@ export default function Prescription() {
 
       for (const file of list) {
         if (!isAccepted(file)) {
-          bad.push(`${file.name} — JPG, PNG or PDF only`)
+          bad.push(`${file.name} — JPG or PNG photo only`)
           continue
         }
         if (file.size > MAX_BYTES) {
@@ -88,34 +79,30 @@ export default function Prescription() {
           continue
         }
         const id = `f${Date.now()}-${(seq.current += 1)}`
-        if (file.type.startsWith('image/')) previews.set(id, URL.createObjectURL(file))
-        accepted.push({ id, name: file.name, size: file.size, type: file.type, progress: 0 })
+        // The bytes go to the session store; only metadata goes in the draft, which
+        // is localStorage-backed and must never hold a prescription image.
+        putFile(id, file)
+        // `progress` stays in DraftFile for schema compatibility. Staging is
+        // instantaneous, so it is complete the moment the file is accepted.
+        accepted.push({
+          id,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          progress: 100,
+        })
       }
 
       setRejected(bad)
       if (accepted.length === 0) return
       writeFiles([...filesRef.current, ...accepted])
-
-      // One ticker drives every file added in this batch to done together.
-      const ids = new Set(accepted.map((f) => f.id))
-      const startedAt = Date.now()
-      const timer = window.setInterval(() => {
-        const pct = Math.min(100, Math.round(((Date.now() - startedAt) / UPLOAD_MS) * 100))
-        writeFiles(filesRef.current.map((f) => (ids.has(f.id) ? { ...f, progress: pct } : f)))
-        if (pct >= 100) window.clearInterval(timer)
-      }, TICK_MS)
-      timers.current.push(timer)
     },
     [writeFiles],
   )
 
   const removeFile = useCallback(
     (id: string) => {
-      const url = previews.get(id)
-      if (url) {
-        URL.revokeObjectURL(url)
-        previews.delete(id)
-      }
+      dropFile(id)
       writeFiles(filesRef.current.filter((f) => f.id !== id))
     },
     [writeFiles],
@@ -149,7 +136,7 @@ export default function Prescription() {
       <input
         ref={cameraInput}
         type="file"
-        accept="image/*"
+        accept={ACCEPT}
         capture="environment"
         onChange={onPick}
         className="hidden"
@@ -159,7 +146,7 @@ export default function Prescription() {
       <input
         ref={galleryInput}
         type="file"
-        accept="image/*"
+        accept={ACCEPT}
         multiple
         onChange={onPick}
         className="hidden"
@@ -202,7 +189,7 @@ export default function Prescription() {
               <span className="text-[12px] font-semibold text-muted-strong">
                 {dragging ? 'Drop to add' : 'Tap to scan, or drop a file'}
               </span>
-              <span className="text-[9px]">JPG · PNG · PDF · up to 10 MB</span>
+              <span className="text-[9px]">JPG · PNG · up to 10 MB</span>
             </Placeholder>
             <button
               type="button"
@@ -228,7 +215,11 @@ export default function Prescription() {
             >
               Gallery
             </Button>
-            <Button variant="outline" className="flex-1" onClick={() => filesInput.current?.click()}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => filesInput.current?.click()}
+            >
               Files
             </Button>
           </Row>
@@ -257,8 +248,7 @@ export default function Prescription() {
           )}
 
           {files.map((f, i) => {
-            const done = f.progress >= 100
-            const preview = previews.get(f.id)
+            const preview = previewUrl(f.id)
             return (
               <Card key={f.id}>
                 <Row>
@@ -270,15 +260,12 @@ export default function Prescription() {
                     />
                   ) : (
                     <Placeholder className="h-[42px] w-[34px] shrink-0 text-[9px]">
-                      {f.type === 'application/pdf' ? 'pdf' : `pg ${i + 1}`}
+                      {`pg ${i + 1}`}
                     </Placeholder>
                   )}
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <span className="truncate text-[12px] font-semibold">{f.name}</span>
-                    <Bar fill={f.progress / 100} />
-                    <span className="text-[9.5px] text-muted">
-                      {done ? `${mb(f.size)} · read ✓` : `uploading · ${f.progress}%`}
-                    </span>
+                    <span className="text-[9.5px] text-muted">{mb(f.size)} · ready to read</span>
                   </div>
                   <button
                     type="button"
@@ -306,17 +293,14 @@ export default function Prescription() {
 
       <Button
         className="w-full"
-        disabled={files.length === 0 || files.some((f) => f.progress < 100)}
+        disabled={files.length === 0}
         onClick={() => navigate('/setup/analysing')}
       >
         Analyse prescription
       </Button>
-      {files.some((f) => f.progress < 100) && (
-        <p className="text-center text-[11px] text-muted">Waiting for the upload to finish…</p>
-      )}
       <p className="text-[10px] text-muted">
-        Three ways in — camera, gallery, files. The same uploader is reused whenever a new
-        prescription arrives.
+        Three ways in — camera, gallery, files. The photo is sent when you tap analyse, and it is
+        not stored after the schedule has been read from it.
       </p>
     </section>
   )

@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Chip, Divider, Label, Row, Tag } from '../../ui'
 import { useSetupDraft } from '../../setup/store'
+import { postOnboarding } from '../../api/hooks'
+import { clearFiles } from '../../setup/files'
 
 /**
  * Wireframe 1E.2 / 2D.2 — the last gate before anything dials.
@@ -36,8 +39,11 @@ const CONSENTS = [
 
 export default function Consent() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { draft, patch } = useSetupDraft()
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // FR-4: this screen must be unreachable without a signed-off schedule — including by
   // browser Forward or a typed URL, not only by the disabled button on 1e.
@@ -51,6 +57,35 @@ export default function Consent() {
   const scheduled = draft.introCall === 'later' ? draft.introCallAt : null
   const optionChosen = draft.introCall === 'now' || (draft.introCall === 'later' && Boolean(scheduled))
   const ready = optionChosen && remaining === 0
+
+  /**
+   * This is where the onboarding stops being a draft.
+   *
+   * Everything up to here lives in localStorage. The POST is what creates the
+   * patient, writes the signed-off schedule with `confirmed_by`/`confirmed_at`,
+   * and records the intro call — and until it succeeds nothing has been saved, so
+   * a failure must keep the caregiver on this screen rather than dropping them on
+   * a home screen showing somebody else's record.
+   */
+  async function finish() {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await postOnboarding(draft)
+      // Saved. Release the prescription photographs — the schedule is the record
+      // we keep, not the image it was read from.
+      clearFiles()
+      // The care record has changed underneath every screen that caches it.
+      await queryClient.invalidateQueries()
+      navigate('/home')
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : 'Could not save the setup. Nothing has been lost.',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-3 p-4">
@@ -153,12 +188,20 @@ export default function Consent() {
           </p>
 
           <div className="sticky bottom-0 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            {saveError && (
+              <Card emphasis="rule">
+                <Label>Not saved</Label>
+                <span className="text-[11px] leading-relaxed text-muted-strong">
+                  {saveError} Nothing has been sent and no call is scheduled. Try again.
+                </span>
+              </Card>
+            )}
             <Button
-              disabled={!ready}
-              onClick={() => navigate('/home')}
+              disabled={!ready || saving}
+              onClick={() => void finish()}
               className="w-full"
             >
-              Continue on the app
+              {saving ? 'Saving…' : 'Continue on the app'}
             </Button>
             {!ready && (
               <span className="text-center text-[11px] text-muted">

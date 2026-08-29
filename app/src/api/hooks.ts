@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { API_BASE, LIVE_POLL_MS } from '../config'
-import { api } from './client'
+import { ApiError, api } from './client'
 import { mock } from './mock'
 import type {
   CallSession,
@@ -28,6 +28,15 @@ const source = {
   summary: () => (live ? api.get<DaySummary>('/app/summary') : mock.daySummary()),
   intake: (id: string) => (live ? api.get<IntakeRecord>(`/app/intake/${id}`) : mock.intake(id)),
   handoff: (token: string) => (live ? api.get<HandoffView>(`/h/${token}`) : mock.handoff(token)),
+}
+
+/**
+ * Post a completed onboarding. Live only — there is nothing to write to in mock
+ * mode, and pretending to save would be worse than saying so.
+ */
+export async function postOnboarding(draft: unknown): Promise<{ patient_id: string }> {
+  if (!live) throw new ApiError('No Care API configured — nothing was saved.', 'unreachable')
+  return api.post<{ patient_id: string }>('/app/onboarding', draft)
 }
 
 /** Screens that must visibly change while a call is in progress poll; the rest do not. */

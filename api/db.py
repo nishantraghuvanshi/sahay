@@ -1,4 +1,158 @@
-"""spec: TRD §3
+"""SQLite connection, schema init, and seeding. spec: TRD §3, §3.2
 
-TODO: Repository layer. CRUD only — no business logic.
+SQLite so the API runs from a fresh clone with nothing to provision. The schema in
+schema.sql keeps TRD §3's column names and nullability, so moving to Postgres later
+is a type substitution rather than a redesign.
+
+Timestamps are stored as ISO-8601 UTC strings with an explicit offset. Dates that
+matter to a caregiver — a 21:00 IST dose — are LOCAL times in `medications.slots`
+and are only combined with a date at read time, never stored pre-combined, which is
+what stops a dose drifting a day when the server and the phone disagree about zones.
 """
+import json
+import os
+import sqlite3
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+SCHEMA = ROOT / "schema.sql"
+
+# The fixture Lane C built every screen against. Seeding from it means the live
+# endpoints return exactly the shapes the app already renders, so switching the
+# app from mock to live is a base-URL change and not a debugging session.
+FIXTURE = ROOT.parent / "scripts" / "mock-api.json"
+
+DB_PATH = Path(os.getenv("KINVOX_DB", ROOT / "kinvox.db"))
+
+# The fixture is written against this date; every timestamp in it is shifted by
+# whole days onto today, so "yesterday" stays yesterday however long the file sits
+# in git. Mirrors the same rebasing in app/src/api/mock.ts.
+FIXTURE_ANCHOR = "2026-08-30"
+
+JSON_COLUMNS = {
+    "patients": ("conditions", "allergies", "meal_times", "consents"),
+    "medications": ("slots", "extraction_flags"),
+    "intake_records": ("fields",),
+    "escalations": ("payload",),
+    "call_sessions": ("safety_findings",),
+    "medication_changes": ("diff",),
+}
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def connect() -> sqlite3.Connection:
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys = ON")
+    return con
+
+
+def _day_shift() -> int:
+    anchor = datetime.fromisoformat(f"{FIXTURE_ANCHOR}T00:00:00+00:00")
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    return round((today - anchor).total_seconds() / 86_400)
+
+
+def _rebase(value, shift: int):
+    """Shift every ISO timestamp in the fixture by whole days onto today."""
+    if isinstance(value, str):
+        try:
+            if len(value) >= 11 and value[10] == "T":
+                return (datetime.fromisoformat(value) + timedelta(days=shift)).isoformat()
+        except ValueError:
+            pass
+        return value
+    if isinstance(value, list):
+        return [_rebase(v, shift) for v in value]
+    if isinstance(value, dict):
+        return {k: _rebase(v, shift) for k, v in value.items()}
+    return value
+
+
+def _encode(table: str, row: dict) -> dict:
+    """JSON-encode the columns SQLite cannot hold natively."""
+    out = dict(row)
+    for col in JSON_COLUMNS.get(table, ()):
+        if col in out and not isinstance(out[col], (str, type(None))):
+            out[col] = json.dumps(out[col])
+    for col, value in list(out.items()):
+        if isinstance(value, bool):
+            out[col] = int(value)
+    return out
+
+
+def insert(con: sqlite3.Connection, table: str, row: dict) -> None:
+    data = _encode(table, row)
+    cols = ", ".join(data)
+    marks = ", ".join("?" for _ in data)
+    con.execute(f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({marks})", tuple(data.values()))
+
+
+def decode(table: str, row: sqlite3.Row) -> dict:
+    """Row -> dict with JSON columns parsed back and booleans restored."""
+    out = dict(row)
+    for col in JSON_COLUMNS.get(table, ()):
+        if col in out and isinstance(out[col], str):
+            try:
+                out[col] = json.loads(out[col])
+            except json.JSONDecodeError:
+                out[col] = None
+    return out
+
+
+def init(reset: bool = False) -> None:
+    """Create the schema, and seed it the first time.
+
+    Seeding only happens when `caregivers` is empty, so restarting the API never
+    overwrites a schedule someone signed off through the app.
+    """
+    if reset and DB_PATH.exists():
+        DB_PATH.unlink()
+
+    con = connect()
+    try:
+        con.executescript(SCHEMA.read_text())
+        already = con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0]
+        if not already:
+            _seed(con)
+        con.commit()
+    finally:
+        con.close()
+
+
+def _seed(con: sqlite3.Connection) -> None:
+    """TRD §3.2 — the seed everyone else builds against, taken from the fixture."""
+    shift = _day_shift()
+    data = _rebase(json.loads(FIXTURE.read_text()), shift)
+
+    caregiver = data["caregiver"]
+    patient = dict(data["patient"])
+
+    insert(con, "caregivers", caregiver)
+
+    # The seed patient's schedule is already signed off, and the fixture predates
+    # the consent gate, so the intro call is recorded as done. A patient whose
+    # intro call is still pending must not have dose reminders dialled (GAP-2).
+    patient.setdefault("intro_call_at", None)
+    patient.setdefault("intro_call_status", "done")
+    patient.setdefault("consents", None)
+    insert(con, "patients", patient)
+
+    confirmed_at = patient.get("schedule_signed_off_at") or now_iso()
+    for med in data["medications"]:
+        insert(con, "medications", {
+            **med,
+            # Seeded rows were typed by a person, not read off a photograph.
+            "source": "manual",
+            "confirmed_by": caregiver["id"],
+            "confirmed_at": confirmed_at,
+        })
+
+    for table in ("call_sessions", "dose_events", "observations", "intake_records",
+                  "escalations", "handoffs"):
+        for row in data.get(table, []):
+            insert(con, table, row)

@@ -36,6 +36,7 @@ export default function Schedule() {
   const { draft, patch } = useSetupDraft()
   const meds = draft.medicines
   const unclear = meds.filter((m) => m.unclear).length
+  const excluded = meds.filter((m) => m.excluded).length
 
   /** `${id}:${index}` of the slot chip currently open as a time editor. */
   const [editingSlot, setEditingSlot] = useState<string | null>(null)
@@ -94,13 +95,18 @@ export default function Schedule() {
     commit([...meds, row])
   }
 
-  /** A row that cannot generate a dose event must not be signable (FR-4 means what it says). */
+  /** A row that cannot generate a dose event must not be signable (FR-4 means what it says).
+   *
+   *  Excluded rows are exempt: an SOS medicine or an injection is deliberately carried
+   *  without a dose time, because no call will ever be placed for it. Requiring times on
+   *  a row that can never be called would leave the sign-off permanently disabled. */
   const incomplete = meds.filter(
     (m) =>
-      !m.name.trim() ||
-      !m.dose.trim() ||
-      m.slots.length === 0 ||
-      m.slots.some((t) => !/^\d{2}:\d{2}$/.test(t)),
+      !m.excluded &&
+      (!m.name.trim() ||
+        !m.dose.trim() ||
+        m.slots.length === 0 ||
+        m.slots.some((t) => !/^\d{2}:\d{2}$/.test(t))),
   ).length
   const canSignOff = meds.length > 0 && unclear === 0 && incomplete === 0
 
@@ -201,6 +207,15 @@ export default function Schedule() {
                   I confirm these {meds.length} {meds.length === 1 ? 'medicine' : 'medicines'}, doses and
                   timings are correct
                 </span>
+                {excluded > 0 && (
+                  <>
+                    <br />
+                    <span className="text-[10.5px] text-muted-strong">
+                      {excluded === 1 ? 'One is' : `${excluded} are`} listed but never called about —
+                      as-needed medicines, injections and topicals get no reminder.
+                    </span>
+                  </>
+                )}
                 <br />
                 <span className="text-[10.5px] text-muted-strong">
                   Nothing is called about until you tick this.
@@ -375,6 +390,34 @@ function MedicineRow({
           </button>
         </Row>
       </div>
+
+      {/* Safety rule S3: show the verbatim line the model claims it read, beside the
+          parsed fields, so the caregiver is checking a reading rather than trusting one.
+          Spans the full grid so it sits under the row on desktop as well as phone. */}
+      {(med.raw_line || med.exclusion_reason) && (
+        <div className="flex flex-col gap-1 sm:col-span-6">
+          <Divider />
+          {med.raw_line && (
+            <Row className="items-start gap-2">
+              <Label>read as</Label>
+              <span className="flex-1 font-mono text-[10.5px] leading-relaxed text-muted-strong">
+                {med.raw_line}
+              </span>
+              {typeof med.confidence === 'number' && (
+                <Label>{Math.round(med.confidence * 100)}%</Label>
+              )}
+            </Row>
+          )}
+          {med.exclusion_reason && (
+            <Row className="items-start gap-2">
+              <Tag outline>no call</Tag>
+              <span className="flex-1 text-[10.5px] text-muted-strong">
+                {med.exclusion_reason}
+              </span>
+            </Row>
+          )}
+        </div>
+      )}
     </Card>
   )
 }

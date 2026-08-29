@@ -41,3 +41,6 @@ agent/data/
 
 # build artifacts
 *.tsbuildinfo
+
+# local database
+*.db

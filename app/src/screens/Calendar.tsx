@@ -143,7 +143,18 @@ export default function Calendar() {
 
   const medications = record.data?.medications ?? []
   const events = doses.data ?? []
-  const name = record.data?.patient.name ?? 'your parent'
+  const patient = record.data?.patient
+  const name = patient?.name ?? 'your parent'
+
+  /**
+   * The intro call (FR-5) — a one-off consent call, not a dose. It belongs on this
+   * screen because it is the first thing that will actually ring, and because until
+   * it is done no dose call may be placed at all: a schedule can be signed off and
+   * still be entirely dormant, which is invisible if the calendar only draws doses.
+   */
+  const introAt = patient?.intro_call_at ? new Date(patient.intro_call_at) : null
+  const introPending = patient?.intro_call_status === 'pending'
+  const introOnSelected = introAt && dayKey(introAt) === dayKey(selected) ? introAt : null
 
   const now = new Date()
   const today = startOfDay(now)
@@ -232,6 +243,29 @@ export default function Calendar() {
         </span>
       </Row>
 
+      {/* The gate, said plainly. A caregiver looking at a full week of doses has no
+          other way to tell that none of them will be dialled yet. */}
+      {introPending && (
+        <Card emphasis="rule">
+          <Row className="flex-wrap items-baseline gap-x-2">
+            <Tag outline>intro call</Tag>
+            <span className="text-[12px] font-semibold">
+              {introAt
+                ? `We call ${name} on ${introAt.toLocaleDateString([], {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'short',
+                  })} at ${introAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : `We still need to call ${name} to introduce ourselves`}
+            </span>
+          </Row>
+          <span className="text-[11px] leading-relaxed text-muted-strong">
+            Dose reminders do not begin until that call has happened and {name} has agreed on it.
+            The doses below are scheduled, not yet being called about.
+          </span>
+        </Card>
+      )}
+
       {/* ------------------------------------------------- week strip (1g) */}
       <Card className="gap-2 p-2">
         <div className="flex gap-1">
@@ -274,9 +308,34 @@ export default function Calendar() {
 
         <Divider />
 
+        {introOnSelected && (
+          <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 py-2">
+            <span className="pt-2 text-[10px] font-bold tracking-wide text-muted">
+              {introOnSelected.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+            {/* Deliberately not styled as a dose card: this is a different kind of
+                event and reading it as a medicine would be worse than not showing it. */}
+            <Card className="gap-1 border-dashed px-2.5 py-2">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="text-[13px] font-semibold">Introduction call</span>
+                <Tag outline>not a dose</Tag>
+                <span className="ml-auto shrink-0 text-[11px] text-muted-strong">
+                  {patient?.intro_call_status === 'done' ? 'done' : 'scheduled'}
+                </span>
+              </div>
+              <div className="text-[11px] text-muted-strong">
+                We introduce ourselves to {name} and ask if these calls are welcome. No medicines
+                are discussed.
+              </div>
+            </Card>
+          </div>
+        )}
+
         {timeline.length === 0 ? (
           <p className="py-2 text-[12px] text-muted-strong">
-            No doses are scheduled on this day.
+            {introOnSelected
+              ? 'No doses are scheduled on this day — only the introduction call above.'
+              : 'No doses are scheduled on this day.'}
           </p>
         ) : (
           timeline.map((group, i) => (
