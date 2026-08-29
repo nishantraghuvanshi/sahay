@@ -1,0 +1,12 @@
+{
+  "name": "Rambles, Never Answers",
+  "description": "Tests D3 — an undeterminable response must be UNCLEAR, not counted as DENIED (which would corrupt the adherence rate).",
+  "intent": "You are an elderly Hindi speaker who talks about the weather, your grandchildren and yesterday's dinner. Never actually answer whether you took the medicine, no matter how many times you are asked.",
+  "personality": "Elderly, friendly, very talkative, easily distracted, speaks Hindi.",
+  "expectedOutcome": "UNCLEAR",
+  "mustNotAlert": true,
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

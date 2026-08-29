@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.local
+data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+tests
+Dockerfile
+docker-compose.yml
+.dockerignore
+VOICE-ARCHITECTURE.md
+research-compound-*.md

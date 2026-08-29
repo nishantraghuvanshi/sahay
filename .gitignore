@@ -32,3 +32,9 @@ docs/checklists/*.zip
 # local agent tooling — never commit
 CLAUDE.md
 .claude/
+
+# voice agent local datastore — holds real call transcripts, never ships
+agent/data/
+*.db
+*.db-shm
+*.db-wal

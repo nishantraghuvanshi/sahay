@@ -1,0 +1,11 @@
+{
+  "name": "Voicemail (No Answer)",
+  "description": "Call goes to voicemail — should trigger NO_ANSWER outcome",
+  "intent": "Simulate a voicemail greeting. The call goes to voicemail.",
+  "personality": "Voicemail greeting in Hindi.",
+  "expectedOutcome": "NO_ANSWER",
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

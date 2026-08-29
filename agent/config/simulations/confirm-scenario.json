@@ -1,0 +1,11 @@
+{
+  "name": "Confirm Medication Taken",
+  "description": "Caller confirms they took their medication",
+  "intent": "You are an elderly Hindi speaker who has taken their medication. When asked, confirm that yes, you took it.",
+  "personality": "Elderly, warm, speaks slowly in Hindi. Cooperative and friendly.",
+  "expectedOutcome": "CONFIRMED",
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}
