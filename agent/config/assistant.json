@@ -1,5 +1,5 @@
 {
-  "name": "Elderly Medication Adherence Agent",
+  "name": "Voxi",
   "transcriber": {
     "provider": "custom-transcriber",
     "server": {

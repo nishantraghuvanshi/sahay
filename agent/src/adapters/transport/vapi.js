@@ -463,7 +463,7 @@ class VapiTransportAdapter extends TransportPort {
     );
 
     return {
-      name: 'Elderly Medication Adherence Agent',
+      name: 'Voxi',
       transcriber,
       model,
       voice,
