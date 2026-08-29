@@ -14,6 +14,7 @@ const { loadProvidersConfig } = require('./core/config/loader');
 const ConversationEngine = require('./core/engine/engine');
 const PluginRegistry = require('./core/plugins/registry');
 const { assertPersistenceSatisfied } = require('./core/persistence-guard');
+const { createWebhookCapture } = require('./utils/webhook-capture');
 
 // Adapters
 const ProviderRegistry = require('./adapters/providers/registry');
@@ -80,6 +81,11 @@ app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
 
 // Serve static files (playground UI, call form, browser JS)
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Capture raw webhook bodies before anything parses them, so one real call
+// settles the payload shapes this service currently only assumes.
+// Opt-in via CAPTURE_WEBHOOKS=<path>; a no-op when unset.
+app.use('/webhook', createWebhookCapture(process.env.CAPTURE_WEBHOOKS));
 
 const server = http.createServer(app);
 
