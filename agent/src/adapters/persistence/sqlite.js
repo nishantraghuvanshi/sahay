@@ -185,11 +185,24 @@ class SqliteRepository extends OutcomeRepositoryPort {
       CREATE INDEX IF NOT EXISTS idx_medications_patient_active
         ON medications(patient_id, active);
 
-      -- upsertMedication is idempotent on (patient_id, name): re-running the
-      -- hand seed script with an updated dose/times for the same drug name
-      -- must update the existing row, not create a second medication.
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_medications_patient_name
-        ON medications(patient_id, name);
+      -- upsertMedication is idempotent on (patient_id, name, start_date):
+      -- re-running the hand seed script with an updated dose/times for the
+      -- same drug/regimen must update the existing row, not create a second
+      -- medication. start_date (not just name) is part of the key so a
+      -- taper — the same drug prescribed twice with different start_dates
+      -- as its dose steps down over time — is representable as two rows
+      -- instead of being silently merged into one. start_date is NOT NULL
+      -- above, so there is no null-collapsing case to handle here.
+      --
+      -- This replaces an earlier idx_medications_patient_name unique index
+      -- on (patient_id, name) alone, which could not represent a taper.
+      -- CREATE INDEX IF NOT EXISTS never redefines an existing index of the
+      -- same name, so the old index is dropped by name before recreating —
+      -- otherwise a database migrated from before this change would keep
+      -- enforcing the old, incorrect constraint alongside the new one.
+      DROP INDEX IF EXISTS idx_medications_patient_name;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_medications_patient_name_start
+        ON medications(patient_id, name, start_date);
 
       -- One row per scheduled dose occurrence, generated ahead of time from
       -- a medication's times. This is the ledger a caregiver-app number
@@ -495,14 +508,23 @@ class SqliteRepository extends OutcomeRepositoryPort {
   // ── Medications ─────────────────────────────────────────────────
 
   /**
-   * Insert or update a medication, keyed on (patientId, name). Overwrites
-   * every field on conflict — this is a full replace, not a partial patch,
-   * so re-running the seed script with a corrected dose/times/food_rule
-   * always leaves the row matching what was just passed in.
+   * Insert or update a medication, keyed on (patientId, name, startDate).
+   * Overwrites every field on conflict — this is a full replace, not a
+   * partial patch, so re-running the seed script with a corrected
+   * dose/times/food_rule for the same regimen always leaves the row
+   * matching what was just passed in.
+   *
+   * start_date is part of the identity key (not just name) so a taper — the
+   * same drug prescribed twice with different start_dates as its dose steps
+   * down over time — persists as two rows instead of being silently merged
+   * into one. Re-seeding the identical regimen (same patient, name and
+   * start_date) still collapses to a single, updated row.
    *
    * @param {Object} med - { patientId, name, dose, times, foodRule,
    *   startDate, endDate, active }
    *   times: array of "HH:MM" strings, e.g. ['08:00', '20:00'].
+   *   startDate: required (schema is NOT NULL) — passing null/undefined
+   *   throws rather than silently coalescing to some default.
    * @returns {Object} The stored row
    */
   async upsertMedication(med) {
@@ -514,11 +536,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
         patient_id, name, dose, times, food_rule, start_date, end_date, active, created_at, updated_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(patient_id, name) DO UPDATE SET
+      ON CONFLICT(patient_id, name, start_date) DO UPDATE SET
         dose       = excluded.dose,
         times      = excluded.times,
         food_rule  = excluded.food_rule,
-        start_date = excluded.start_date,
         end_date   = excluded.end_date,
         active     = excluded.active,
         updated_at = excluded.updated_at
@@ -537,10 +558,14 @@ class SqliteRepository extends OutcomeRepositoryPort {
       nowIso
     );
 
-    logger.log('db_medication_upserted', { patientId: med.patientId, name: med.name });
+    logger.log('db_medication_upserted', {
+      patientId: med.patientId,
+      name: med.name,
+      startDate: med.startDate,
+    });
     return this.db
-      .prepare('SELECT * FROM medications WHERE patient_id = ? AND name = ?')
-      .get(med.patientId, med.name);
+      .prepare('SELECT * FROM medications WHERE patient_id = ? AND name = ? AND start_date = ?')
+      .get(med.patientId, med.name, med.startDate);
   }
 
   /**

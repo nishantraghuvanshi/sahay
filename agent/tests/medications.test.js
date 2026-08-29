@@ -73,12 +73,45 @@ describe('medications', () => {
     assert.deepStrictEqual(JSON.parse(meds[0].times), ['08:00', '20:00']);
   });
 
-  test('upsertMedication is idempotent on (patientId, name)', async () => {
+  test('upsertMedication is idempotent on (patientId, name, startDate)', async () => {
     await repo.upsertMedication({ ...MED, patientId });
     await repo.upsertMedication({ ...MED, patientId, dose: '1000mg' });
     const meds = await repo.listMedications(patientId);
-    assert.strictEqual(meds.length, 1, 'name is the natural key per patient');
+    assert.strictEqual(meds.length, 1, 'same regimen re-seeded must update, not duplicate');
     assert.strictEqual(meds[0].dose, '1000mg');
+  });
+
+  test('a taper — same drug, different start_date — persists as two rows', async () => {
+    // A dose stepping down over time is modelled as two rows for the same
+    // drug name, distinguished by start_date. Silently merging them into
+    // one row would be a data-loss bug: a caregiver's app would show one
+    // regimen where two actually exist.
+    await repo.upsertMedication({
+      ...MED,
+      patientId,
+      startDate: '2026-01-01',
+      endDate: '2026-01-14',
+      dose: '1000mg',
+    });
+    await repo.upsertMedication({
+      ...MED,
+      patientId,
+      startDate: '2026-01-15',
+      endDate: null,
+      dose: '500mg',
+    });
+
+    const meds = await repo.listMedications(patientId);
+    assert.strictEqual(meds.length, 2, 'both steps of the taper must persist');
+    const doses = meds.map((m) => m.dose).sort();
+    assert.deepStrictEqual(doses, ['1000mg', '500mg']);
+  });
+
+  test('upsertMedication rejects a null start_date rather than silently defaulting', async () => {
+    // start_date is NOT NULL in the schema and part of the identity key, so
+    // there is no ambiguous null-collapsing case: a missing start_date must
+    // fail loudly rather than being coalesced into some default.
+    await assert.rejects(() => repo.upsertMedication({ ...MED, patientId, startDate: null }));
   });
 
   test('listMedications activeOnly filters out inactive rows', async () => {
@@ -176,7 +209,7 @@ describe('dose events', () => {
     // never look like a successful write.
     await assert.rejects(
       () => repo.setDoseStatus(medicationId, '2099-01-01T00:00:00.000Z', 'confirmed'),
-      /unknown/i
+      /Unknown dose event/i
     );
   });
 
