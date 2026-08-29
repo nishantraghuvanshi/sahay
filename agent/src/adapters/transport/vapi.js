@@ -415,6 +415,11 @@ class VapiTransportAdapter extends TransportPort {
         messages: [systemMessage],
         temperature: llm.temperature,
         maxTokens: llm.max_tokens,
+        // Vapi rejects a top-level `tools` property (400: "property tools
+        // should not exist"). They belong on the model — the native branch
+        // below always had this right; the bridged branch did not, so the
+        // assistant was being created with no tools at all.
+        tools: [...strategy.getTools(), { type: 'endCall' }],
       };
     } else {
       // Native shape: Vapi calls the provider itself. No native LLM
@@ -472,23 +477,37 @@ class VapiTransportAdapter extends TransportPort {
       voicemailMessage: 'नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
       silenceTimeoutSeconds: strategyConfig.silenceTimeoutSeconds,
       maxDurationSeconds: strategyConfig.maxDurationSeconds,
-      maxIdleSeconds: strategyConfig.maxIdleSeconds,
       backgroundSound: strategyConfig.backgroundSound,
-      denoiseEnabled: strategyConfig.denoiseEnabled,
+      backgroundDenoisingEnabled: strategyConfig.denoiseEnabled,
       // Turn-taking: when the assistant starts speaking after user pauses
       startSpeakingPlan: {
         waitSeconds: 0.4,  // 400ms pause before responding (elderly-friendly)
         smartEndpointingPlan: {
-          enabled: true,
+          provider: 'vapi',
         },
       },
       // Turn-taking: when the assistant stops on user interruption
+      // Barge-in is on by default; this tunes HOW READILY it triggers.
+      // Shapes verified against docs.vapi.ai/customization/voice-pipeline-configuration
+      // after Vapi rejected `enabled`, `sensitivity` and `backchannelingEnabled`
+      // outright — those properties do not exist and never configured anything.
+      //
+      // numWords: 2 selects transcription-based detection instead of raw VAD, so
+      // a cough or a throat-clear does not cut the agent off mid-sentence. It
+      // costs 200-500ms versus VAD, which is the right trade for an elderly
+      // caller who is easy to talk over.
+      //
+      // voiceSeconds is deliberately absent: it only applies when numWords is 0.
+      //
+      // acknowledgementPhrases stops a listening noise from being treated as an
+      // interruption. "हाँ" is deliberately NOT in this list — it is the actual
+      // answer to "क्या आपने दवाई ले ली है?", and the one word this call exists
+      // to hear must never be classed as a filler.
       stopSpeakingPlan: {
-        enabled: true,          // Allow barge-in
-        sensitivity: 'medium',  // Don't stop on every noise (elderly may cough)
-        backchannelingEnabled: true,  // Agent says "हम्म" while listening
+        numWords: 2,
+        backoffSeconds: 1.0,
+        acknowledgementPhrases: ['अच्छा', 'ठीक', 'ठीक है', 'हम्म', 'जी', 'ओके', 'okay'],
       },
-      tools: [...strategy.getTools(), { type: 'endCall' }],
       server: { url: `${webhookUrl}/webhook` },
       // Recording is deliberately enabled — previously nothing set this, so
       // whether a call was recorded depended on an unverified account
@@ -506,10 +525,23 @@ class VapiTransportAdapter extends TransportPort {
         recordingEnabled: true,
       },
       analysisPlan: {
-        summary: 'Summarize the call in 1-2 sentences.',
-        structuredData: {
-          outcome: 'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
-          reason: 'Brief reason for the outcome',
+        summaryPlan: {
+          messages: [
+            { role: 'system', content: 'Summarize the call in 1-2 sentences.' },
+          ],
+        },
+        structuredDataPlan: {
+          schema: {
+            type: 'object',
+            properties: {
+              outcome: {
+                type: 'string',
+                description:
+                  'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
+              },
+              reason: { type: 'string', description: 'Brief reason for the outcome' },
+            },
+          },
         },
       },
     };
