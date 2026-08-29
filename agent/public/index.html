@@ -93,6 +93,16 @@
     .status.thinking { background: #fff3d6; color: #8a5a00; }
     .status.speaking .dot { background: #0071e3; }
     .status.speaking { background: #d0e8ff; color: #004cb3; }
+    .mode-badge {
+      display: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      background: #ece3ff;
+      color: #5c3fd6;
+    }
+    .mode-badge.visible { display: inline-flex; }
     .transcript-box {
       background: #fff;
       border: 1px solid #d2d2d7;
@@ -151,8 +161,13 @@
     <p class="subtitle">Talk to the medication adherence agent in your browser. No phone call needed.</p>
 
     <div class="config-bar">
-      <input type="text" id="parentName" placeholder="Parent name" value="रोहन">
-      <input type="text" id="drugName" placeholder="Drug name" value="Crocin">
+      <select id="patientSelect">
+        <option value="">Loading patients...</option>
+      </select>
+      <select id="directionSelect">
+        <option value="inbound">Inbound (patient calls in)</option>
+        <option value="outbound">Outbound (we call the patient)</option>
+      </select>
       <select id="language">
         <option value="hi">हिन्दी (Hindi)</option>
         <option value="en">English</option>
@@ -161,11 +176,12 @@
 
     <div class="controls">
       <button class="btn-start" id="startBtn">Start Conversation</button>
-      <button class="btn-stop" id="stopBtn" disabled>Stop</button>
+      <button class="btn-stop" id="stopBtn" disabled>Disconnect</button>
       <div class="status" id="status">
         <span class="dot"></span>
         <span id="statusText">Idle</span>
       </div>
+      <div class="mode-badge" id="modeBadge"></div>
     </div>
 
     <div class="transcript-box" id="transcript">
@@ -176,7 +192,8 @@
     <div id="outcomeBox"></div>
 
     <p class="hint">
-      Uses Sarvam AI directly — no Vapi or Twilio costs.<br>
+      Runs the same session lifecycle as a phone call — no Vapi or Twilio costs.<br>
+      Disconnect mid-conversation, then Start again with the same patient to see resume engage.<br>
       Allow microphone access when prompted.
     </p>
   </div>

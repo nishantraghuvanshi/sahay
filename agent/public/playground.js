@@ -11,12 +11,16 @@
  * the agent speaks) cancels TTS playback and notifies the server.
  *
  * Protocol (browser → server):
- *   - Text frames (JSON):  { type: "start", language, variables }
- *                           { type: "stop" }
+ *   - Text frames (JSON):  { type: "start", language, phone, direction }
+ *                           { type: "stop" }               // ends the session as "dropped" — resumable
  *                           { type: "barge-in" }          // user interrupted agent
  *                           { type: "speech-detected" }    // VAD detected speech
  *                           { type: "silence-detected" }   // VAD endpoint (user stopped)
  *   - Binary frames:       raw Int16 PCM, 16 kHz, mono (only during speech)
+ *
+ * `phone` picks a seeded patient (see loadPatients / GET /api/playground/patients);
+ * `direction` is "inbound" or "outbound". The server resolves these to a
+ * mode ("outbound" | "inbound" | "resume") the same way a phone call would.
  *
  * Protocol (server → browser, JSON text frames):
  *   { type: "transcript", text, isFinal }
@@ -24,6 +28,7 @@
  *   { type: "audio", data: "<base64 PCM>" }   // 16-bit, 16 kHz, mono
  *   { type: "outcome", label, reason }
  *   { type: "status", state: "idle"|"listening"|"thinking"|"speaking" }
+ *   { type: "mode", mode: "outbound"|"inbound"|"resume" }
  *   { type: "error", message }
  *
  * No external dependencies — vanilla JS loaded via a <script> tag.
@@ -52,11 +57,12 @@
 
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const parentNameInput = document.getElementById('parentName');
-  const drugNameInput = document.getElementById('drugName');
+  const patientSelect = document.getElementById('patientSelect');
+  const directionSelect = document.getElementById('directionSelect');
   const languageSelect = document.getElementById('language');
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('statusText');
+  const modeBadge = document.getElementById('modeBadge');
   const transcriptEl = document.getElementById('transcript');
   const errorBox = document.getElementById('errorBox');
   const outcomeBox = document.getElementById('outcomeBox');
@@ -218,6 +224,9 @@
       case 'status':
         updateStatus(message.state);
         break;
+      case 'mode':
+        updateModeBadge(message.mode);
+        break;
       case 'transcript':
         handleTranscript(message.text, message.isFinal);
         break;
@@ -260,6 +269,22 @@
 
     // Track whether the agent is speaking so the VAD can detect barge-in.
     agentSpeaking = state === 'speaking';
+  }
+
+  /**
+   * Show (or hide) the resolved-mode badge — the whole point of the
+   * playground transport is being able to see resume engage.
+   * @param {"outbound"|"inbound"|"resume"|null} mode
+   */
+  function updateModeBadge(mode) {
+    if (!mode) {
+      modeBadge.classList.remove('visible');
+      modeBadge.textContent = '';
+      return;
+    }
+    const labels = { outbound: 'Outbound', inbound: 'Inbound', resume: 'Resumed' };
+    modeBadge.textContent = `Mode: ${labels[mode] || mode}`;
+    modeBadge.classList.add('visible');
   }
 
   /**
@@ -690,6 +715,42 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Patient picker
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Load the seeded patient list from the server and populate the picker.
+   * Falls back to a disabled placeholder on failure rather than blocking
+   * the rest of the page.
+   */
+  async function loadPatients() {
+    try {
+      const res = await fetch('/api/playground/patients');
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const { patients } = await res.json();
+
+      patientSelect.innerHTML = '';
+      if (!patients || patients.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No seeded patients found';
+        patientSelect.appendChild(opt);
+        return;
+      }
+
+      for (const patient of patients) {
+        const opt = document.createElement('option');
+        opt.value = patient.phone_e164;
+        opt.textContent = `${patient.name || '(no name)'} — ${patient.phone_e164}`;
+        patientSelect.appendChild(opt);
+      }
+    } catch (err) {
+      console.error('Failed to load patients:', err);
+      patientSelect.innerHTML = '<option value="">Could not load patients</option>';
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Start / Stop flow
   // ---------------------------------------------------------------------------
 
@@ -698,15 +759,19 @@
    */
   async function startConversation() {
     clearError();
-    // Clear any previous outcome banner.
+    // Clear any previous outcome banner and mode badge.
     outcomeBox.className = '';
     outcomeBox.textContent = '';
+    updateModeBadge(null);
 
     const language = languageSelect.value || 'hi';
-    const variables = {
-      parent_name: parentNameInput.value,
-      drug_name: drugNameInput.value,
-    };
+    const phone = patientSelect.value;
+    const direction = directionSelect.value || 'inbound';
+
+    if (!phone) {
+      showError('Pick a patient before starting.');
+      return;
+    }
 
     try {
       // 1. Connect WebSocket (if not already open).
@@ -718,7 +783,7 @@
       await startMicrophone();
 
       // 3. Tell the server to start the conversation.
-      sendJSON({ type: 'start', language, variables });
+      sendJSON({ type: 'start', language, phone, direction });
 
       // 4. Update UI state.
       isRunning = true;
@@ -783,6 +848,7 @@
   startBtn.addEventListener('click', startConversation);
   stopBtn.addEventListener('click', stopConversation);
 
-  // Initialize the status indicator.
+  // Initialize the status indicator and load the patient picker.
   updateStatus('idle');
+  loadPatients();
 })();
