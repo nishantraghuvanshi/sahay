@@ -1,13 +1,12 @@
 'use strict';
 
 const TransportPort = require('../../core/ports/transport');
-const { resolveInboundCall } = require('../../core/inbound/resolve-caller');
+const { openCall, captureField, closeCall } = require('../../core/call/lifecycle');
 const {
   buildInboundVariables,
   INTAKE_FIELDS,
 } = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
-const { terminalStatusFor } = require('../../core/inbound/session-status');
 const logger = require('../../utils/logger');
 
 /**
@@ -220,15 +219,14 @@ class VapiTransportAdapter extends TransportPort {
               },
             });
 
-            // Outbound calls have no session yet (Task 3 adds that), so a
-            // missing session here is expected today — log it and move on
+            // A missing session (e.g. an outbound call before Task 3 opened
+            // one) is expected, not an error — closeCall logs and returns
             // rather than letting endSession's throw escape the handler.
-            if (callData.id && (await this.repository.getSession(callData.id))) {
-              const status = terminalStatusFor(callData.endedReason);
-              await this.repository.endSession(callData.id, status);
-            } else {
-              logger.log('session_end_skipped_unknown_session', { callId: callData.id });
-            }
+            await closeCall({
+              repository: this.repository,
+              callId: callData.id,
+              endedReason: callData.endedReason,
+            });
             break;
           }
 
@@ -258,13 +256,8 @@ class VapiTransportAdapter extends TransportPort {
    *
    * This is what makes fields_so_far non-empty before the call ends, so a
    * resumed call opens holding what was already said instead of nothing.
-   *
-   * A field name the model invented is logged and dropped rather than
-   * written — models emit arbitrary strings, and INTAKE_FIELDS is the only
-   * source of truth for what a session may hold. A callId with no matching
-   * session is checked for up front (rather than caught from
-   * updateSessionFields's throw) so a real persistence failure still
-   * surfaces instead of being swallowed alongside the expected case.
+   * Delegates to the shared lifecycle module — see its docstring for the
+   * validation and tolerance rules.
    *
    * @param {string} callId
    * @param {Object} args - { field, value } from the tool call
@@ -272,18 +265,13 @@ class VapiTransportAdapter extends TransportPort {
    */
   async _captureField(callId, args) {
     const { field, value } = args;
-
-    if (!INTAKE_FIELDS.some((f) => f.key === field)) {
-      logger.log('capture_field_unknown_field', { callId, field });
-      return;
-    }
-
-    if (!callId || !(await this.repository.getSession(callId))) {
-      logger.log('capture_field_unknown_session', { callId, field });
-      return;
-    }
-
-    await this.repository.updateSessionFields(callId, { [field]: value });
+    await captureField({
+      repository: this.repository,
+      callId,
+      field,
+      value,
+      allowedFields: INTAKE_FIELDS.map((f) => f.key),
+    });
   }
 
   /**
@@ -307,28 +295,15 @@ class VapiTransportAdapter extends TransportPort {
     const phone =
       message.call?.from?.phoneNumber || message.call?.customer?.number || null;
 
-    const resolution = await resolveInboundCall({
+    const resolution = await openCall({
       repository: this.repository,
       phone,
+      direction: 'inbound',
+      callId: message.call?.id || null,
     });
 
     const language = resolution.patient?.language || 'hi';
     const variables = buildInboundVariables(resolution, language);
-
-    // A minted sessionId (e.g. `inbound-${Date.now()}`) would create a
-    // session end-of-call-report can never match, since that webhook keys
-    // off the real call.id — an unresumable, orphaned row. Skipping is
-    // strictly better: no session at all, rather than one nothing can close.
-    if (resolution.patient && message.call?.id) {
-      await this.repository.createSession({
-        sessionId: message.call.id,
-        patientId: resolution.patient.id,
-        callId: message.call.id,
-        direction: 'inbound',
-      });
-    } else if (resolution.patient) {
-      logger.log('inbound_session_skipped_no_call_id', { phone });
-    }
 
     return this.buildAssistantConfig(
       this.strategy,
@@ -538,25 +513,12 @@ class VapiTransportAdapter extends TransportPort {
    * @private
    */
   async _openOutboundSession(call, phoneNumber) {
-    try {
-      const patient = await this.repository.findPatientByPhone(phoneNumber);
-      if (!patient) {
-        logger.log('outbound_session_skipped_unknown_patient', {
-          call_id: call.id,
-          phone: phoneNumber,
-        });
-        return;
-      }
-
-      await this.repository.createSession({
-        sessionId: call.id,
-        patientId: patient.id,
-        callId: call.id,
-        direction: 'outbound',
-      });
-    } catch (err) {
-      logger.error('outbound_session_create_error', err);
-    }
+    await openCall({
+      repository: this.repository,
+      phone: phoneNumber,
+      direction: 'outbound',
+      callId: call.id,
+    });
   }
 }
 
