@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 
 const TransportPort = require('../../core/ports/transport');
-const { openCall, captureField, closeCall } = require('../../core/call/lifecycle');
+const { openCall, captureField, closeCall, recordTurn } = require('../../core/call/lifecycle');
 const { INTAKE_FIELDS } = require('../../use-cases/medication-adherence/inbound-context');
 const logger = require('../../utils/logger');
 
@@ -101,6 +101,21 @@ class PlaygroundTransportAdapter extends TransportPort {
       value,
       allowedFields: INTAKE_FIELDS.map((f) => f.key),
     });
+  }
+
+  /**
+   * Route one turn of a playground conversation through the shared
+   * lifecycle module — same write path the phone transport uses, so
+   * PlaygroundConversation never touches the repository directly.
+   *
+   * @param {Object} args
+   * @param {string} args.sessionId
+   * @param {string} args.role - 'user' | 'assistant'
+   * @param {string|null} [args.content]
+   * @param {Array|null} [args.toolCalls]
+   */
+  async recordTurn({ sessionId, role, content, toolCalls }) {
+    await recordTurn({ repository: this.repository, callId: sessionId, role, content, toolCalls });
   }
 
   /**

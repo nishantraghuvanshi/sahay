@@ -1,7 +1,7 @@
 'use strict';
 
 const TransportPort = require('../../core/ports/transport');
-const { openCall, captureField, closeCall } = require('../../core/call/lifecycle');
+const { openCall, captureField, closeCall, recordTurn } = require('../../core/call/lifecycle');
 const {
   buildInboundVariables,
   INTAKE_FIELDS,
@@ -192,6 +192,30 @@ class VapiTransportAdapter extends TransportPort {
 
             if (toolName === 'capture_field') {
               await this._captureField(callId, args);
+            }
+
+            await recordTurn({
+              repository: this.repository,
+              callId,
+              role: 'assistant',
+              toolCalls: [{ name: toolName, arguments: args }],
+            });
+            break;
+          }
+
+          // UNVERIFIED: 'transcript' / 'role' / 'transcriptType' are this
+          // project's best reading of Vapi's documented per-turn transcript
+          // shape, not confirmed against a live account. Only final
+          // transcripts are persisted — partials would otherwise duplicate
+          // the same turn as it's refined.
+          case 'transcript': {
+            if (message.transcriptType === 'final' && message.transcript) {
+              await recordTurn({
+                repository: this.repository,
+                callId: message.call?.id,
+                role: message.role,
+                content: message.transcript,
+              });
             }
             break;
           }

@@ -262,6 +262,7 @@ class PlaygroundConversation {
 
     // Add user message to history
     this.messages.push({ role: 'user', content: transcript });
+    await this._recordTurn({ role: 'user', content: transcript });
 
     try {
       const llmAdapter = this.providerRegistry.getActiveLLM();
@@ -326,6 +327,7 @@ class PlaygroundConversation {
         tool_calls: tool_calls,
       };
       this.messages.push(assistantMessage);
+      await this._recordTurn({ role: 'assistant', content, toolCalls: tool_calls });
 
       // 5b. Route capture_field tool calls through the shared lifecycle
       // module — same as the phone path, this is what makes fields_so_far
@@ -421,6 +423,22 @@ class PlaygroundConversation {
       } catch (err) {
         logger.error('playground_capture_field_error', err);
       }
+    }
+  }
+
+  /**
+   * Persist one turn of history through the transport, mirroring the phone
+   * path's write. Tolerates never having opened a session (this.sessionId
+   * null) — the transport's recordTurn already logs and drops that case.
+   *
+   * @param {Object} args - { role, content, toolCalls }
+   * @private
+   */
+  async _recordTurn({ role, content, toolCalls }) {
+    try {
+      await this.transport.recordTurn({ sessionId: this.sessionId, role, content, toolCalls });
+    } catch (err) {
+      logger.error('playground_record_turn_error', err);
     }
   }
 

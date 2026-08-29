@@ -95,6 +95,25 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return [];
   }
 
+  async createCall(call) {
+    this._noop('call_create_skipped', { callId: call && call.callId });
+  }
+
+  async getCall() {
+    return null;
+  }
+
+  /**
+   * No persistence to check against, so this can't tell a known call id
+   * from an unknown one — unlike SqliteRepository, it never rejects.
+   * Logged as skipped so console mode stays visible in logs rather than
+   * silently indistinguishable from a real write.
+   */
+  async setGroundTruth(callId, groundTruth) {
+    this._noop('ground_truth_set_skipped', { callId, groundTruth });
+    return null;
+  }
+
   // ── Medications & dose events ────────────────────────────────────
 
   async upsertMedication(med) {
@@ -127,6 +146,16 @@ class ConsoleRepository extends OutcomeRepositoryPort {
   }
 
   async dueDoseEvents() {
+    return [];
+  }
+
+  // ── Messages ────────────────────────────────────────────────────
+
+  async saveMessage(message) {
+    this._noop('message_save_skipped', { callId: message && message.callId, role: message && message.role });
+  }
+
+  async getMessages() {
     return [];
   }
 

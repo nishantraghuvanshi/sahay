@@ -41,10 +41,35 @@ const logger = require('../../utils/logger');
  * @returns {Promise<Object>} { mode, patient, session, fieldsSoFar, lastCalls, isNewPatient }
  */
 async function openCall({ repository, phone, direction = 'inbound', callId, resumeWindowMinutes, now }) {
+  await _ensureCallRow({ repository, callId, phone });
+
   if (direction === 'outbound') {
     return _openOutboundCall({ repository, phone, callId });
   }
   return _openInboundCall({ repository, phone, callId, resumeWindowMinutes, now });
+}
+
+/**
+ * Make sure a `calls` row exists for this call id before anything (turn
+ * history in particular — see recordTurn below) tries to reference it.
+ * messages.call_id is a foreign key against calls.call_id, and nothing
+ * else in this codebase creates that row until the call ends — without
+ * this, every mid-call message insert would fail its FK constraint.
+ *
+ * Best-effort and non-fatal: opening (or dialling) the call is the primary
+ * effect and must survive a DB hiccup here. createCall() is idempotent on
+ * call_id, so this is safe to call on every openCall, including a resumed
+ * or retried one.
+ *
+ * @private
+ */
+async function _ensureCallRow({ repository, callId, phone }) {
+  if (!callId) return;
+  try {
+    await repository.createCall({ callId, phone });
+  } catch (err) {
+    logger.error('call_row_create_error', err, { callId });
+  }
 }
 
 /** @private */
@@ -162,4 +187,36 @@ async function closeCall({ repository, callId, endedReason }) {
   await repository.endSession(callId, status);
 }
 
-module.exports = { openCall, captureField, closeCall };
+/**
+ * Persist one turn of a conversation — user, assistant, or a tool call —
+ * tolerating whatever a live call can throw at it. A missing call id or a
+ * call id with no matching `calls` row (an unknown call) is logged and
+ * dropped rather than thrown: losing one turn of history must never take
+ * down a live call the way a thrown error would.
+ *
+ * @param {Object} args
+ * @param {Object} args.repository
+ * @param {string|null} args.callId
+ * @param {string} args.role - 'user' | 'assistant' | ...
+ * @param {string|null} [args.content]
+ * @param {Array|null} [args.toolCalls]
+ */
+async function recordTurn({ repository, callId, role, content, toolCalls }) {
+  if (!callId) {
+    logger.log('record_turn_skipped_no_call_id', { role });
+    return;
+  }
+
+  try {
+    await repository.saveMessage({
+      callId,
+      role,
+      content: content ?? null,
+      toolCalls: toolCalls || null,
+    });
+  } catch (err) {
+    logger.error('record_turn_error', err, { callId, role });
+  }
+}
+
+module.exports = { openCall, captureField, closeCall, recordTurn };

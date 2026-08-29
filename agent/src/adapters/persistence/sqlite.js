@@ -763,12 +763,19 @@ class SqliteRepository extends OutcomeRepositoryPort {
 
   /**
    * Create a call record when a conversation starts.
+   *
+   * Idempotent on call_id (ON CONFLICT DO NOTHING): a retried
+   * assistant-request or a resumed session calls this again with the same
+   * call id, and that must not throw against the UNIQUE constraint or
+   * clobber outcome fields an in-flight save() may already have written.
+   *
    * @param {Object} call - { callId, useCase, language, phone, variables }
    */
   async createCall(call) {
     const stmt = this.db.prepare(`
       INSERT INTO calls (call_id, use_case, language, phone, variables)
       VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(call_id) DO NOTHING
     `);
 
     stmt.run(
