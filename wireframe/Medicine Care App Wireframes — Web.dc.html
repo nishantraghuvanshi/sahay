@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}
+.dv-sub{font:400 11.5px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5);margin:0 0 22px;max-width:720px}
+.dv-grp{font:700 10px/1 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,0,0,.4);margin:26px 0 14px}
+.dv-opts{display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1160px}
+.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}
+.dv-next{margin:26px 0 0;font:12px/1.6 system-ui,sans-serif;color:rgba(0,0,0,.5)}
+
+/* desktop frame */
+.dt{width:1160px;height:730px;border:1.5px solid #1a1a1a;border-radius:10px;background:#fff;display:flex;flex-direction:column;overflow:hidden;font-family:system-ui,sans-serif;font-size:11px;color:#222;box-shadow:0 2px 6px rgba(0,0,0,.07)}
+.brow{height:26px;background:#ececea;border-bottom:1px solid #dededa;display:flex;align-items:center;gap:8px;padding:0 10px;flex:none;font-size:9px;color:#8d8d8d}
+.brow .bdot{width:8px;height:8px;border-radius:99px;background:#cfcfc9}
+.url{flex:1;max-width:420px;background:#fff;border:1px solid #d8d8d4;border-radius:99px;padding:3px 9px;color:#9a9a9a;font-size:8.5px}
+.app{flex:1;display:flex;overflow:hidden}
+.sd{width:186px;flex:none;border-right:1px solid #e4e4e0;background:#fbfbfa;display:flex;flex-direction:column;padding:12px 10px;gap:4px}
+.nv{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;color:#6d6d6d;font-size:11px}
+.nv.on{background:#1a1a1a;color:#fff;font-weight:700}
+.nv.on .ic{border-color:#fff;background:#fff}
+.nv .cnt{margin-left:auto;font-size:8.5px;font-weight:800;background:#1a1a1a;color:#fff;border-radius:4px;padding:1px 5px}
+.nv.on .cnt{background:#fff;color:#1a1a1a}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.hd{height:48px;flex:none;border-bottom:1px solid #e4e4e0;display:flex;align-items:center;gap:10px;padding:0 18px}
+.h1{font-size:15px;font-weight:700}
+.cnt-area{flex:1;padding:16px 18px;display:flex;gap:16px;overflow:hidden}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pane{flex:none;width:330px;border-right:1px solid #e4e4e0;display:flex;flex-direction:column;overflow:hidden}
+.pane-b{flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-width:0}
+
+/* shared atoms (same language as mobile file) */
+.c{border:1px solid #d8d8d4;border-radius:8px;background:#fafaf8;padding:11px;display:flex;flex-direction:column;gap:8px}
+.r{display:flex;align-items:center;gap:8px}
+.sp{margin-left:auto}
+.vsp{margin-top:auto}
+.g{background:#dedede;border-radius:3px;height:7px}
+.lbl{font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:#8d8d8d;font-weight:700}
+.btn{background:#1a1a1a;color:#fff;border-radius:7px;padding:9px 14px;text-align:center;font-weight:600;font-size:11px}
+.ob{border:1px solid #1a1a1a;border-radius:7px;padding:8px 13px;text-align:center;font-weight:600;font-size:10.5px}
+.chip{border:1px solid #cbcbc5;border-radius:99px;padding:3px 9px;font-size:9.5px;background:#fff;white-space:nowrap}
+.chip.on{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.av{width:26px;height:26px;border-radius:99px;background:#e2e2de;border:1px solid #cfcfc9;flex:none}
+.im{background:repeating-linear-gradient(45deg,#f1f1ef,#f1f1ef 6px,#e6e6e2 6px,#e6e6e2 12px);border:1px solid #d8d8d4;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#9a9a9a;font-size:9.5px;text-align:center}
+.ic{width:15px;height:15px;border:1.4px solid #b8b8b2;border-radius:4px;flex:none}
+.in{border:1px solid #cfcfc9;border-radius:6px;padding:7px 9px;color:#9a9a9a;background:#fff;font-size:10.5px}
+.tag{font-size:8px;font-weight:800;padding:2px 6px;border-radius:4px;background:#1a1a1a;color:#fff;letter-spacing:.05em}
+.tag.o{background:#fff;color:#1a1a1a;border:1px solid #1a1a1a}
+.ann{font-family:'Patrick Hand',cursive;font-size:12.5px;color:#2a78d6;line-height:1.35}
+.hr{height:1px;background:#e6e6e2}
+.dot{width:7px;height:7px;border-radius:99px;background:#c9c9c3;flex:none}
+.dot.k{background:#1a1a1a}
+.dot.x{background:#fff;border:1.4px solid #1a1a1a}
+/* table */
+.tbl{border:1px solid #d8d8d4;border-radius:8px;overflow:hidden;background:#fff}
+.th,.tr{display:flex;align-items:center;gap:10px;padding:9px 12px}
+.th{background:#f6f6f4;border-bottom:1px solid #e4e4e0}
+.tr{border-bottom:1px solid #eeeeea}
+.tr:last-child{border-bottom:0}
+.tr.sel{background:#f6f6f4;border-left:3px solid #1a1a1a;padding-left:9px}
+.li{border-bottom:1px solid #eeeeea;padding:11px 14px;display:flex;flex-direction:column;gap:6px}
+.li.sel{background:#f4f4f2;border-left:3px solid #1a1a1a;padding-left:11px}
+</style></helmet>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Sahay — web app (desktop), full flow</span></div>
+<p class="dv-sub">Desktop counterpart of the mobile set. Same grey-box fidelity, same blue handwriting = behaviour notes. Shell = left sidebar nav (mobile's 4 tabs + Prescriptions, What she said, Settings) · list/detail split panes replace push navigation · wide editable tables replace stacked cards. 1160×730 frames, ~1440 viewport.</p>
+
+<div class="dv-grp">Marketing, auth &amp; onboarding</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Landing + login — split hero, Google first</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app</span><span class="sp">＋</span></div>
+<div class="app" style="flex-direction:column">
+<div class="hd" style="height:52px"><div class="im" style="width:24px;height:24px;border-radius:6px">▲</div><span class="h1">Sahay</span><span class="sp r" style="gap:16px"><span style="color:#6d6d6d">How it works</span><span style="color:#6d6d6d">Pricing</span><span style="color:#6d6d6d">For families</span><span class="ob">Log in</span><span class="btn">Get started</span></span></div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="flex:1.25;padding:44px 40px;display:flex;flex-direction:column;gap:14px;border-right:1px solid #e4e4e0">
+<span class="tag o" style="align-self:flex-start">for adult children of ageing parents</span>
+<div style="font-size:34px;font-weight:700;line-height:1.15;max-width:460px">Keep an eye on your parent's medicines — without calling five times a day</div>
+<div class="g" style="width:66%"></div><div class="g" style="width:48%"></div>
+<div class="r" style="gap:10px;margin-top:6px"><span class="btn">Start free</span><span class="ob">Watch 90-sec demo ▶</span></div>
+<div style="height:10px"></div>
+<div class="r" style="gap:12px;align-items:stretch">
+<div class="c" style="flex:1"><div class="ic"></div><div style="font-weight:600">Scan the prescription</div><div style="color:#6d6d6d">We read dose, timing and food rules.</div></div>
+<div class="c" style="flex:1"><div class="ic"></div><div style="font-weight:600">Agent calls your parent</div><div style="color:#6d6d6d">In their language, in your window.</div></div>
+<div class="c" style="flex:1"><div class="ic"></div><div style="font-weight:600">You only hear what matters</div><div style="color:#6d6d6d">Missed dose, no answer, anything she says that needs you.</div></div>
+</div>
+<div class="vsp"></div>
+<div class="im" style="height:150px">product screenshot — dashboard (<a class="dv-oid" href="#2e">2e</a>)</div>
+</div>
+<div style="width:376px;flex:none;padding:44px 34px;display:flex;flex-direction:column;gap:12px;background:#fbfbfa">
+<div style="font-size:18px;font-weight:700">Log in or sign up</div>
+<div style="color:#6d6d6d">One account, one parent to start.</div>
+<div style="height:6px"></div>
+<div class="btn">Continue with Google</div>
+<div class="ob">Continue with Apple</div>
+<div class="r" style="gap:10px"><div class="hr" style="flex:1"></div><span style="color:#9a9a9a;font-size:9.5px">then</span><div class="hr" style="flex:1"></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="dot k"></span><span style="flex:1">rohit@gmail.com</span><span class="tag o">verify mail</span></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="lbl" style="flex:1">Add your phone</span><span class="lbl">required</span></div><div class="in">+91 · 98••• •••••</div><div class="r"><span style="flex:1;color:#6d6d6d">6-digit OTP</span><span class="chip">Send</span></div></div>
+<div class="lbl">Language</div>
+<div class="r" style="gap:6px"><span class="chip on">English</span><span class="chip">हिन्दी</span><span class="chip">मराठी</span></div>
+<div class="c"><div class="r"><span class="tag o">note</span><span style="flex:1;color:#6d6d6d">By continuing you consent to automated voice calls being placed to your parent.</span></div></div>
+<div class="vsp"></div>
+<div class="ann">Google first, phone after — same order as mobile <a class="dv-oid" href="#1a">1a</a>, so the two flows stay identical.</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2b"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Onboarding step 1 — parent profile, two columns + live preview</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/setup/parent</span></div>
+<div class="app" style="flex-direction:column">
+<div class="hd"><div class="im" style="width:20px;height:20px;border-radius:5px"></div><span class="h1">Set up</span>
+<span class="r" style="gap:6px;margin-left:22px"><span class="chip on">1 · Parent</span><span class="chip">2 · Prescription</span><span class="chip">3 · Schedule</span></span>
+<span class="sp lbl">saved just now</span><span class="chip">Exit</span></div>
+<div class="cnt-area">
+<div class="col" style="flex:1.5">
+<div style="font-size:19px;font-weight:700">Who are we caring for?</div>
+<div style="color:#6d6d6d">Everything here shapes what the agent says on a call.</div>
+<div class="c" style="gap:11px">
+<div class="r" style="gap:12px;align-items:flex-end">
+<div class="av" style="width:52px;height:52px"></div>
+<div style="flex:2"><div class="lbl">Name</div><div class="in">Sushila Devi</div></div>
+<div style="flex:.6"><div class="lbl">Age</div><div class="in">71</div></div>
+<div style="flex:.9"><div class="lbl">Relation</div><div class="in">Mother ▾</div></div>
+</div>
+<div class="r" style="gap:12px">
+<div style="flex:1"><div class="lbl">Parent's phone — the agent calls this</div><div class="in">+91 90••• •••••</div></div>
+<div style="flex:1"><div class="lbl">City / timezone</div><div class="in">Pune · IST ▾</div></div>
+</div>
+</div>
+<div class="r" style="gap:12px;align-items:stretch">
+<div class="c" style="flex:1"><div class="lbl">Known conditions</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">Diabetes</span><span class="chip on">BP</span><span class="chip">Thyroid</span><span class="chip">Arthritis</span><span class="chip">+ add</span></div></div>
+<div class="c" style="flex:1"><div class="lbl">Allergies &amp; things to avoid</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">Penicillin</span><span class="chip on">Sulfa drugs</span><span class="chip on">Peanuts</span><span class="chip">+ add</span></div></div>
+</div>
+<div class="c"><div class="lbl">Anything the agent should keep in mind</div><div class="in" style="height:54px;line-height:1.5">Hard of hearing on the left ear · gets confused after 9 PM · won't take tablets without food · call her "Amma"</div></div>
+<div class="c"><div class="r"><span style="font-weight:600;flex:1">Allow agent check-in calls</span><span style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div>
+<div class="hr"></div>
+<div class="r" style="gap:22px"><span style="color:#6d6d6d">Call window</span><span style="font-weight:600">9 AM – 8 PM</span><span style="color:#6d6d6d;margin-left:16px">Language</span><span style="font-weight:600">Hindi ▾</span><span style="color:#6d6d6d;margin-left:16px">Voice</span><span style="font-weight:600">Warm ▾</span></div></div>
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span style="font-weight:600;flex:1">Mom knows about these calls</span><span style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div><div style="color:#6d6d6d">Tell her before we start. She can ask us to stop on any call, and we stop.</div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Escalate to if I don't respond</span><span class="lbl">optional</span><span class="chip">+ add family member</span></div><div class="r"><div class="av"></div><span style="flex:1">Priya (sister)</span><span class="lbl">after 15 min</span><span style="color:#8d8d8d">✕</span></div><div style="color:#8d8d8d;font-size:9.5px">Skip this — you can add people later.</div></div>
+<div class="vsp"></div>
+<div class="r"><span class="lbl" style="flex:1">You can change all of this later in Settings</span><span class="ob">Back</span><span class="btn">Next — add prescription</span></div>
+</div>
+<div class="col" style="width:300px;flex:none">
+<div class="lbl">Preview · first call script</div>
+<div class="c" style="border:1.5px solid #1a1a1a;gap:9px">
+<div class="r"><span class="tag">agent</span><span class="sp lbl">Hindi · warm</span></div>
+<div style="color:#4d4d4d;line-height:1.5">"Amma, namaste. Khana ho gaya? 8 baje wali goli le li?"</div>
+<div class="hr"></div>
+<div class="r"><span class="lbl" style="flex:1">Uses</span></div>
+<div class="r" style="flex-wrap:wrap;gap:5px"><span class="chip">"Amma"</span><span class="chip">after food</span><span class="chip">Hindi</span><span class="chip">speak slowly</span></div>
+</div>
+<div class="c"><div class="lbl">Won't ever</div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Give medical advice</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Mention penicillin drugs</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Call after 8 PM</span></div></div>
+<div class="ann">Live script preview is web-only — the wide canvas makes the profile fields feel like consequences, not a form.</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2c"><div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Onboarding step 2 — drag-drop upload with OCR running beside it</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/setup/prescription</span></div>
+<div class="app" style="flex-direction:column">
+<div class="hd"><div class="im" style="width:20px;height:20px;border-radius:5px"></div><span class="h1">Set up</span>
+<span class="r" style="gap:6px;margin-left:22px"><span class="chip">1 · Parent</span><span class="chip on">2 · Prescription</span><span class="chip">3 · Schedule</span></span>
+<span class="sp chip">Skip, add later</span></div>
+<div class="cnt-area">
+<div class="col" style="flex:1.15">
+<div class="im" style="height:210px;flex-direction:column;gap:8px;border-style:dashed;border-width:1.5px"><div style="font-size:26px">▢</div><div style="font-size:12px;color:#6d6d6d;font-weight:600">Drop prescription files here</div><span style="font-size:9px">JPG · PNG · PDF · up to 10 pages · or paste from clipboard</span><span class="ob" style="margin-top:4px">Browse files</span></div>
+<div class="r" style="gap:8px"><div class="ob" style="flex:1">Scan with phone (QR)</div><div class="ob" style="flex:1">Import from email</div><div class="ob" style="flex:1">Google Drive</div></div>
+<div class="lbl">Uploaded (2)</div>
+<div class="c" style="padding:9px"><div class="r"><div class="im" style="width:40px;height:50px">pg 1</div><div style="flex:1;display:flex;flex-direction:column;gap:5px"><span style="font-weight:600">Dr_Mehta_Aug12.jpg</span><div class="g" style="width:100%"></div><span style="color:#8d8d8d;font-size:9.5px">1.8 MB · read ✓</span></div><span class="chip">Preview</span><span style="color:#8d8d8d">✕</span></div></div>
+<div class="c" style="padding:9px"><div class="r"><div class="im" style="width:40px;height:50px">pg 2</div><div style="flex:1;display:flex;flex-direction:column;gap:5px"><span style="font-weight:600">Lab_notes.pdf</span><div class="g" style="width:45%"></div><span style="color:#8d8d8d;font-size:9.5px">uploading · 45%</span></div><span style="color:#8d8d8d">✕</span></div></div>
+<div class="c"><div class="r"><span class="tag o">tip</span><span style="flex:1;color:#6d6d6d">Flatten the page and keep dosage lines in frame. Photos of a phone screen work too.</span></div></div>
+<div class="vsp"></div>
+<div class="r"><span class="sp ob">Back</span><span class="btn">Analyse prescription</span></div>
+</div>
+<div class="col" style="flex:1">
+<div class="r"><span class="lbl" style="flex:1">Reading · step 3 of 4</span></div>
+<div class="im" style="height:210px">scanned page preview<br>(detected dose lines boxed · click a box to jump to the row)</div>
+<div class="c" style="gap:10px">
+<div class="r"><span class="dot k"></span><span style="flex:1">Enhancing &amp; deskewing image</span><span class="lbl">0.4s</span></div>
+<div class="r"><span class="dot k"></span><span style="flex:1">Extracting text (OCR)</span><span class="lbl">1.1s</span></div>
+<div class="r"><span class="dot x"></span><span style="flex:1;font-weight:600">Matching 5 medicines to drug database</span><span class="lbl">…</span></div>
+<div class="r"><span class="dot"></span><span style="flex:1;color:#9a9a9a">Building dose schedule</span></div>
+</div>
+<div class="c"><div class="lbl">Found so far</div>
+<div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip">Metformin 500</span><span class="chip">Amlodipine 5</span><span class="chip">Thyronorm 50</span><span class="chip">Atorvas… ?</span><span class="chip">Insulin pen</span></div>
+<div class="r"><span class="tag">2 unclear</span><span style="flex:1;color:#6d6d6d">You'll confirm these on the next step.</span></div></div>
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="tag o">check</span><span style="flex:1;color:#6d6d6d">Penicillin allergy on file — nothing in this prescription conflicts.</span></div></div>
+<div class="vsp"></div>
+<div class="ann">Upload and OCR sit side by side instead of mobile's two screens (<a class="dv-oid" href="#1c">1c</a>+<a class="dv-oid" href="#1d">1d</a>) — you watch it read while adding page 2.</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2d"><div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Onboarding step 3 — approve schedule as a real spreadsheet</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/setup/schedule</span></div>
+<div class="app" style="flex-direction:column">
+<div class="hd"><div class="im" style="width:20px;height:20px;border-radius:5px"></div><span class="h1">Review schedule</span>
+<span class="r" style="gap:6px;margin-left:22px"><span class="chip">1 · Parent</span><span class="chip">2 · Prescription</span><span class="chip on">3 · Schedule</span></span>
+<span class="sp lbl">5 medicines · 2 need a look</span><span class="chip">Source scan</span></div>
+<div class="cnt-area" style="flex-direction:column;gap:12px">
+<div class="c" style="padding:9px 12px;background:#f6f6f4"><div class="r"><span class="tag">check</span><span style="flex:1;color:#6d6d6d">2 rows unclear — fix these before you sign off</span><span class="chip">Jump to first</span><span class="chip">View as calendar</span></div></div>
+<div class="tbl">
+<div class="th"><span class="lbl" style="width:190px">Medicine</span><span class="lbl" style="width:110px">Dose</span><span class="lbl" style="width:90px">Frequency</span><span class="lbl" style="flex:1">Times</span><span class="lbl" style="width:110px">Food rule</span><span class="lbl" style="width:100px">End date</span><span class="lbl" style="width:52px">Alerts</span><span style="width:16px"></span></div>
+<div class="tr"><div style="width:190px"><div style="font-weight:600">Metformin</div><div style="color:#9a9a9a;font-size:9.5px">500 mg tablet</div></div><span style="width:110px">1 tablet</span><span style="width:90px">2× daily</span><span style="flex:1" class="r"><span class="chip">08:00</span><span class="chip">21:00</span><span class="chip">+</span></span><span style="width:110px">After food</span><span style="width:100px">19 Sep</span><span style="width:52px" class="dot k"></span><span style="width:16px;color:#8d8d8d">✎</span></div>
+<div class="tr"><div style="width:190px"><div style="font-weight:600">Amlodipine</div><div style="color:#9a9a9a;font-size:9.5px">5 mg tablet</div></div><span style="width:110px">1 tablet</span><span style="width:90px">1× daily</span><span style="flex:1" class="r"><span class="chip">08:00</span><span class="chip">+</span></span><span style="width:110px">Any</span><span style="width:100px">Ongoing</span><span style="width:52px" class="dot k"></span><span style="width:16px;color:#8d8d8d">✎</span></div>
+<div class="tr sel"><div style="width:190px"><div style="font-weight:600">Atorvas… <span class="tag">unclear</span></div><div style="color:#9a9a9a;font-size:9.5px">Atorvastatin 10 mg?</div></div><span style="width:110px" class="in" >1 tablet</span><span style="width:90px">1× daily</span><span style="flex:1" class="r"><span class="chip">22:00</span><span class="chip">+</span></span><span style="width:110px">Night</span><span style="width:100px">19 Nov</span><span style="width:52px" class="dot k"></span><span style="width:16px;color:#8d8d8d">✎</span></div>
+<div class="tr"><div style="width:190px"><div style="font-weight:600">Thyronorm</div><div style="color:#9a9a9a;font-size:9.5px">50 mcg</div></div><span style="width:110px">1 tablet</span><span style="width:90px">1× daily</span><span style="flex:1" class="r"><span class="chip">06:30</span><span class="chip">+</span></span><span style="width:110px">Empty stomach</span><span style="width:100px">Ongoing</span><span style="width:52px" class="dot k"></span><span style="width:16px;color:#8d8d8d">✎</span></div>
+<div class="tr"><div style="width:190px"><div style="font-weight:600">Insulin <span class="tag">unclear</span></div><div style="color:#9a9a9a;font-size:9.5px">units not legible</div></div><span style="width:110px" class="in">8 units</span><span style="width:90px">2× daily</span><span style="flex:1" class="r"><span class="chip">07:30</span><span class="chip">19:30</span><span class="chip">+</span></span><span style="width:110px">Before food</span><span style="width:100px">Ongoing</span><span style="width:52px" class="dot k"></span><span style="width:16px;color:#8d8d8d">✎</span></div>
+<div class="tr"><span class="chip">+ Add medicine</span><span class="chip">Set all end dates</span><span class="chip">Bulk edit times</span><span class="sp lbl">shift-click to select a range</span></div>
+</div>
+<div class="r" style="gap:12px;align-items:stretch">
+<div class="c" style="flex:1"><div class="lbl">Resulting day</div><div class="r" style="gap:5px;flex-wrap:wrap"><span class="chip">06:30 Thyronorm</span><span class="chip">07:30 Insulin</span><span class="chip">08:00 Metformin · Amlodipine</span><span class="chip">19:30 Insulin</span><span class="chip">21:00 Metformin</span><span class="chip">22:00 Atorvastatin</span></div><div class="r"><span style="flex:1;color:#6d6d6d">6 dose events · 3 agent check-in calls placed around them</span></div></div>
+<div class="c" style="width:300px;flex:none;border-left:3px solid #1a1a1a"><div class="r"><span class="tag o">conflict</span><span style="flex:1">Thyronorm 06:30 needs an empty stomach — 30 min before breakfast tea.</span></div><div class="r"><span class="chip">Shift to 06:00</span><span class="chip">Keep</span></div></div>
+</div>
+<div class="vsp"></div>
+<div class="r"><span class="ann" style="flex:1">Sign-off is a gate, not a warning: until it is ticked the button does nothing and no call is ever placed.</span><span class="c" style="padding:8px 10px;border-left:3px solid #1a1a1a;flex-direction:row;align-items:center;gap:8px"><span class="dot x"></span><span style="font-weight:600">I confirm these 5 medicines, doses and timings are correct</span></span><span class="ob">Save draft</span><span class="btn" style="opacity:.45">Approve &amp; start calling</span></div>
+</div>
+</div>
+</div></div>
+
+</div>
+
+<div class="dv-grp">Daily use — the app shell</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2e"><div class="dv-olabel"><a class="dv-oid" href="#2e">2e</a>Dashboard — next dose, today's timeline, attention column</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/home</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="c" style="padding:8px;background:#fff"><div class="r"><div class="av" style="width:28px;height:28px"></div><div style="flex:1"><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">3 of 5 today</div></div><span style="color:#8d8d8d">▾</span></div></div>
+<div style="height:6px"></div>
+<div class="nv on"><span class="ic"></span>Dashboard</div>
+<div class="nv"><span class="ic"></span>Calendar</div>
+<div class="nv"><span class="ic"></span>Alerts<span class="cnt">3</span></div>
+<div class="nv"><span class="ic"></span>Calls<span class="cnt">2</span></div>
+
+<div class="nv"><span class="ic"></span>Prescriptions</div>
+<div class="nv"><span class="ic"></span>What she said</div>
+<div class="hr" style="margin:8px 4px"></div>
+<div class="nv"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="c" style="padding:9px;background:#fff"><div class="lbl">Agent</div><div class="r"><span class="dot k"></span><span style="flex:1;color:#6d6d6d">Next call 2:05 PM</span></div><div class="ob" style="padding:6px">Check in now</div></div>
+<div class="r" style="padding:8px 6px 0"><div class="av" style="width:20px;height:20px"></div><span style="color:#6d6d6d;flex:1">Rohit</span><span style="color:#8d8d8d">›</span></div>
+</div>
+<div class="main">
+<div class="hd"><span class="h1">Today · Wed 20 Aug</span><span class="chip">On track</span><span class="sp in" style="width:210px">Search meds, calls, alerts…</span><span class="ob">Call Mom</span><span class="btn">+ Add medicine</span><span class="ic" style="border-radius:99px"></span></div>
+<div class="cnt-area">
+<div class="col" style="flex:1.35">
+<div class="c" style="border:1.5px solid #1a1a1a;background:#fff;gap:10px;padding:14px">
+<div class="r"><span class="lbl">Next dose · in 22 min</span><span class="sp tag o">2:00 PM</span></div>
+<div class="r" style="gap:12px;align-items:flex-end"><div style="font-size:22px;font-weight:700">Metformin 500 mg</div><div style="color:#6d6d6d;padding-bottom:3px">1 tablet · after lunch</div></div>
+<div class="r" style="gap:8px"><div class="btn">Mark taken</div><div class="ob">Snooze 30 min</div><div class="ob">Call Mom</div><div class="ob">Skip with reason</div><span class="sp lbl">agent calls at 2:05 if unconfirmed · edit</span></div>
+</div>
+<div class="r"><span class="lbl" style="flex:1">Today's doses</span><span class="lbl">3 of 5 taken · 86% this week</span><span class="chip">Open calendar</span></div>
+<div class="tbl">
+<div class="th"><span class="lbl" style="width:64px">Time</span><span class="lbl" style="flex:1">Medicine</span><span class="lbl" style="width:110px">Rule</span><span class="lbl" style="width:120px">Status</span><span class="lbl" style="width:120px">Action</span></div>
+<div class="tr"><span style="width:64px">06:30</span><span style="flex:1;font-weight:600">Thyronorm 50</span><span style="width:110px;color:#9a9a9a">Empty stomach</span><span style="width:120px" class="r"><span class="dot x"></span><span class="tag">missed</span></span><span style="width:120px" class="r"><span class="chip">Mark taken</span></span></div>
+<div class="tr"><span style="width:64px">07:30</span><span style="flex:1;font-weight:600">Insulin 8 u</span><span style="width:110px;color:#9a9a9a">Before food</span><span style="width:120px" class="r"><span class="dot k"></span><span style="color:#6d6d6d">7:41 · by Mom</span></span><span style="width:120px"></span></div>
+<div class="tr"><span style="width:64px">08:00</span><span style="flex:1;font-weight:600">Metformin 500 · Amlodipine 5</span><span style="width:110px;color:#9a9a9a">After food</span><span style="width:120px" class="r"><span class="dot k"></span><span style="color:#6d6d6d">on call</span></span><span style="width:120px"></span></div>
+<div class="tr sel"><span style="width:64px;font-weight:700">14:00</span><span style="flex:1;font-weight:600">Metformin 500</span><span style="width:110px;color:#9a9a9a">After food</span><span style="width:120px" class="r"><span class="dot"></span><span class="chip">now</span></span><span style="width:120px" class="r"><span class="chip on">Mark taken</span></span></div>
+<div class="tr"><span style="width:64px">19:30</span><span style="flex:1">Insulin 8 u</span><span style="width:110px;color:#9a9a9a">Before food</span><span style="width:120px;color:#9a9a9a">upcoming</span><span style="width:120px"></span></div>
+<div class="tr"><span style="width:64px">21:00</span><span style="flex:1">Metformin 500 · Atorvastatin 10</span><span style="width:110px;color:#9a9a9a">Night</span><span style="width:120px;color:#9a9a9a">upcoming</span><span style="width:120px"></span></div>
+</div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Adherence · last 14 days</span><span class="chip">Export CSV</span></div>
+<div class="r" style="gap:3px;align-items:flex-end;height:44px">
+<span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:60%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:80%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:40%"></span><span style="flex:1;background:#dedede;height:60%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:80%"></span><span style="flex:1;background:#dedede;height:60%"></span></div>
+<div class="r"><span class="lbl" style="flex:1">7 Aug</span><span class="lbl">today</span></div></div>
+</div>
+<div class="col" style="width:326px;flex:none">
+<div class="r"><span class="lbl" style="flex:1">Needs you</span><span class="chip">All alerts ›</span></div>
+<div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><span class="tag">critical</span><span class="sp lbl">6 min ago</span></div><div style="font-weight:700;font-size:13px">"I feel dizzy and my chest is tight"</div><div style="color:#6d6d6d">Said on the 1:35 PM check-in call.</div><div class="r" style="gap:7px"><div class="btn" style="flex:1">Call Mom now</div><div class="ob" style="flex:1">Open</div></div></div>
+<div class="c" style="border-left:3px solid #1a1a1a;padding:9px"><div class="r"><span class="tag o">missed</span><span style="flex:1">6:30 AM Thyronorm</span><span class="chip">fix</span></div><div class="r"><span class="tag o">no answer</span><span style="flex:1">Yesterday 8:05 PM call</span><span class="chip">retry</span></div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Last check-in · 9:12 AM</span><span class="chip">Transcript</span></div><div style="color:#6d6d6d">"Took the morning ones, knee hurts a bit."</div><div class="r" style="gap:3px"><span class="dot k"></span><span class="dot k"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="sp lbl">calm</span></div></div>
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="lbl" style="flex:1">What she said this week</span><span class="tag">1 red</span></div><div style="line-height:1.4">"Chest feels tight when I walk."</div><div class="r"><span style="flex:1;color:#6d6d6d">Today 1:36 PM · 4 more entries</span><span class="chip">View all</span></div></div>
+<div class="c"><div class="lbl">Care record</div><div class="r"><span style="flex:1;color:#6d6d6d">5 medicines · 1 priority</span><span class="chip">Open</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Allergies: penicillin, sulfa</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Dr. Mehta · +91 98•••</span><span class="chip">Call</span></div></div>
+<div class="vsp"></div>
+<div class="ann">Mobile <a class="dv-oid" href="#1f">1f</a> stacks these; on web the day's list and the attention rail are visible together — no scrolling to know if something's wrong.</div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2f"><div class="dv-olabel"><a class="dv-oid" href="#2f">2f</a>Calendar — week grid, doses × times, drag to reschedule</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/calendar</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="c" style="padding:8px;background:#fff"><div class="r"><div class="av" style="width:28px;height:28px"></div><div style="flex:1"><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">3 of 5 today</div></div><span style="color:#8d8d8d">▾</span></div></div>
+<div style="height:6px"></div>
+<div class="nv"><span class="ic"></span>Dashboard</div><div class="nv on"><span class="ic"></span>Calendar</div><div class="nv"><span class="ic"></span>Alerts<span class="cnt">3</span></div><div class="nv"><span class="ic"></span>Calls<span class="cnt">2</span></div><div class="nv"><span class="ic"></span>Prescriptions</div><div class="nv"><span class="ic"></span>What she said</div>
+<div class="hr" style="margin:8px 4px"></div><div class="nv"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="c" style="padding:9px;background:#fff"><div class="lbl">Filter</div><div class="r" style="flex-wrap:wrap;gap:5px"><span class="chip on">All meds</span><span class="chip">Insulin</span><span class="chip">Calls</span></div></div>
+</div>
+<div class="main">
+<div class="hd"><span class="h1">August 2026</span><span class="r" style="gap:4px;margin-left:10px"><span class="chip">‹</span><span class="chip">Today</span><span class="chip">›</span></span><span class="r" style="gap:5px;margin-left:12px"><span class="chip">Day</span><span class="chip on">Week</span><span class="chip">Month</span><span class="chip">Agenda</span></span><span class="sp lbl">17–23 Aug · 86% taken</span><span class="btn">+ Add dose</span></div>
+<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div class="r" style="padding:8px 18px 8px 78px;border-bottom:1px solid #e4e4e0;gap:6px">
+<div style="flex:1;text-align:center"><div class="lbl">Mon</div><div style="font-weight:600">17</div></div>
+<div style="flex:1;text-align:center"><div class="lbl">Tue</div><div style="font-weight:600">18</div></div>
+<div style="flex:1;text-align:center"><div class="lbl">Wed</div><div style="font-weight:600">19</div></div>
+<div style="flex:1;text-align:center;background:#1a1a1a;color:#fff;border-radius:7px;padding:2px 0"><div class="lbl" style="color:#bdbdbd">Thu</div><div style="font-weight:700">20</div></div>
+<div style="flex:1;text-align:center;color:#9a9a9a"><div class="lbl">Fri</div><div style="font-weight:600">21</div></div>
+<div style="flex:1;text-align:center;color:#9a9a9a"><div class="lbl">Sat</div><div style="font-weight:600">22</div></div>
+<div style="flex:1;text-align:center;color:#9a9a9a"><div class="lbl">Sun</div><div style="font-weight:600">23</div></div>
+</div>
+<div style="flex:1;padding:0 18px 10px;display:flex;flex-direction:column;overflow:hidden">
+<div class="r" style="align-items:stretch;border-bottom:1px solid #f0f0ec;padding:7px 0"><span class="lbl" style="width:60px;padding-top:6px">06:30</span>
+<div style="flex:1;display:flex;gap:6px">
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Thyronorm</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Thyronorm</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Thyronorm</span></div></div>
+<div class="c" style="flex:1;padding:6px;border-left:3px solid #1a1a1a"><div class="r"><span class="dot x"></span><span style="flex:1">Thyronorm</span><span class="tag">missed</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Thyronorm</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Thyronorm</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Thyronorm</span></div></div>
+</div></div>
+<div class="r" style="align-items:stretch;border-bottom:1px solid #f0f0ec;padding:7px 0"><span class="lbl" style="width:60px;padding-top:6px">07:30</span>
+<div style="flex:1;display:flex;gap:6px">
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot x"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+</div></div>
+<div class="r" style="align-items:stretch;border-bottom:1px solid #f0f0ec;padding:7px 0"><span class="lbl" style="width:60px;padding-top:6px">08:00</span>
+<div style="flex:1;display:flex;gap:6px">
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Amlodipine</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Amlodipine</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Amlodipine</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Amlodipine</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Amlodipine</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Amlodipine</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Amlodipine</span></div></div>
+</div></div>
+<div class="r" style="align-items:stretch;border-bottom:1px solid #f0f0ec;padding:7px 0"><span class="lbl" style="width:60px;padding-top:6px">14:00</span>
+<div style="flex:1;display:flex;gap:6px">
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div></div>
+<div class="c" style="flex:1;padding:6px;border:1.5px solid #1a1a1a;background:#fff"><div class="r"><span class="dot"></span><span style="flex:1;font-weight:700">Metformin</span><span class="chip">now</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div></div>
+</div></div>
+<div class="r" style="align-items:stretch;border-bottom:1px solid #f0f0ec;padding:7px 0"><span class="lbl" style="width:60px;padding-top:6px">19:30</span>
+<div style="flex:1;display:flex;gap:6px">
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Insulin 8u</span></div></div>
+</div></div>
+<div class="r" style="align-items:stretch;padding:7px 0"><span class="lbl" style="width:60px;padding-top:6px">21:00</span>
+<div style="flex:1;display:flex;gap:6px">
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Atorvastatin</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot x"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Atorvastatin</span></div></div>
+<div class="c" style="flex:1;padding:6px"><div class="r"><span class="dot k"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot k"></span><span style="flex:1">Atorvastatin</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Atorvastatin</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Atorvastatin</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Atorvastatin</span></div></div>
+<div class="c" style="flex:1;padding:6px;opacity:.55"><div class="r"><span class="dot"></span><span style="flex:1">Metformin</span></div><div class="r"><span class="dot"></span><span style="flex:1">Atorvastatin</span></div></div>
+</div></div>
+<div class="vsp"></div>
+<div class="r" style="gap:12px;padding-top:9px;border-top:1px solid #e4e4e0"><span class="r" style="gap:4px"><span class="dot k"></span><span class="lbl">taken</span></span><span class="r" style="gap:4px"><span class="dot x"></span><span class="lbl">missed</span></span><span class="r" style="gap:4px"><span class="dot"></span><span class="lbl">upcoming</span></span><span class="ann" style="margin-left:16px">Drag a card to another cell to reschedule that one dose; shift-drag moves the whole series.</span><span class="sp chip">Print / share PDF</span></div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2g"><div class="dv-olabel"><a class="dv-oid" href="#2g">2g</a>Alerts — list + detail in one view (mobile <a class="dv-oid" href="#1h">1h</a>+<a class="dv-oid" href="#1i">1i</a> merged)</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/alerts/214</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="c" style="padding:8px;background:#fff"><div class="r"><div class="av" style="width:28px;height:28px"></div><div style="flex:1"><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">1 critical</div></div><span style="color:#8d8d8d">▾</span></div></div>
+<div style="height:6px"></div>
+<div class="nv"><span class="ic"></span>Dashboard</div><div class="nv"><span class="ic"></span>Calendar</div><div class="nv on"><span class="ic"></span>Alerts<span class="cnt">3</span></div><div class="nv"><span class="ic"></span>Calls<span class="cnt">2</span></div><div class="nv"><span class="ic"></span>Prescriptions</div><div class="nv"><span class="ic"></span>What she said</div>
+<div class="hr" style="margin:8px 4px"></div><div class="nv"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="c" style="padding:9px;background:#fff"><div class="lbl">Escalation</div><div class="r"><div class="av" style="width:18px;height:18px"></div><span style="flex:1;color:#6d6d6d">Priya</span><span class="lbl">15 min</span></div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div class="pane">
+<div class="hd" style="padding:0 14px"><span class="h1" style="font-size:13.5px">Alerts</span><span class="sp chip">Mark all read</span></div>
+<div style="padding:9px 14px;border-bottom:1px solid #e4e4e0;display:flex;gap:5px;flex-wrap:wrap"><span class="chip on">All 6</span><span class="chip">Critical 1</span><span class="chip">Meds 3</span><span class="chip">Calls 1</span></div>
+<div style="flex:1;overflow:hidden">
+<div class="li sel"><div class="r"><span class="tag">critical</span><span class="sp lbl">6 min ago</span></div><div style="font-weight:700">"I feel dizzy and my chest is tight"</div><div style="color:#6d6d6d">1:35 PM check-in · agent stayed on the line</div></div>
+<div class="li"><div class="r"><span class="tag o">missed dose</span><span class="sp lbl">7:15 AM</span></div><div style="font-weight:600">Thyronorm 50 mcg not taken</div><div style="color:#6d6d6d">Agent asked twice; strip not found</div></div>
+<div class="li"><div class="r"><span class="tag o">no answer</span><span class="sp lbl">Yesterday</span></div><div style="font-weight:600">2 check-in calls unanswered</div></div>
+<div class="li"><div class="r"><span class="tag o">missed dose</span><span class="sp lbl">Yesterday</span></div><div style="font-weight:600">Metformin 9:00 PM not confirmed</div></div>
+<div class="li" style="opacity:.6"><div class="r"><span class="tag o">resolved</span><span class="sp lbl">Aug 16</span></div><div style="font-weight:600">Double dose of Metformin</div></div>
+<div class="li" style="opacity:.6"><div class="r"><span class="tag o">resolved</span><span class="sp lbl">Aug 15</span></div><div style="font-weight:600">Sleep change flagged</div></div>
+</div>
+</div>
+<div class="pane-b">
+<div class="r"><div style="flex:1"><div style="font-size:17px;font-weight:700">Possible chest discomfort</div><div style="color:#8d8d8d">Today · 1:35 PM · agent call #214 · 2 min 11 s</div></div><span class="tag">critical</span><span class="chip">Copy link</span><span class="chip">‹ ›</span></div>
+<div class="r" style="gap:8px"><div class="btn">Call Mom now</div><div class="ob">Escalate to Priya</div><div class="ob">Copy handoff link</div><div class="ob">Mark resolved</div><span class="sp lbl">j / k to move · r to resolve</span></div>
+<div class="r" style="gap:12px;align-items:stretch;flex:1;overflow:hidden">
+<div class="col" style="flex:1.2">
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="lbl" style="flex:1">Why this was flagged</span><span class="tag">P1</span></div><div style="font-weight:600;font-size:12.5px">rule: chest complaint with age over 40</div><div style="color:#6d6d6d">Triggered on the words she used. No interpretation, no diagnosis.</div></div>
+<div class="c" style="flex:1;gap:9px;overflow:hidden"><div class="r"><span class="lbl" style="flex:1">Transcript</span><span class="chip">Play audio ▶</span><span class="chip">Download</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Did you take the 8 o'clock tablets?</span><span class="lbl">0:12</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="tag">mom</span><span style="flex:1">Yes… but since morning I feel dizzy.</span><span class="lbl">0:19</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Any pain in the chest or arm?</span><span class="lbl">0:26</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="tag">mom</span><span style="flex:1;font-weight:600;background:#ededea">Chest feels tight when I walk.</span><span class="lbl">0:31</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">I'm telling Rohit right now. Please sit down.</span><span class="lbl">0:37</span></div>
+<div class="hr"></div>
+<div class="r"><span class="lbl" style="flex:1">Audio</span></div>
+<div class="r" style="gap:6px"><span class="chip">▶</span><div class="g" style="flex:1;height:9px"><span style="display:block;width:34%;height:9px;background:#1a1a1a;border-radius:3px"></span></div><span class="lbl">0:44 / 2:11</span></div>
+</div>
+</div>
+<div class="col" style="width:250px;flex:none">
+<div class="c"><div class="lbl">Told to</div><div class="r"><span class="dot k"></span><span style="flex:1">You · WhatsApp</span><span class="lbl">1:37p ✓</span></div><div class="r"><span class="dot"></span><span style="flex:1;color:#6d6d6d">Priya · in 9 min</span></div></div>
+<div class="c"><div class="lbl">Context</div><div class="r"><span class="dot k"></span><span style="flex:1;color:#6d6d6d">BP meds taken on time</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">3 dizziness mentions this week</span></div><div class="r"><span class="dot"></span><span style="flex:1;color:#6d6d6d">Amlodipine stock low</span></div></div>
+<div class="c"><div class="lbl">Activity</div><div class="r"><span style="flex:1;color:#6d6d6d">Agent flagged</span><span class="lbl">1:37p</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Push + SMS to you</span><span class="lbl">1:37p</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Priya notified in</span><span class="lbl">9 min</span></div></div>
+<div class="c"><div class="lbl">Note for the family</div><div class="in" style="height:44px">Add a note…</div></div>
+<div class="vsp"></div>
+<div class="ann">Triage without losing your place: arrow through the list, detail loads right. Mobile needs a push+back per alert.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2h"><div class="dv-olabel"><a class="dv-oid" href="#2h">2h</a>Calls &amp; messages — call log, searchable transcript, what she said</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/calls</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="c" style="padding:8px;background:#fff"><div class="r"><div class="av" style="width:28px;height:28px"></div><div style="flex:1"><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">18 calls this week</div></div><span style="color:#8d8d8d">▾</span></div></div>
+<div style="height:6px"></div>
+<div class="nv"><span class="ic"></span>Dashboard</div><div class="nv"><span class="ic"></span>Calendar</div><div class="nv"><span class="ic"></span>Alerts<span class="cnt">3</span></div><div class="nv on"><span class="ic"></span>Calls<span class="cnt">2</span></div><div class="nv"><span class="ic"></span>Prescriptions</div><div class="nv"><span class="ic"></span>What she said</div>
+<div class="hr" style="margin:8px 4px"></div><div class="nv"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="c" style="padding:9px;background:#fff"><div class="lbl">Next scheduled</div><div class="r"><span class="dot k"></span><span style="flex:1;color:#6d6d6d">2:05 PM · dose check</span></div><div class="r"><span class="dot"></span><span style="flex:1;color:#6d6d6d">6:00 PM · chat</span></div></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div class="pane" style="width:300px">
+<div class="hd" style="padding:0 14px"><span class="h1" style="font-size:13.5px">Calls</span><span class="sp chip">+ Check in now</span></div>
+<div style="padding:9px 14px;border-bottom:1px solid #e4e4e0;display:flex;flex-direction:column;gap:7px"><div class="in">Search transcripts…</div><div class="r" style="gap:5px"><span class="chip on">Agent</span><span class="chip">Mine</span><span class="chip">Messages</span><span class="chip">Flagged</span></div></div>
+<div style="flex:1;overflow:hidden">
+<div class="li sel"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Today 1:35 PM</span><span class="lbl">2:11</span></div><div style="color:#6d6d6d">Flagged: chest tightness</div><div class="r"><span class="sp tag">alert</span></div></div>
+<div class="li"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Today 9:12 AM</span><span class="lbl">1:04</span></div><div style="color:#6d6d6d">All morning doses confirmed</div></div>
+<div class="li" style="opacity:.7"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Yest. 8:05 PM</span><span class="lbl">no answer</span></div><div style="color:#6d6d6d">Retried twice · voicemail left</div></div>
+<div class="li"><div class="r"><span class="tag">you</span><span style="flex:1;font-weight:600">Yest. 6:40 PM</span><span class="lbl">7:22</span></div><div style="color:#6d6d6d">Direct call to Mom</div></div>
+<div class="li"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Yest. 1:30 PM</span><span class="lbl">1:48</span></div><div style="color:#6d6d6d">Mentioned poor sleep</div></div>
+<div class="li"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Mon 6:05 PM</span><span class="lbl">3:02</span></div><div style="color:#6d6d6d">"The house is very quiet"</div></div>
+</div>
+</div>
+<div class="pane-b">
+<div class="r"><div style="flex:1"><div style="font-size:16px;font-weight:700">Check-in call #214</div><div style="color:#8d8d8d">Today 1:35 PM · 2 min 11 s · Hindi · agent "warm"</div></div><span class="tag">flagged</span><span class="ob">Call Mom</span><span class="ob">Share with Priya</span></div>
+<div class="c" style="gap:8px"><div class="r"><span class="lbl" style="flex:1">What this call produced</span><span class="chip">Open in record</span></div>
+<div class="r" style="gap:8px;flex-wrap:wrap"><span class="chip on">2 doses confirmed</span><span class="chip on">1 observation · red</span><span class="chip on">1 escalation · P1</span><span class="chip">handoff link created</span></div>
+<div class="r"><span class="lbl" style="flex:1">rule: chest complaint with age over 40</span><span class="lbl">written 1:36 PM</span></div></div>
+<div class="r" style="gap:12px;flex:1;align-items:stretch;overflow:hidden">
+<div class="c" style="flex:1.3;overflow:hidden;gap:9px">
+<div class="r"><span class="lbl" style="flex:1">Transcript</span><span class="chip">Hindi</span><span class="chip on">English</span><span class="chip">Play ▶</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:04</span><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Amma, namaste. Have you eaten?</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:09</span><span class="tag">mom</span><span style="flex:1">Just finished lunch.</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:12</span><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Did you take the 8 o'clock tablets?</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:19</span><span class="tag">mom</span><span style="flex:1">Yes… but since morning I feel dizzy.</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:26</span><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Any pain in the chest or arm?</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:31</span><span class="tag">mom</span><span style="flex:1;font-weight:600;background:#ededea">Chest feels tight when I walk.</span></div>
+<div class="r" style="align-items:flex-start;gap:8px"><span class="lbl" style="width:30px">0:37</span><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Sit down please, I'm telling Rohit now.</span></div>
+</div>
+<div class="col" style="width:238px;flex:none">
+<div class="c"><div class="lbl">What the call achieved</div><div class="r"><span class="dot k"></span><span style="flex:1;color:#6d6d6d">Metformin 08:00 confirmed</span></div><div class="r"><span class="dot k"></span><span style="flex:1;color:#6d6d6d">Amlodipine confirmed</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Thyronorm still missed</span></div></div>
+<div class="c"><div class="lbl">Topics detected</div><div class="r" style="flex-wrap:wrap;gap:5px"><span class="chip on">Dizziness</span><span class="chip on">Chest</span><span class="chip">Lunch</span><span class="chip">Knee</span></div></div>
+<div class="c"><div class="lbl">Messages</div><div class="r"><div class="av" style="width:20px;height:20px"></div><span style="flex:1">Mom · voice note 0:12</span><span class="tag">2</span></div><div class="r"><div class="av" style="width:20px;height:20px"></div><span style="flex:1;color:#6d6d6d">Priya: "I'll visit Sunday"</span></div><div class="ob" style="padding:6px">Open messages</div></div>
+<div class="vsp"></div>
+<div class="ann">Transcript search across every call is the web-only win — "when did she first say dizzy?" The words are the record; no mood score sits on top of them.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2j"><div class="dv-olabel"><a class="dv-oid" href="#2j">2j</a>What she said — verbatim, severity-tagged, newest first</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/wellbeing</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="c" style="padding:8px;background:#fff"><div class="r"><div class="av" style="width:28px;height:28px"></div><div style="flex:1"><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">18 calls this week</div></div><span style="color:#8d8d8d">▾</span></div></div>
+<div style="height:6px"></div>
+<div class="nv"><span class="ic"></span>Dashboard</div><div class="nv"><span class="ic"></span>Calendar</div><div class="nv"><span class="ic"></span>Alerts<span class="cnt">3</span></div><div class="nv"><span class="ic"></span>Calls<span class="cnt">2</span></div><div class="nv"><span class="ic"></span>Prescriptions</div><div class="nv on"><span class="ic"></span>What she said</div>
+<div class="hr" style="margin:8px 4px"></div><div class="nv"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="c" style="padding:9px;background:#fff"><div class="lbl">Weekly digest</div><div class="r"><span style="flex:1;color:#6d6d6d">Sunday · email + push</span><span class="chip">on</span></div></div>
+</div>
+<div class="main">
+<div class="hd"><span class="h1">What she said</span><span class="chip">Aug 14–20 ▾</span><span class="chip">Red + watch only</span><span class="sp tag">needs attention</span><span class="ob">Share with Priya</span><span class="ob">Export PDF for doctor</span></div>
+<div class="cnt-area">
+<div class="col" style="flex:1.5">
+<div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><span class="tag">summary</span><span class="sp lbl">from 18 calls this week</span></div><div style="font-size:16px;font-weight:700;line-height:1.35">14 things she said · 1 red · 4 watch</div><div style="color:#6d6d6d">Every line below is what she actually said, timestamped, with the call it came from. Nothing is summarised or scored.</div></div>
+<div class="tbl" style="flex:1">
+<div class="th"><span class="lbl" style="width:120px">When</span><span class="lbl" style="width:70px">Severity</span><span class="lbl" style="flex:1">What she said</span><span class="lbl" style="width:90px">Call</span><span class="lbl" style="width:110px"></span></div>
+<div class="tr sel"><span style="width:120px">Today 1:36 PM</span><span style="width:70px"><span class="tag">red</span></span><span style="flex:1;font-weight:600">"Chest feels tight when I walk."</span><span style="width:90px">#214</span><span style="width:110px" class="r"><span class="chip">Transcript</span></span></div>
+<div class="tr"><span style="width:120px">Today 9:13 AM</span><span style="width:70px"><span class="tag o">watch</span></span><span style="flex:1">"Took the morning ones, knee hurts a bit."</span><span style="width:90px">#213</span><span style="width:110px" class="r"><span class="chip">Transcript</span></span></div>
+<div class="tr"><span style="width:120px">Mon 6:05 PM</span><span style="width:70px"><span class="tag o">watch</span></span><span style="flex:1">"The house is very quiet these days."</span><span style="width:90px">#207</span><span style="width:110px" class="r"><span class="chip">Transcript</span></span></div>
+<div class="tr"><span style="width:120px">Tue 9:04 AM</span><span style="width:70px"><span class="tag o">watch</span></span><span style="flex:1">"I was awake till three."</span><span style="width:90px">#209</span><span style="width:110px" class="r"><span class="chip">Transcript</span></span></div>
+<div class="tr"><span style="width:120px">Sun 1:20 PM</span><span style="width:70px"><span class="lbl">none</span></span><span style="flex:1;color:#6d6d6d">"Knee is worse in the rain."</span><span style="width:90px">#204</span><span style="width:110px" class="r"><span class="chip">Transcript</span></span></div>
+<div class="tr"><span style="width:120px">Sat 9:10 AM</span><span style="width:70px"><span class="lbl">none</span></span><span style="flex:1;color:#6d6d6d">"Slept well, grandson called."</span><span style="width:90px">#201</span><span style="width:110px" class="r"><span class="chip">Transcript</span></span></div>
+</div>
+<div class="r" style="gap:12px;align-items:stretch">
+<div class="c" style="flex:1"><div class="lbl">Words that repeat</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">sleep 4×</span><span class="chip on">knee 2×</span><span class="chip on">quiet / alone 3×</span><span class="chip">grandson 5×</span><span class="chip">chest 1×</span></div><div style="color:#8d8d8d;font-size:9.5px">Counted from her exact words — tap one to see every line it appears in.</div></div>
+<div class="c" style="width:250px;flex:none"><div class="lbl">This week</div><div class="r"><span style="flex:1;color:#6d6d6d">Doses confirmed</span><span style="font-weight:600">31 of 36</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Calls answered</span><span style="font-weight:600">16 / 18</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Escalations raised</span><span style="font-weight:600">1 · P1</span></div></div>
+</div>
+</div>
+<div class="col" style="width:320px;flex:none">
+<div class="r"><span class="lbl" style="flex:1">Needs a look</span><span class="chip">Play all</span></div>
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="tag o">flagged</span><span class="sp lbl">Mon 6:05 PM</span></div><div style="font-weight:600">"The house is very quiet these days."</div><div class="r"><span style="flex:1;color:#6d6d6d">3rd mention of being alone</span><span class="chip">Transcript</span></div></div>
+<div class="c"><div class="r"><span class="tag o">sleep</span><span class="sp lbl">Tue 9:04 AM</span></div><div style="font-weight:600">"I was awake till three."</div><div class="r"><span style="flex:1;color:#6d6d6d">4th mention this week</span><span class="chip">Transcript</span></div></div>
+<div class="c"><div class="r"><span class="tag o">pain</span><span class="sp lbl">Sun 1:20 PM</span></div><div style="font-weight:600">"Knee is worse in the rain."</div></div>
+<div class="c"><div class="lbl">Suggested</div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Add a 6 PM chat call — no medicine, just talk</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Ask Priya to visit before Sunday</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Mention sleep to Dr. Mehta</span></div></div>
+<div class="vsp"></div>
+<div class="btn">Call Mom now</div>
+<div class="r" style="gap:8px"><div class="ob" style="flex:1">Add daily chat call</div><div class="ob" style="flex:1">Tell Priya</div></div>
+<div class="ann">Her words are the whole screen. No mood score — a number nobody can trace back to a sentence is not evidence.</div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2k"><div class="dv-olabel"><a class="dv-oid" href="#2k">2k</a>Settings — sectioned nav, agent &amp; escalation rules</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/settings/agent</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="c" style="padding:8px;background:#fff"><div class="r"><div class="av" style="width:28px;height:28px"></div><div style="flex:1"><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">Diabetes · BP</div></div><span style="color:#8d8d8d">▾</span></div></div>
+<div style="height:6px"></div>
+<div class="nv"><span class="ic"></span>Dashboard</div><div class="nv"><span class="ic"></span>Calendar</div><div class="nv"><span class="ic"></span>Alerts<span class="cnt">3</span></div><div class="nv"><span class="ic"></span>Calls<span class="cnt">2</span></div><div class="nv"><span class="ic"></span>Prescriptions</div><div class="nv"><span class="ic"></span>What she said</div>
+<div class="hr" style="margin:8px 4px"></div><div class="nv on"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="r" style="padding:8px 6px 0"><div class="av" style="width:20px;height:20px"></div><span style="color:#6d6d6d;flex:1">Rohit</span><span style="color:#8d8d8d">›</span></div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="width:196px;flex:none;border-right:1px solid #e4e4e0;padding:14px 10px;display:flex;flex-direction:column;gap:3px;background:#fbfbfa">
+<div class="lbl" style="padding:4px 9px">Parent</div>
+<div class="nv">Profile &amp; conditions</div>
+<div class="nv">Medicines &amp; schedule</div>
+<div class="nv">Prescriptions</div>
+<div class="lbl" style="padding:10px 9px 4px">Agent</div>
+<div class="nv on">Calls &amp; voice</div>
+<div class="nv">Alert rules</div>
+<div class="nv">Escalation</div>
+<div class="lbl" style="padding:10px 9px 4px">Account</div>
+<div class="nv">Family &amp; access</div>
+<div class="nv">Notifications</div>
+<div class="nv">Billing</div>
+<div class="nv">Privacy &amp; data</div>
+</div>
+<div class="pane-b" style="padding:16px 22px">
+<div class="r"><div style="flex:1"><div class="h1">Calls &amp; voice</div><div style="color:#8d8d8d">How the agent speaks to Mom and when it dials.</div></div><span class="chip">Test call to me</span><span class="btn">Save</span></div>
+<div class="r" style="gap:14px;align-items:stretch;flex:1;overflow:hidden">
+<div class="col" style="flex:1.15">
+<div class="c" style="gap:10px">
+<div class="r"><span style="flex:1;font-weight:600">Check-in calls</span><span style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div>
+<div class="hr"></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Calls per day</span><span class="r" style="gap:5px"><span class="chip">2</span><span class="chip on">3</span><span class="chip">4</span><span class="chip">Custom</span></span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Call window</span><span class="in" style="width:80px">9:00 AM</span><span style="color:#8d8d8d">–</span><span class="in" style="width:80px">8:00 PM</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Offset from a dose</span><span class="in" style="width:110px">+5 min ▾</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Retry if unanswered</span><span class="in" style="width:110px">2× / 10 min ▾</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Leave voicemail</span><span class="chip on">On</span></div>
+</div>
+<div class="c" style="gap:10px">
+<div class="lbl">Voice</div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Language</span><span class="in" style="width:130px">Hindi ▾</span><span class="chip">+ Marathi fallback</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Tone</span><span class="r" style="gap:5px"><span class="chip on">Warm</span><span class="chip">Neutral</span><span class="chip">Brisk</span></span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Speed</span><div class="g" style="flex:1;height:6px"><span style="display:block;width:40%;height:6px;background:#1a1a1a;border-radius:3px"></span></div><span class="lbl">slow</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Calls her</span><span class="in" style="width:130px">Amma</span><span class="chip">Preview ▶</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Record &amp; transcribe</span><span class="chip on">On</span><span style="color:#8d8d8d;font-size:9.5px">Mom is told on the first call</span></div>
+</div>
+<div class="c"><div class="lbl">Do not call</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">During temple 6–7 AM</span><span class="chip on">Sunday afternoon</span><span class="chip">+ add window</span></div></div>
+</div>
+<div class="col" style="flex:1">
+<div class="c"><div class="lbl">Alert rules · notify me when</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">Missed dose</span><span class="chip on">No answer</span><span class="chip on">Unwell</span><span class="chip on">Double dose</span><span class="chip on">Emergency word</span><span class="chip">Sleep change</span><span class="chip">Says she is unwell</span></div>
+<div class="hr"></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Missed dose alerts after</span><span class="in" style="width:110px">30 min ▾</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Notify me by</span><span class="r" style="gap:5px"><span class="chip on">Push</span><span class="chip on">SMS</span><span class="chip">Email</span><span class="chip">WhatsApp</span></span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Quiet hours for me</span><span class="in" style="width:130px">11 PM – 7 AM</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Critical ignores quiet hours</span><span class="chip on">Yes</span></div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Escalation chain</span><span class="chip">+ Add contact</span></div>
+<div class="r"><span class="lbl" style="width:14px">1</span><div class="av"></div><div style="flex:1"><div style="font-weight:600">Rohit (you)</div><div style="color:#8d8d8d;font-size:9.5px">immediately</div></div><span style="color:#8d8d8d">✎</span></div>
+<div class="r"><span class="lbl" style="width:14px">2</span><div class="av"></div><div style="flex:1"><div style="font-weight:600">Priya (sister)</div><div style="color:#8d8d8d;font-size:9.5px">after 15 min · view-only access</div></div><span style="color:#8d8d8d">✎</span></div>
+<div class="r"><span class="lbl" style="width:14px">3</span><div class="av"></div><div style="flex:1"><div style="font-weight:600">Dr. Mehta</div><div style="color:#8d8d8d;font-size:9.5px">critical only · SMS</div></div><span style="color:#8d8d8d">✎</span></div>
+<div class="r"><span class="lbl" style="width:14px">4</span><div class="av"></div><div style="flex:1"><div style="font-weight:600">Neighbour · Mrs Rao</div><div style="color:#8d8d8d;font-size:9.5px">no answer 3× · call only</div></div><span style="color:#8d8d8d">✎</span></div></div>
+<div class="c"><div class="lbl">Data</div><div class="r"><span style="flex:1;color:#6d6d6d">Keep recordings</span><span class="in" style="width:110px">90 days ▾</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Export everything</span><span class="chip">Download</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Delete account &amp; data</span><span class="chip">Request</span></div></div>
+<div class="vsp"></div>
+<div class="ann">Two-column settings + section rail: everything mobile hides behind rows (<a class="dv-oid" href="#1m">1m</a>) is one page here.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></div>
+
+</div>
+
+<div class="dv-grp">Alternate directions to compare</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2l"><div class="dv-olabel"><a class="dv-oid" href="#2l">2l</a>Dashboard alt — "quiet wall": one status, nothing else, for good days</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/home</span></div>
+<div class="app">
+<div class="sd" style="width:64px;align-items:center">
+<div class="im" style="width:24px;height:24px;border-radius:7px;margin-bottom:8px">▲</div>
+<div class="av" style="width:30px;height:30px"></div>
+<div style="height:8px"></div>
+<div class="ic" style="width:20px;height:20px;background:#1a1a1a;border-color:#1a1a1a"></div>
+<div class="ic" style="width:20px;height:20px;margin-top:12px"></div>
+<div class="ic" style="width:20px;height:20px;margin-top:12px"></div>
+<div class="ic" style="width:20px;height:20px;margin-top:12px"></div>
+<div class="ic" style="width:20px;height:20px;margin-top:12px"></div>
+<div class="vsp"></div>
+<div class="ic" style="width:20px;height:20px;border-radius:99px"></div>
+</div>
+<div class="main">
+<div class="hd"><span class="h1">Mom</span><span class="chip">Wed 20 Aug</span><span class="sp ob">Call Mom</span><span class="chip">Everything ›</span></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px 60px">
+<span class="tag o">nothing needs you</span>
+<div style="font-size:30px;font-weight:700;text-align:center;line-height:1.25;max-width:640px">Mom has taken 3 of 5 doses today and sounded fine on both calls</div>
+<div class="r" style="gap:8px"><span class="chip">Next: Metformin 2:00 PM</span><span class="chip">Agent calls 2:05 PM</span></div>
+<div class="r" style="gap:10px;margin-top:6px"><span class="ob">Mark 2 PM taken</span><span class="ob">Listen to 9:12 AM call</span><span class="ob">Read what she said today</span></div>
+<div style="height:10px"></div>
+<div class="c" style="width:640px;background:#fff"><div class="r"><span class="lbl" style="flex:1">Last 14 days</span><span class="lbl">86% taken · 2 alerts</span></div>
+<div class="r" style="gap:4px;align-items:flex-end;height:54px">
+<span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:60%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:80%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:40%"></span><span style="flex:1;background:#dedede;height:60%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#1a1a1a;height:100%"></span><span style="flex:1;background:#dedede;height:80%"></span><span style="flex:1;background:#dedede;height:60%"></span></div></div>
+<div class="ann" style="max-width:620px;text-align:center">Web can afford to show almost nothing. On a bad day this whole area becomes the critical alert card. Compare with the dense <a class="dv-oid" href="#2e">2e</a> — dense wins for daily managers, quiet wins for people who dread opening the app.</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2m"><div class="dv-olabel"><a class="dv-oid" href="#2m">2m</a>Multi-parent alt — one console for two parents (and future clinic/ops use)</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/console</span></div>
+<div class="app">
+<div class="sd">
+<div class="r" style="padding:2px 6px 10px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div><span style="font-weight:700;font-size:12.5px">Sahay</span></div>
+<div class="lbl" style="padding:2px 8px">People</div>
+<div class="nv on"><div class="av" style="width:20px;height:20px"></div>Mom<span class="cnt">1</span></div>
+<div class="nv"><div class="av" style="width:20px;height:20px"></div>Papa</div>
+<div class="nv"><div class="av" style="width:20px;height:20px"></div>Nani</div>
+<div class="nv"><span class="ic"></span>+ Add person</div>
+<div class="hr" style="margin:8px 4px"></div>
+<div class="nv"><span class="ic"></span>All alerts<span class="cnt">4</span></div><div class="nv"><span class="ic"></span>All calls</div><div class="nv"><span class="ic"></span>Settings</div>
+<div class="vsp"></div>
+<div class="c" style="padding:9px;background:#fff"><div class="lbl">Shared with</div><div class="r"><div class="av" style="width:18px;height:18px"></div><span style="flex:1;color:#6d6d6d">Priya · view</span></div></div>
+</div>
+<div class="main">
+<div class="hd"><span class="h1">Everyone · today</span><span class="chip">3 people</span><span class="sp lbl">1 critical · 2 missed · 3 low stock</span><span class="ob">Check in on all</span></div>
+<div class="cnt-area" style="flex-direction:column;gap:12px">
+<div class="tbl">
+<div class="th"><span class="lbl" style="width:160px">Person</span><span class="lbl" style="width:130px">Doses today</span><span class="lbl" style="width:150px">Next dose</span><span class="lbl" style="width:150px">Last call</span><span class="lbl" style="width:110px">Last said</span><span class="lbl" style="flex:1">Needs you</span><span class="lbl" style="width:110px"></span></div>
+<div class="tr sel"><div style="width:160px" class="r"><div class="av" style="width:24px;height:24px"></div><div><div style="font-weight:600">Mom · 71</div><div style="color:#8d8d8d;font-size:9.5px">Pune</div></div></div>
+<span style="width:130px" class="r"><span class="dot k"></span><span class="dot k"></span><span class="dot k"></span><span class="dot"></span><span class="dot x"></span><span class="lbl">3/5</span></span>
+<span style="width:150px">2:00 PM Metformin</span><span style="width:150px">1:35 PM · flagged</span><span style="width:110px" class="r"><span class="tag">red</span></span>
+<span style="flex:1" class="r"><span class="tag">critical</span><span>Chest tightness</span></span><span style="width:110px"><span class="btn" style="padding:6px 10px">Call now</span></span></div>
+<div class="tr"><div style="width:160px" class="r"><div class="av" style="width:24px;height:24px"></div><div><div style="font-weight:600">Papa · 76</div><div style="color:#8d8d8d;font-size:9.5px">Pune</div></div></div>
+<span style="width:130px" class="r"><span class="dot k"></span><span class="dot k"></span><span class="dot"></span><span class="lbl">2/3</span></span>
+<span style="width:150px">8:00 PM Warfarin</span><span style="width:150px">11:02 AM · calm</span><span style="width:110px;color:#6d6d6d">nothing flagged</span>
+<span style="flex:1" class="r"><span class="tag o">missed dose</span><span style="color:#6d6d6d">Warfarin 8 PM yesterday</span></span><span style="width:110px"><span class="chip">Mark taken</span></span></div>
+<div class="tr"><div style="width:160px" class="r"><div class="av" style="width:24px;height:24px"></div><div><div style="font-weight:600">Nani · 89</div><div style="color:#8d8d8d;font-size:9.5px">Nagpur · with helper</div></div></div>
+<span style="width:130px" class="r"><span class="dot k"></span><span class="dot k"></span><span class="dot k"></span><span class="dot k"></span><span class="lbl">4/4</span></span>
+<span style="width:150px">—</span><span style="width:150px">6:20 PM · no answer</span><span style="width:110px">n/a</span>
+<span style="flex:1" class="r"><span class="tag o">no answer</span><span style="color:#6d6d6d">2 calls yesterday</span></span><span style="width:110px"><span class="chip">Retry</span></span></div>
+</div>
+<div class="r" style="gap:12px;align-items:stretch;flex:1;overflow:hidden">
+<div class="c" style="flex:1.1"><div class="r"><span class="lbl" style="flex:1">Combined alert feed</span><span class="chip">Only critical</span></div>
+<div class="r"><span class="lbl" style="width:52px">1:37p</span><span class="tag">critical</span><span style="flex:1">Mom · chest tightness</span><span class="chip">Open</span></div>
+<div class="r"><span class="lbl" style="width:52px">7:15a</span><span class="tag o">missed</span><span style="flex:1">Mom · Thyronorm</span><span class="chip">Fix</span></div>
+<div class="r"><span class="lbl" style="width:52px">Yest</span><span class="tag o">no answer</span><span style="flex:1">Nani · 2 calls</span><span class="chip">Retry</span></div>
+<div class="r"><span class="lbl" style="width:52px">Aug 17</span><span class="tag o">missed</span><span style="flex:1">Papa · Warfarin 8 PM</span><span class="chip">Fix</span></div></div>
+<div class="c" style="width:300px;flex:none"><div class="lbl">This week across everyone</div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Doses taken</span><span style="font-weight:700">91%</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Calls answered</span><span style="font-weight:700">41 / 47</span></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Alerts raised</span><span style="font-weight:700">7 · 1 critical</span></div>
+<div class="hr"></div>
+<div class="lbl">One handoff for whoever is with them</div>
+<div class="r"><span style="flex:1;color:#6d6d6d">3 read-only links · no login</span><span class="chip">Copy</span></div></div>
+</div>
+<div class="ann">Mobile assumes one parent. Web is where a second parent — or a paid family-manager tier — stops being painful. Row = person, not medicine.</div>
+</div>
+</div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2n"><div class="dv-olabel"><a class="dv-oid" href="#2n">2n</a>Nav alt — top bar instead of sidebar, content full width</div>
+<div class="dt">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/home</span></div>
+<div class="app" style="flex-direction:column">
+<div class="hd" style="height:46px;gap:16px"><div class="im" style="width:22px;height:22px;border-radius:6px">▲</div>
+<span class="r" style="gap:14px"><span style="font-weight:700;border-bottom:2px solid #1a1a1a;padding-bottom:14px;margin-top:14px">Dashboard</span><span style="color:#6d6d6d">Calendar</span><span style="color:#6d6d6d" class="r">Alerts<span class="tag" style="margin-left:4px">3</span></span><span style="color:#6d6d6d">Calls</span><span style="color:#6d6d6d">What she said</span></span>
+<span class="sp in" style="width:200px">Search…</span><span class="chip">Mom ▾</span><span class="ob">Call Mom</span><div class="av"></div></div>
+<div class="cnt-area" style="gap:14px">
+<div class="col" style="flex:1">
+<div class="c" style="border:1.5px solid #1a1a1a;background:#fff;padding:14px"><div class="r"><span class="lbl">Next dose · in 22 min</span><span class="sp tag o">2:00 PM</span></div><div style="font-size:20px;font-weight:700">Metformin 500 mg</div><div style="color:#6d6d6d">1 tablet · after lunch</div><div class="r" style="gap:8px"><div class="btn">Mark taken</div><div class="ob">Snooze</div><div class="ob">Call Mom</div></div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Today</span><span class="lbl">3 of 5</span></div>
+<div class="r"><span class="dot x"></span><span style="width:52px">06:30</span><span style="flex:1">Thyronorm 50</span><span class="tag">missed</span></div>
+<div class="r"><span class="dot k"></span><span style="width:52px">07:30</span><span style="flex:1">Insulin 8 u</span><span class="lbl">7:41</span></div>
+<div class="r"><span class="dot k"></span><span style="width:52px">08:00</span><span style="flex:1">Metformin · Amlodipine</span></div>
+<div class="r"><span class="dot"></span><span style="width:52px">19:30</span><span style="flex:1">Insulin 8 u</span></div>
+<div class="r"><span class="dot"></span><span style="width:52px">21:00</span><span style="flex:1">Metformin · Atorvastatin</span></div></div>
+</div>
+<div class="col" style="flex:1">
+<div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><span class="tag">critical</span><span class="sp lbl">6 min ago</span></div><div style="font-weight:700;font-size:13px">"I feel dizzy and my chest is tight"</div><div class="r" style="gap:7px"><div class="btn" style="flex:1">Call Mom now</div><div class="ob" style="flex:1">Open detail</div></div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Recent calls</span><span class="chip">All ›</span></div><div class="r"><span class="tag o">agent</span><span style="flex:1">1:35 PM · 2:11</span><span class="tag">alert</span></div><div class="r"><span class="tag o">agent</span><span style="flex:1">9:12 AM · 1:04</span><span class="lbl">calm</span></div><div class="r"><span class="tag">you</span><span style="flex:1">Yest 6:40 PM · 7:22</span></div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Care record</span><span class="chip">Open</span></div><div class="r"><span style="flex:1;color:#6d6d6d">5 medicines · 1 priority</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Allergies: penicillin, sulfa</span></div></div>
+</div>
+<div class="col" style="flex:1">
+<div class="c"><div class="r"><span class="lbl" style="flex:1">What she said</span><span class="tag">1 red</span></div><div style="line-height:1.4">"Chest feels tight when I walk."</div><div class="r"><span style="flex:1;color:#6d6d6d">Today 1:36 PM · 4 more</span><span class="chip">View</span></div></div>
+<div class="c"><div class="lbl">Prescriptions</div><div class="r"><div class="im" style="width:26px;height:32px">pg</div><span style="flex:1">Dr_Mehta_Aug12</span><span class="lbl">12 Aug</span></div><div class="r"><div class="im" style="width:26px;height:32px">pg</div><span style="flex:1">Lab_notes.pdf</span><span class="lbl">12 Aug</span></div><div class="ob" style="padding:6px">Upload new</div></div>
+<div class="c"><div class="lbl">Agent</div><div class="r"><span style="flex:1;color:#6d6d6d">3 calls/day · Hindi · warm</span><span class="chip">Edit</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Next 2:05 PM</span><span class="chip">Call now</span></div></div>
+</div>
+</div>
+<div style="padding:0 18px 14px"><div class="ann">Top nav frees ~190px and reads more like a consumer site than a console; costs the persistent parent switcher and the alert count in peripheral vision. Sidebar (<a class="dv-oid" href="#2e">2e</a>) scales to multi-parent (<a class="dv-oid" href="#2m">2m</a>), top nav does not.</div></div>
+</div>
+</div></div>
+
+<div class="dv-opt" id="2o"><div class="dv-olabel"><a class="dv-oid" href="#2o">2o</a>States — empty, loading, offline agent, error</div>
+<div class="dt" style="height:560px">
+<div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app/states</span></div>
+<div class="app" style="flex-direction:column">
+<div class="hd"><span class="h1">States to build</span><span class="sp lbl">same shell, four conditions</span></div>
+<div class="cnt-area" style="gap:14px">
+<div class="col" style="flex:1">
+<div class="lbl">Empty · no prescription yet</div>
+<div class="c" style="flex:1;align-items:center;justify-content:center;gap:10px;text-align:center;border-style:dashed"><div class="im" style="width:44px;height:44px;border-radius:10px">▢</div><div style="font-weight:700;font-size:13px">No medicines yet</div><div style="color:#6d6d6d;max-width:190px">Add Mom's prescription and we'll build the schedule and start check-in calls.</div><div class="btn">Add prescription</div><span class="chip">Enter manually instead</span></div>
+</div>
+<div class="col" style="flex:1">
+<div class="lbl">Loading · skeleton, never a spinner</div>
+<div class="c" style="flex:1;gap:10px">
+<div class="g" style="width:55%;height:13px"></div>
+<div class="g" style="width:80%"></div><div class="g" style="width:70%"></div>
+<div class="hr"></div>
+<div class="r"><div class="g" style="width:44px;height:10px"></div><div class="g" style="flex:1;height:10px"></div></div>
+<div class="r"><div class="g" style="width:44px;height:10px"></div><div class="g" style="flex:1;height:10px"></div></div>
+<div class="r"><div class="g" style="width:44px;height:10px"></div><div class="g" style="flex:1;height:10px"></div></div>
+<div class="vsp"></div><div class="lbl">Layout is stable before data lands — no jump.</div>
+</div>
+</div>
+<div class="col" style="flex:1">
+<div class="lbl">Degraded · agent can't reach Mom</div>
+<div class="c" style="flex:1;border-left:3px solid #1a1a1a;gap:9px"><div class="r"><span class="tag">agent offline</span><span class="sp lbl">since 6:05 PM</span></div><div style="font-weight:700">4 calls have not connected</div><div style="color:#6d6d6d">Number unreachable — phone off, out of network, or blocked.</div><div class="hr"></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Doses now tracked as "unknown", not missed</span></div><div class="r"><span class="dot x"></span><span style="flex:1;color:#6d6d6d">Priya notified at 6:35 PM</span></div><div class="vsp"></div><div class="btn">Call Mom yourself</div><div class="r" style="gap:7px"><div class="ob" style="flex:1">Try another number</div><div class="ob" style="flex:1">Ask neighbour</div></div></div>
+</div>
+<div class="col" style="flex:1">
+<div class="lbl">Error · OCR couldn't read it</div>
+<div class="c" style="flex:1;gap:9px"><div class="r"><span class="tag o">couldn't read</span></div><div style="font-weight:700">We got 2 of 5 lines</div><div class="im" style="height:90px">blurred scan preview</div><div style="color:#6d6d6d">Photo is blurry near the dosage column.</div><div class="r" style="gap:6px;flex-wrap:wrap"><span class="chip">Retake photo</span><span class="chip">Crop &amp; retry</span><span class="chip">Type it in</span></div><div class="hr"></div><div class="r"><span style="flex:1;color:#6d6d6d">Nothing is saved until you approve the schedule.</span></div><div class="vsp"></div><div class="ann">Every error offers a manual path — never a dead end.</div></div>
+</div>
+</div>
+</div>
+</div></div>
+
+</div>
+<p class="dv-next">Try next: "make <a class="dv-oid" href="#2e">2e</a> responsive down to tablet" · "build <a class="dv-oid" href="#2a">2a</a>→<a class="dv-oid" href="#2d">2d</a> as a clickable prototype" · "merge <a class="dv-oid" href="#2l">2l</a>'s quiet state into <a class="dv-oid" href="#2e">2e</a> as the good-day layout" · "spec the multi-parent console <a class="dv-oid" href="#2m">2m</a>"</p>
+</section>
+
+</x-dc>
+</body>
+</html>

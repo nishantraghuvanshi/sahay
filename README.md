@@ -76,6 +76,7 @@ The Care API must be reachable over public HTTPS for the voice agent to call its
 | [`docs/PRD.md`](docs/PRD.md) | What and why |
 | [`docs/TRD.md`](docs/TRD.md) | How |
 | [`docs/IDEA_SCOPE.md`](docs/IDEA_SCOPE.md) | Who, when, what proof |
+| [`docs/WIREFRAMES.md`](docs/WIREFRAMES.md) | What the app looks like and why — screen-by-screen spec |
 | [`docs/checklists/END-TO-END.md`](docs/checklists/END-TO-END.md) | The whole system, walked through |
 | [`docs/checklists/MASTER-CHECKLIST.md`](docs/checklists/MASTER-CHECKLIST.md) | Every task, in clock order |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How we work together |
