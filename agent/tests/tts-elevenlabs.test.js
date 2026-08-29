@@ -98,6 +98,83 @@ describe('ElevenLabsTTSAdapter', () => {
       global.fetch = originalFetch;
     }
   });
+
+  test('rejects an MP3 body (ID3 tag) instead of playing it as raw PCM', async () => {
+    const adapter = new ElevenLabsTTSAdapter();
+    const originalFetch = global.fetch;
+    // "ID3" + a few filler bytes — the start of a real MP3 file with an ID3v2 tag.
+    const mp3Body = new Uint8Array([0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00]);
+    global.fetch = async () => ({ ok: true, arrayBuffer: async () => mp3Body.buffer });
+
+    try {
+      await assert.rejects(
+        () =>
+          adapter.synthesize(
+            { text: 'hi', sampleRate: 16000 },
+            { api_key_env: 'TEST_ELEVENLABS_KEY', model: 'm', voice_id: 'v', stability: 0.5, similarity_boost: 0.5 },
+            { TEST_ELEVENLABS_KEY: 'secret' }
+          ),
+        /output_format/
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test('rejects an MP3 body (MPEG frame sync) instead of playing it as raw PCM', async () => {
+    const adapter = new ElevenLabsTTSAdapter();
+    const originalFetch = global.fetch;
+    const mp3Body = new Uint8Array([0xff, 0xfb, 0x90, 0x00]);
+    global.fetch = async () => ({ ok: true, arrayBuffer: async () => mp3Body.buffer });
+
+    try {
+      await assert.rejects(
+        () =>
+          adapter.synthesize(
+            { text: 'hi', sampleRate: 16000 },
+            { api_key_env: 'TEST_ELEVENLABS_KEY', model: 'm', voice_id: 'v', stability: 0.5, similarity_boost: 0.5 },
+            { TEST_ELEVENLABS_KEY: 'secret' }
+          ),
+        /output_format/
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test('rejects a RIFF/WAV body instead of playing it as raw PCM', async () => {
+    const adapter = new ElevenLabsTTSAdapter();
+    const originalFetch = global.fetch;
+    const wavBody = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0]);
+    global.fetch = async () => ({ ok: true, arrayBuffer: async () => wavBody.buffer });
+
+    try {
+      await assert.rejects(
+        () =>
+          adapter.synthesize(
+            { text: 'hi', sampleRate: 16000 },
+            { api_key_env: 'TEST_ELEVENLABS_KEY', model: 'm', voice_id: 'v', stability: 0.5, similarity_boost: 0.5 },
+            { TEST_ELEVENLABS_KEY: 'secret' }
+          ),
+        /output_format/
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test('throws on an unsupported sample rate rather than substituting the nearest one', async () => {
+    const adapter = new ElevenLabsTTSAdapter();
+    await assert.rejects(
+      () =>
+        adapter.synthesize(
+          { text: 'hi', sampleRate: 8000 },
+          { api_key_env: 'TEST_ELEVENLABS_KEY', model: 'm', voice_id: 'v', stability: 0.5, similarity_boost: 0.5 },
+          { TEST_ELEVENLABS_KEY: 'secret' }
+        ),
+      /unsupported sample rate 8000/
+    );
+  });
 });
 
 describe('ProviderRegistry — playground bridging of a native provider', () => {

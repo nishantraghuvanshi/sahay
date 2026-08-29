@@ -75,7 +75,9 @@ class ElevenLabsTTSAdapter extends TTSPort {
           throw err;
         }
 
-        return Buffer.from(await response.arrayBuffer());
+        const body = Buffer.from(await response.arrayBuffer());
+        _assertRawPcm(body, outputFormat);
+        return body;
       },
       {
         maxRetries: 2,
@@ -89,9 +91,15 @@ class ElevenLabsTTSAdapter extends TTSPort {
 }
 
 /**
- * Nearest ElevenLabs raw-PCM `output_format` identifier for a requested
- * sample rate. ElevenLabs documents pcm_16000/22050/24000/44100 as its
- * supported raw-PCM outputs — see the UNVERIFIED note on the class above.
+ * ElevenLabs `output_format` identifier for a requested sample rate.
+ * ElevenLabs documents pcm_16000/22050/24000/44100 as its supported
+ * raw-PCM outputs — see the UNVERIFIED note on the class above.
+ *
+ * Throws on any other rate rather than substituting the nearest supported
+ * one: a caller asking for 8000 Hz and silently getting 16 kHz PCM back
+ * would play it back at the wrong rate (chipmunked audio) with nothing
+ * anywhere reporting a problem — the same silent-failure shape this
+ * project keeps shipping.
  *
  * @param {number} [sampleRate=24000]
  * @returns {string} e.g. "pcm_16000"
@@ -99,10 +107,48 @@ class ElevenLabsTTSAdapter extends TTSPort {
  */
 function _pcmFormatFor(sampleRate = 24000) {
   const SUPPORTED_RATES = [16000, 22050, 24000, 44100];
-  const nearest = SUPPORTED_RATES.reduce((best, rate) =>
-    Math.abs(rate - sampleRate) < Math.abs(best - sampleRate) ? rate : best
+  if (!SUPPORTED_RATES.includes(sampleRate)) {
+    throw new Error(
+      `ElevenLabs TTS: unsupported sample rate ${sampleRate} — supported rates are ${SUPPORTED_RATES.join(', ')}.`
+    );
+  }
+  return `pcm_${sampleRate}`;
+}
+
+/**
+ * Magic-byte signatures for container formats ElevenLabs could return
+ * instead of raw PCM (its default MP3 body, if `output_format` names a
+ * query parameter or value ElevenLabs doesn't recognize — still a 200,
+ * still a body, just not the one asked for).
+ * @private
+ */
+const CONTAINER_SIGNATURES = [
+  { name: 'MP3 (ID3 tag)', bytes: [0x49, 0x44, 0x33] }, // "ID3"
+  { name: 'MP3 (MPEG frame sync)', bytes: [0xff, 0xfb] },
+  { name: 'WAV/RIFF', bytes: [0x52, 0x49, 0x46, 0x46] }, // "RIFF"
+];
+
+/**
+ * Reject a response body that looks like a container format rather than
+ * raw PCM. A wrong or unsupported `output_format` query parameter gets a
+ * 200 with ElevenLabs' default MP3 body — which the browser then plays as
+ * raw PCM, i.e. static, with nothing anywhere reporting a problem. This
+ * throws loudly instead, naming the likely cause.
+ *
+ * @param {Buffer} body
+ * @param {string} outputFormat - The `output_format` value that was requested
+ * @private
+ */
+function _assertRawPcm(body, outputFormat) {
+  const match = CONTAINER_SIGNATURES.find((sig) =>
+    sig.bytes.every((byte, i) => body[i] === byte)
   );
-  return `pcm_${nearest}`;
+  if (match) {
+    throw new Error(
+      `ElevenLabs TTS returned ${match.name} data instead of raw PCM for output_format=${outputFormat} — ` +
+        'the output_format query parameter is likely wrong or unsupported for this account/plan.'
+    );
+  }
 }
 
 module.exports = ElevenLabsTTSAdapter;
