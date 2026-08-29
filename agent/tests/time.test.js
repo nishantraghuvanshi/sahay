@@ -64,6 +64,29 @@ describe('localSlotToUtc', () => {
       hhmm: '08:00',
     });
   });
+
+  test('spring-forward gap: a local time that never occurs resolves to the post-transition offset', () => {
+    // 2026-03-08 in America/New_York: clocks jump from 02:00 to 03:00, so
+    // 02:30 never happens. Pinned to the documented, verified behaviour in
+    // localSlotToUtc's comment: the result is a real UTC instant, computed
+    // with the EDT (post-transition) offset — not a throw, not the
+    // pre-transition (EST) offset.
+    assert.strictEqual(
+      localSlotToUtc('2026-03-08', '02:30', 'America/New_York'),
+      '2026-03-08T06:30:00.000Z'
+    );
+  });
+
+  test('fall-back ambiguity: a local time that occurs twice resolves to the earlier occurrence', () => {
+    // 2026-11-01 in America/New_York: clocks fall from 02:00 back to
+    // 01:00, so 01:30 happens twice — once at EDT (UTC-4), once at EST
+    // (UTC-5). Pinned to the documented, verified behaviour: this
+    // resolves to the earlier, EDT occurrence, not the later EST one.
+    assert.strictEqual(
+      localSlotToUtc('2026-11-01', '01:30', 'America/New_York'),
+      '2026-11-01T05:30:00.000Z'
+    );
+  });
 });
 
 describe('isWithinLocalWindow', () => {
@@ -92,6 +115,18 @@ describe('isWithinLocalWindow', () => {
     assert.strictEqual(
       isWithinLocalWindow(localSlotToUtc('2026-08-30', '06:00', 'Asia/Kolkata'), WINDOW, 'Asia/Kolkata'),
       true
+    );
+  });
+
+  test('start === end matches only that exact minute', () => {
+    const zeroWidth = { start: '09:00', end: '09:00' };
+    assert.strictEqual(
+      isWithinLocalWindow(localSlotToUtc('2026-08-30', '09:00', 'Asia/Kolkata'), zeroWidth, 'Asia/Kolkata'),
+      true
+    );
+    assert.strictEqual(
+      isWithinLocalWindow(localSlotToUtc('2026-08-30', '09:01', 'Asia/Kolkata'), zeroWidth, 'Asia/Kolkata'),
+      false
     );
   });
 });

@@ -64,6 +64,27 @@ function localSlotToUtc(dateOnly, hhmm, timeZone) {
   // offset at the corrected instant — that's what keeps this right across
   // a DST transition, where the offset at the naive guess can differ from
   // the offset at the true instant.
+  //
+  // Two edge cases fall out of this and are deliberate, not accidental:
+  //
+  // - Spring-forward gap (a local time that never occurs, e.g. 02:30 on
+  //   the day clocks jump from 02:00 to 03:00): the final subtraction uses
+  //   refinedOffset, which is read AFTER the correction, so it lands on
+  //   the post-transition offset. The result is a real UTC instant, but
+  //   converting it back with utcToLocalParts will not reproduce the
+  //   requested hhmm — that local time was never realizable, so there is
+  //   no offset that round-trips it.
+  //   Verified: localSlotToUtc('2026-03-08', '02:30', 'America/New_York')
+  //   -> '2026-03-08T06:30:00.000Z' (the EDT/post-transition offset).
+  //
+  // - Fall-back ambiguity (a local time that occurs twice, e.g. 01:30 on
+  //   the day clocks fall from 02:00 back to 01:00): guessOffset is read
+  //   at the naive (pre-correction) instant, which — for every zone this
+  //   codebase uses — falls on the pre-transition side, so this resolves
+  //   to the EARLIER of the two occurrences and refinedOffset confirms it
+  //   (no second correction needed).
+  //   Verified: localSlotToUtc('2026-11-01', '01:30', 'America/New_York')
+  //   -> '2026-11-01T05:30:00.000Z' (the EDT/first-occurrence offset).
   const naiveUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
   const guessOffset = offsetMinutesAt(new Date(naiveUtc), timeZone);
   const firstPass = naiveUtc - guessOffset * 60000;
