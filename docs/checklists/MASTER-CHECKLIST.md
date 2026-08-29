@@ -1,4 +1,4 @@
-# SAHAY — MASTER BUILD CHECKLIST
+# KINVOX — MASTER BUILD CHECKLIST
 ### Everything, in clock order. One file. 24 hours.
 
 **Legend** — `[A]` Voice · `[B]` API · `[C]` App · `[D]` Evidence · `[ALL]` everyone
@@ -20,9 +20,10 @@ Gates are pass/fail — miss one, **cut scope, do not extend**.
 # § 0 · PRE-KICKOFF — 17:00 → 18:30
 
 - [ ] `[ALL]` ⚠️ Ask a mentor at check-in, verbatim:
-      *"I'm a founder — pre-product in elder-care voice AI. A prior codebase exists for
-      a related use case; I will not open it, use it, or show it. If I build from zero
-      today in the same domain, is that clean? Does it change if I reuse the brand name?"*
+      *"I'm a founder — pre-product in elder-care voice AI. No codebase, no launch, never
+      pitched. Prior work is market research and a no-code voice agent I won't touch. If I
+      build from zero today in the same domain, is that clean? Does it change if I reuse
+      the brand name?"*
 - [ ] `[ALL]` **Get a name.** Write down who answered and what they said
 - [ ] `[ALL]` ⚠️ Confirm: has any of this been **pitched or demoed at another event?**
       (hard disqualifier, no borderline path)
@@ -30,7 +31,7 @@ Gates are pass/fail — miss one, **cut scope, do not extend**.
       codebase for the same use case **and a `.env` with live Sarvam + Groq keys.**
       Gitignoring is not enough — one `git add -f` ships a disqualifier and two live
       credentials into a public repo
-- [ ] `[ALL]` Agree the submitted product name — **not Voxikin**; "Sahay" is a placeholder
+- [x] `[ALL]` Product name — **not Voxikin**. Settled 30 Aug: **Kinvox**
 - [ ] `[D]` Charge phones. Two recording devices. A second physical handset for the handoff shot
 
 ---
@@ -296,10 +297,15 @@ Gates are pass/fail — miss one, **cut scope, do not extend**.
 - [ ] 🔑 **Escalation feed rendering the literal rule text** —
       `rule: chest complaint with age over 40`, **not just `P1`**.
       *This is the answer when a judge asks "how do you know it's a P1?"*
-- [ ] **Onboarding** — caregiver signup · add parent (E.164) · clinical context ·
-      medicines · at most one priority medicine · meal times
+- [ ] **Onboarding, four steps** (`WIREFRAMES §4`) — auth (phone → OTP → email → OTP,
+      **no social login**) · add parent (E.164, language, clinical context) · prescription
+      + schedule · **consent**. At most one priority medicine; meal times
 - [ ] 🔑 **Explicit schedule sign-off gate** — scheduling without sign-off is **refused**, not warned
-- [ ] Copy telling the caregiver to inform the parent that calls are coming
+- [ ] 🔑 **Second gate: the intro call.** One call, no medicines, before anything else —
+      dose calls start only after the parent agrees on it. Three mandatory caregiver
+      consents (parent knows · recorded & transcribed · never gives medical advice)
+- [ ] **Medicine editor** — plain-language change diff + **mandatory doctor-advice
+      attestation** before changes save
 - [ ] **Handoff view** `/h/{token}` — no login, read-only, **one phone screen, no scrolling
       for the P1 fields**, renders all twelve including **priority + rule text**
 - [ ] Copy-link action; `viewed_at` shown back to the caregiver

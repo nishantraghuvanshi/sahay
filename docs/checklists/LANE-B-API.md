@@ -39,6 +39,9 @@
         double-log a dose
   - [ ] `observations(patient_id, created_at DESC)` — `get_care_context` returns 3
 - [ ] `patients.schedule_signed_off_at` — NULL means no calls allowed (`FR-4`)
+- [ ] Parent-consent state — the intro call's outcome. NULL means no **dose** calls
+      allowed, even with sign-off. Plus the three caregiver consents and **the version of
+      the consent copy agreed to** (the wireframe copy is still `TBC`)
 - [ ] `patients.calls_paused` — parent asked to stop (`SR-5`)
 - [ ] `intake_records.priority_rule` — **never empty**
 
@@ -139,6 +142,11 @@
 - [ ] `SC-3` Deferred doses re-queue at `now + callback_interval`
 - [ ] `SC-4` No answer → `dose_events.status = no_answer` → escalation matrix applies
 - [ ] Skip if `schedule_signed_off_at IS NULL` (`FR-4`)
+- [ ] 🔑 Skip if the **intro call has not happened and been agreed to** — sign-off alone
+      is no longer enough. Lane C's consent step (`2D.2`) writes the three caregiver
+      consents and schedules one intro call carrying no medicines; dose calls start only
+      after the parent says yes on it. Needs a `parent_consented_at` (or equivalent) that
+      the scheduler checks
 - [ ] Skip if `calls_paused` (`SR-5`)
 - [ ] 🔑 **Authenticated "fire this slot now" endpoint** — you cannot wait for 08:30
       on camera. **Do not show it in the video**

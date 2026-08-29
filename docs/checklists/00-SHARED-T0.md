@@ -12,19 +12,22 @@ four lanes assigned to four named people.
 ## A. Compliance — settle before kickoff (17:00–17:30, at check-in)
 
 - [ ] Ask a mentor, verbatim:
-  > *"I'm a founder — pre-product in elder-care voice AI. A prior codebase exists
-  > for a related use case; I will not open it, use it, or show it. If I build from
-  > zero today in the same domain, is that clean? Does it change if I reuse the brand name?"*
+  > *"I'm a founder — pre-product in elder-care voice AI. No codebase, no launch, never
+  > pitched. Prior work is market research and a no-code voice agent I won't touch. If I
+  > build from zero today in the same domain, is that clean? Does it change if I reuse
+  > the brand name?"*
 - [ ] **Get a name.** Write down who answered and what they said
 - [ ] Confirm among yourselves: has any of this been **pitched or demoed at another event?**
       (`[V]` hard disqualifier, no borderline path)
-- [ ] Agree the submitted product name — **not Voxikin**, and "Sahay" is a placeholder
+- [x] Agree the submitted product name — **not Voxikin**. Settled 30 Aug: **Kinvox**.
+      A distinct name, so `[V]` rule 04 is satisfied on the brand question
 - [ ] Move `docs/Archive 2/` **out of the project directory** to a sibling folder.
       It contains a working codebase for the same use case **and a `.env` with live
       Sarvam + Groq API keys.** Gitignoring is not enough — one `git add -f` ships a
       disqualifier and two live credentials into a public repo
-- [ ] Draft the borderline note with **accurate** wording (see `IDEA_SCOPE` §9, but
-      correct "no codebase" → "prior codebase exists, not used, not opened, not shown")
+- [ ] Draft the borderline note with **accurate** wording — `IDEA_SCOPE` §9 verbatim:
+      pre-product, **no codebase**, never pitched or demoed; prior work is market
+      research and a no-code voice agent, untouched
 
 ## B. The five blocking verifications
 

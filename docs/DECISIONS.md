@@ -23,7 +23,7 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 | 4 | **Outbound is thin.** It exists to seed memory. Inbound is the hero | Outbound alone is a commodity; the loop between directions is the product |
 | 5 | **No** acoustic distress detection · **no** diagnosis · **no** dispatch claim | Unverifiable across 3 cold runs, and each invites a challenge that cannot be won |
 | 6 | Priority is **rule-cited**, and the UI renders the rule string | Converts a subjective judgment into an auditable one. Evidence for Memory L5 |
-| 7 | Product name is **not Voxikin** | Handbook rule 04 |
+| 7 | Product name is **not Voxikin** — settled 30 Aug: **Kinvox** | Handbook rule 04. A distinct name keeps the build clear of the founder's company brand |
 | 8 | Tool contract frozen at **T+1h**, not renegotiated | The only interface all four lanes share |
 
 ---
@@ -46,6 +46,15 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 
 ---
 
+## Aug 30
+
+| Time | Decision | Why |
+|---|---|---|
+| — | **Product name settled: Kinvox.** Renamed across docs, checklists and both wireframe files (`sahay.app` → `kinvox.app`). Placeholder history: MediWatch → Sahay → *(briefly Voxikin)* → **Kinvox** | Closes locked decision 7 and `IDEA_SCOPE` §9 item 1. Kinvox is distinct from the founder's company brand, so `[V]` rule 04 (*"if your company builds in this space, you can't demo your existing product"*) is satisfied without a mentor ruling on brand reuse |
+| — | Borderline note corrected back to `IDEA_SCOPE` §9 wording — **pre-product, no codebase**, never pitched or demoed; prior work is market research and a no-code voice agent | The README and the T-0 checklist had drifted into claiming "a prior codebase exists". The founder states there is none. ⚠️ **Not yet reconciled — see the note below.** |
+
+---
+
 ## Still open — resolve and record here
 
 | # | Open question | Owner | Blocking? |
@@ -57,5 +66,48 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 | 5 | **V5** — dynamic variables at call start? | A | No — costs one round trip if unavailable |
 | 6 | **The Impact number.** The rubric grades Impact by how far a metric moves (<5%=L2, 5–10%=L3, 10–30%=L4, >30%=L5). No delta is currently claimed | ALL | No, but it silently costs two levels |
 | 7 | **Appointment reminders** — cut in `PRD` §14, sold in the Care+ tier in §15. Mark "coming soon" or delete from the tier | D | No, but a judge is likely to open the pricing page |
-| 8 | **Product name.** "Sahay" is a placeholder throughout | ALL | Needed before the video and the viral post |
+| 8 | ~~**Product name**~~ — **settled 30 Aug: Kinvox** | ALL | Closed |
 | 9 | **Lane owners.** Four lanes are defined; the people are not | ALL | **Yes** — Lane A is the critical path |
+
+---
+
+## ⚠️ Unreconciled — settle before the submission note is final
+
+Two statements in this log contradict each other. Recording what is **verifiable on disk**
+so the founder can settle the wording; nobody else should edit the origin note.
+
+**Verified 30 Aug 00:35, by direct filesystem check:**
+
+| Check | Result |
+|---|---|
+| `~/Desktop/projects/sahay-archive/` exists | **Yes** — 15 MB, created 29 Aug 20:23 |
+| Contents | `Archive 2/` and `Archive 2.zip` |
+| `Archive 2/va/va/src/` | **35 source files** |
+| `Archive 2/va/va/package.json` → `name` | `elderly-voice-agent` |
+| `Archive 2/va/va/.env` | populated `SARVAM_API_KEY`, `GROQ_API_KEY`, `API_KEY` |
+| Anything from it inside this repo | **No** — confirmed absent from every commit |
+
+So the Aug 30 row's claim that the directory "does not exist on disk" is **incorrect**;
+it was moved there at 20:23 on 29 Aug and is still there. The 20:23 row is accurate as written.
+
+**What is genuinely unsettled is whose work it is.** `Archive 2/va/PRODUCT-BRIEF.md` names
+its owner as **Anmol**, while `PRD.md` and `TRD.md` name the owner as **Shubh Sankalp Das**.
+If the archive is a teammate's or a third party's prior work rather than the submitting
+founder's, then "pre-product, no codebase" may be accurate *about the submitter* and the
+two rows are not actually in conflict.
+
+**Three things are true regardless of how that resolves, and none of them are at risk:**
+
+1. No archive code, config, or data is in this repo, and none was opened or copied
+2. Every prompt and every line of `api/` was written after kickoff
+3. The archive sits outside the repo and cannot be swept in by `git add`
+
+**Decide before submission:** whether the origin note says *"no codebase"* or
+*"a prior codebase exists for a related use case; it was not used, opened, or shown."*
+The handbook's rule is that **hiding the origin is an auto-disqualification** while a
+flagged borderline case is cleared by a mentor — so the more disclosive wording carries
+less risk if there is any doubt about attribution. This is the founder's call, not a
+drafting decision.
+
+**Unrelated but pending:** the live `SARVAM_API_KEY` and `GROQ_API_KEY` in
+`Archive 2/va/va/.env` should be rotated whenever there is a spare minute.

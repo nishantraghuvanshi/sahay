@@ -38,3 +38,6 @@ agent/data/
 *.db
 *.db-shm
 *.db-wal
+
+# build artifacts
+*.tsbuildinfo

@@ -1,5 +1,5 @@
 # Technical Requirements Document
-# "Sahay" — bidirectional care-line agent
+# "Kinvox" — bidirectional care-line agent
 
 | | |
 |---|---|
@@ -632,7 +632,7 @@ escalate(patient, level, reason, summary)
 Message template:
 
 ```
-Sahay alert — {patient_name}
+Kinvox alert — {patient_name}
 
 {summary}
 
