@@ -6,6 +6,7 @@ const {
   buildInboundVariables,
 } = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
+const { terminalStatusFor } = require('../../core/inbound/session-status');
 const logger = require('../../utils/logger');
 
 /**
@@ -181,6 +182,16 @@ class VapiTransportAdapter extends TransportPort {
                 cost: callData.cost,
               },
             });
+
+            // Outbound calls have no session yet (Task 3 adds that), so a
+            // missing session here is expected today — log it and move on
+            // rather than letting endSession's throw escape the handler.
+            if (callData.id && (await this.repository.getSession(callData.id))) {
+              const status = terminalStatusFor(callData.endedReason);
+              await this.repository.endSession(callData.id, status);
+            } else {
+              logger.log('session_end_skipped_unknown_session', { callId: callData.id });
+            }
             break;
           }
 
