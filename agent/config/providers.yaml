@@ -1,0 +1,124 @@
+# Provider Configuration
+# =====================
+# Swap the orchestrator or any STT/TTS/LLM provider by changing "active" below.
+# No code changes needed — the server reads this file at startup.
+#
+# Every provider declares an `integration`, because these are two different
+# architectures and not two providers:
+#
+#   bridge — audio/tokens flow through THIS server. Requires an adapter under
+#            src/adapters/providers/<type>/<name>.js. Higher latency, but the
+#            provider stays swappable from this file and testable in /playground.
+#   native — the phone orchestrator (Vapi) talks to the provider directly on
+#            that path. Lower latency there, but not A/B-able from this file
+#            on the phone path. The playground has no orchestrator of its own,
+#            so it always bridges its active providers regardless of this
+#            setting — a `native` provider may still have an adapter
+#            registered for the playground to use (see elevenlabs below).
+#
+# ProviderRegistry enforces at boot that every bridge provider has an
+# adapter — a bridge provider with none fails fast and says which.
+#
+# To add a bridge provider:
+#   1. Create src/adapters/providers/<type>/<name>.js implementing the port
+#      in src/core/ports/<type>.js
+#   2. Register it in src/adapters/providers/registry.js (BRIDGE_ADAPTERS)
+#   3. Add its config below with `integration: bridge`
+#   4. Point active.<type> at it
+#
+# To add a transport (orchestrator), see src/adapters/transport/registry.js.
+
+active:
+  transport: vapi
+  stt: sarvam       # bridge  — Indic-specialised, audio via our server
+  llm: openai       # bridge  — uses the OpenAI adapter built in Phase 3a
+  tts: elevenlabs   # native  — Vapi calls ElevenLabs directly
+
+# ── Transport (call orchestrator) ─────────────────────────────────
+
+transport:
+  vapi:
+    api_key_env: "VAPI_PRIVATE_KEY"
+    assistant_id_env: "VAPI_ASSISTANT_ID"
+    # Inbound routing is configured by scripts/setup-inbound.js
+
+# ── STT (Speech-to-Text) ──────────────────────────────────────────
+
+stt:
+  sarvam:
+    integration: bridge
+    model: "saaras:v3"
+    language: "hi-IN"          # hi-IN, en-IN, ta-IN, etc. Use "unknown" for auto-detect
+    mode: "transcribe"         # "transcribe" (same language) or "translate" (to English)
+    sample_rate: 16000
+    high_vad_sensitivity: true
+    api_key_env: "SARVAM_API_KEY"
+    # Bridge server route: /api/stt/sarvam (WebSocket)
+
+  deepgram:
+    integration: native        # Vapi runs Deepgram itself; we serve no STT route
+    model: "nova-3"
+    language: "hi"
+    smart_format: true
+    endpointing: 300           # ms of silence to trigger endpoint
+    api_key_env: "DEEPGRAM_API_KEY"
+    # To use: set active.stt to "deepgram" and remove custom-transcriber
+    # from assistant.json — Vapi transcribes and never calls this server.
+
+# ── LLM (Language Model) ──────────────────────────────────────────
+
+llm:
+  sarvam:
+    integration: bridge
+    model: "sarvam-105b"
+    base_url: "https://api.sarvam.ai/v1"
+    temperature: 0.3
+    max_tokens: 250
+    api_key_env: "SARVAM_API_KEY"
+    # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
+
+  groq:
+    integration: bridge
+    model: "llama-3.3-70b-versatile"
+    base_url: "https://api.groq.com/openai/v1"
+    temperature: 0.3
+    max_tokens: 250
+    api_key_env: "GROQ_API_KEY"
+    # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
+
+  openai:
+    integration: bridge
+    model: "gpt-4o-mini"
+    base_url: "https://api.openai.com/v1"
+    temperature: 0.3
+    max_tokens: 250
+    api_key_env: "OPENAI_API_KEY"
+    # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
+
+# ── TTS (Text-to-Speech) ──────────────────────────────────────────
+
+tts:
+  sarvam:
+    integration: bridge
+    model: "bulbul:v3"
+    speaker: "shubh"            # Male voices: shubh, aditya, rahul, etc.
+    target_language_code: "hi-IN"
+    speech_sample_rate: 8000   # 8000 for telephony, 22050 for general use
+    output_audio_codec: "mulaw" # mulaw for telephony, mp3 for general use
+    pace: 0.9                   # 0.9 = slightly slower (elderly-friendly)
+    api_key_env: "SARVAM_API_KEY"
+    # Bridge server route: /api/tts/sarvam (HTTP webhook)
+
+  elevenlabs:
+    integration: native        # Vapi runs it directly on the phone path
+    model: "eleven_turbo_v2_5"  # Hindi-capable via Vapi; eleven_v3_conversational
+                                 # (used previously) may not be exposed through Vapi — unverified
+    voice_id: "QTKSa2Iyv0yoxvXY2V8a"  # validated on real elderly callers in a prior agent
+    stability: 0.5
+    similarity_boost: 0.75
+    api_key_env: "ELEVENLABS_API_KEY"
+    # A bridge adapter (src/adapters/providers/tts/elevenlabs.js) is
+    # registered for this provider despite `integration: native` — the phone
+    # path still never routes through it (Vapi calls ElevenLabs directly),
+    # but the playground has no orchestrator to run it for, so it always
+    # bridges via that adapter. See ProviderRegistry.getPlaygroundAdapter.

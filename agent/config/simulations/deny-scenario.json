@@ -1,0 +1,11 @@
+{
+  "name": "Deny Medication Taken",
+  "description": "Caller says they have not taken medication yet",
+  "intent": "You are an elderly Hindi speaker who has NOT taken their medication yet. When asked, say no, you haven't taken it.",
+  "personality": "Elderly, slightly distracted, speaks Hindi. Honest but not worried.",
+  "expectedOutcome": "DENIED",
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

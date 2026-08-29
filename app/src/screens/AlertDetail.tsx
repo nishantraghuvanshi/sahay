@@ -232,6 +232,8 @@ export default function AlertDetail() {
 
   const now = new Date()
   const firedAt = escalation.sent_at ? new Date(escalation.sent_at) : null
+  const levelTone: 'danger' | 'warn' | 'ink' =
+    escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'
 
   const intakeRecord = intake.data ?? null
   const chiefComplaint = intakeRecord?.fields.chief_complaint?.trim() || null
@@ -294,16 +296,16 @@ export default function AlertDetail() {
         </Link>
       </Row>
 
-      <Card emphasis="border" className="gap-2">
+      <Card emphasis="border" className="gap-2.5">
         <Row className="flex-wrap gap-2">
-          <Tag tone={escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'}>{escalation.level}</Tag>
+          <Tag tone={levelTone}>{escalation.level}</Tag>
           <Label className="flex-1">Alert detail</Label>
-          {resolvedAt && <Tag outline>resolved</Tag>}
+          {resolvedAt && <Tag tone="accent" outline>resolved</Tag>}
         </Row>
 
         <h1
           lang="hi"
-          className="text-lg leading-snug font-bold break-words hyphens-none sm:text-xl"
+          className="text-xl leading-snug font-bold break-words hyphens-none sm:text-2xl"
         >
           {chiefComplaint ? `“${chiefComplaint}”` : `${escalation.level} alert raised`}
         </h1>
@@ -327,12 +329,12 @@ export default function AlertDetail() {
         {/* ------------------------------------------- left: rule, transcript, record */}
         <div className="flex min-w-0 flex-col gap-3">
           {/* 🔑 the cited rule, rendered literally (PR-3) */}
-          <Card emphasis="rule" className="gap-2">
+          <Card emphasis={escalation.level === 'P1' ? 'danger' : 'rule'} className="gap-2">
             <Row>
               <Label className="flex-1">Why this was flagged</Label>
-              <Tag tone={escalation.level === 'P1' ? 'danger' : escalation.level === 'P2' ? 'warn' : 'ink'}>{escalation.level}</Tag>
+              <Tag tone={levelTone}>{escalation.level}</Tag>
             </Row>
-            <div className="text-md leading-relaxed font-semibold break-words sm:text-md">
+            <div className="text-sm leading-relaxed font-bold break-words sm:text-md">
               {escalation.reason}
             </div>
             {intakeRecord?.priority_rule && intakeRecord.priority_rule !== escalation.reason && (
@@ -381,9 +383,7 @@ export default function AlertDetail() {
                       className={clsx(
                         'min-w-0 flex-1 rounded text-base leading-relaxed break-words hyphens-none whitespace-pre-wrap',
                         line.agent && !matched && 'text-muted-strong',
-                        // the line that fired the rule: marigold, with a danger marker.
-                        // was bg-fill — the same grey as a skeleton bar.
-                        matched && 'bg-highlight px-1.5 py-0.5 font-bold shadow-[inset_3px_0_0_var(--color-danger)]',
+                        matched && 'rounded bg-highlight px-1.5 py-0.5 font-bold',
                       )}
                     >
                       {line.text}
@@ -391,8 +391,8 @@ export default function AlertDetail() {
                   </Row>
                   {matched && (
                     <Row className="gap-1.5 pl-1">
-                      <Dot kind="filled" />
-                      <span className="text-xs font-semibold">
+                      <Dot kind="filled" tone="accent" />
+                      <span className="text-xs font-semibold text-accent">
                         this line is what the rule matched
                       </span>
                     </Row>
@@ -555,11 +555,12 @@ export default function AlertDetail() {
               const sent = d.sent_at ? new Date(d.sent_at) : null
               const status = d.delivery_status ?? (sent ? 'sent' : 'pending')
               const kind = status === 'delivered' || status === 'read' ? 'filled' : status === 'failed' ? 'hollow' : 'empty'
+              const tone = status === 'delivered' || status === 'read' ? 'accent' : status === 'failed' ? 'danger' : 'ink'
               return (
                 <div key={d.id} className="flex flex-col gap-0.5">
                   <Row className="items-start gap-2">
                     <span className="pt-1">
-                      <Dot kind={kind} />
+                      <Dot kind={kind} tone={tone} />
                     </span>
                     <span className="min-w-0 flex-1 text-base break-words">
                       {d.sent_to} · {d.channel}

@@ -1,14 +1,27 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import clsx from 'clsx'
+import { Home, CalendarDays, Bell, Phone, FileText, MessageSquareQuote, Settings } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useIsDesktop } from './useBreakpoint'
 import { NAV, TABS } from './nav'
 import { Wordmark } from '../ui'
 import { useCareRecord } from '../api/hooks'
 
 /**
- * One shell, two layouts: sidebar + top bar on desktop (wireframe 2e),
- * bottom tab bar on a phone (wireframe 1f). Screens are identical in both.
+ * One shell, two layouts: sidebar + top bar on desktop, bottom tab bar on a phone.
+ * Screens are identical in both.
  */
+
+const ICONS: Record<string, LucideIcon> = {
+  '/home': Home,
+  '/calendar': CalendarDays,
+  '/alerts': Bell,
+  '/calls': Phone,
+  '/record': FileText,
+  '/observations': MessageSquareQuote,
+  '/settings': Settings,
+}
+
 export default function AppShell() {
   const isDesktop = useIsDesktop()
 
@@ -17,6 +30,7 @@ export default function AppShell() {
       <div className="flex h-full">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar />
           <main className="min-h-0 flex-1 overflow-auto p-6">
             <Outlet />
           </main>
@@ -27,7 +41,7 @@ export default function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
-      <main className="min-h-0 flex-1 overflow-auto p-3">
+      <main className="min-h-0 flex-1 overflow-auto p-4">
         <Outlet />
       </main>
       <TabBar />
@@ -35,32 +49,51 @@ export default function AppShell() {
   )
 }
 
+function Wordmark() {
+  return (
+    <span className="grid size-7 place-items-center rounded-lg bg-ink text-sm font-bold text-paper">
+      K
+    </span>
+  )
+}
+
 function Sidebar() {
   return (
-    <aside className="flex w-[186px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-3">
-      <div className="flex items-center gap-2 px-2 pb-3">
-        <Wordmark size={19} />
+    <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4">
+      <div className="flex items-center gap-2.5 px-1 pb-4">
+        <Wordmark />
+        <span className="text-md font-bold tracking-tight">Kinvox</span>
       </div>
 
-      <PatientCard />
+      <div className="mb-3 rounded-xl border border-line-strong bg-paper p-3 shadow-[var(--shadow-card)]">
+        <div className="text-sm font-semibold">Mom · 71</div>
+        <div className="text-2xs text-muted">Care line active</div>
+      </div>
 
-      {NAV.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className={({ isActive }) =>
-            clsx(
-              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-base transition-colors duration-150 ease-out',
-              isActive
-                ? 'bg-accent-soft font-semibold text-accent'
-                : 'text-muted-strong hover:bg-line/60 hover:text-ink',
-            )
-          }
-        >
-          <item.icon size={17} strokeWidth={2} aria-hidden="true" />
-          {item.label}
-        </NavLink>
-      ))}
+      {NAV.map((item) => {
+        const Icon = ICONS[item.to] ?? Home
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors duration-150',
+                isActive
+                  ? 'bg-ink font-semibold text-paper'
+                  : 'font-medium text-muted-strong hover:bg-fill/60 hover:text-ink',
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <Icon className="size-[18px] shrink-0" strokeWidth={isActive ? 2.4 : 2} />
+                {item.label}
+              </>
+            )}
+          </NavLink>
+        )
+      })}
     </aside>
   )
 }
@@ -70,49 +103,41 @@ function PatientCard() {
   const { data } = useCareRecord()
   const patient = data?.patient
   return (
-    <div className="mb-2 rounded-lg border border-line-strong bg-paper p-2">
-      <div className="text-base font-semibold">
-        {patient ? `${patient.name}${patient.honorific ? `-${patient.honorific}` : ''}` : '—'}
-        {patient?.age != null && ` · ${patient.age}`}
-      </div>
-      <div className="text-2xs text-muted-strong">
-        {patient?.calls_paused
-          ? 'Calls paused'
-          : patient?.schedule_signed_off_at
-            ? 'Calls active'
-            : 'Not signed off'}
-      </div>
-    </div>
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface/80 px-6 backdrop-blur">
+      <span className="font-display text-lg font-semibold tracking-tight">Kinvox</span>
+      <span className="text-xs text-muted-strong">the care line, at a glance</span>
+    </header>
   )
 }
 
 function TabBar() {
   return (
-    <nav className="flex shrink-0 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)]">
-      {TABS.map((tab) => (
-        <NavLink
-          key={tab.to}
-          to={tab.to}
-          className={({ isActive }) =>
-            clsx(
-              'flex flex-1 flex-col items-center gap-1 py-2 text-2xs transition-colors duration-150 ease-out',
-              isActive ? 'font-bold text-accent' : 'text-muted-strong',
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <tab.icon
-                size={19}
-                strokeWidth={isActive ? 2.4 : 1.9}
-                aria-hidden="true"
-                className="transition-colors duration-150 ease-out"
-              />
-              {tab.label}
-            </>
-          )}
-        </NavLink>
-      ))}
+    <nav className="flex shrink-0 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+      {TABS.map((tab) => {
+        const Icon = ICONS[tab.to] ?? Home
+        return (
+          <NavLink
+            key={tab.to}
+            to={tab.to}
+            className={({ isActive }) =>
+              clsx(
+                'relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-2xs font-medium transition-colors duration-150',
+                isActive ? 'text-accent' : 'text-muted-strong',
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <span className="absolute top-0 h-[3px] w-9 rounded-b-full bg-accent" />
+                )}
+                <Icon className="size-[22px]" strokeWidth={isActive ? 2.5 : 2} />
+                <span className={clsx(isActive && 'font-bold')}>{tab.label}</span>
+              </>
+            )}
+          </NavLink>
+        )
+      })}
     </nav>
   )
 }

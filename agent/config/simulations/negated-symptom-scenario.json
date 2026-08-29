@@ -1,0 +1,12 @@
+{
+  "name": "Negated Symptom (must NOT escalate)",
+  "description": "Caller explicitly denies symptoms. Tests D2 — negation-blind keyword matching used to escalate on 'कोई दर्द नहीं' and page the caregiver.",
+  "intent": "You are an elderly Hindi speaker who feels completely fine. You took your medicine. If asked how you feel, say clearly 'कोई दर्द नहीं है' and 'बुखार नहीं है'.",
+  "personality": "Elderly, cheerful, healthy, speaks Hindi. Volunteers that nothing hurts.",
+  "expectedOutcome": "CONFIRMED",
+  "mustNotAlert": true,
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

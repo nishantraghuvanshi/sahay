@@ -3,36 +3,13 @@ import clsx from 'clsx'
 import type { DoseStatus, Severity } from '../api/types'
 
 /**
- * Primitives ported 1:1 from the wireframe CSS atoms (wireframe/*.dc.html):
- * .c Card · .r Row · .chip · .tag · .dot · .btn/.ob Button · .in Field · .lbl Label · .g Bar
+ * Shared primitives. Status is never colour-only: every Dot / Chip / Tag that carries a
+ * state renders a shape AND a word, and colour is layered on top of a mark that already
+ * works in greyscale (verify: DevTools → Rendering → Achromatopsia).
  *
- * Rule carried over from the wireframes: status is never colour-only. Every Dot renders
- * a text label beside it, so the screen survives a greyscale screen recording and a
- * colour-blind viewer (LANE-C demo readiness).
- *
- * Palette F adds hue ON TOP of those marks — it never replaces the shape or the label.
- * Verify with DevTools > Rendering > Emulate vision deficiency > Achromatopsia: every
- * dose status, severity and step state must still be distinguishable.
+ * Three marks, no more: filled = taken / done / confirmed · outlined = missed / needs
+ * action · muted = upcoming / pending / locked.
  */
-
-/** Status hue. `ink` is the default; the rest are layered onto an existing mark. */
-export type Tone = 'ink' | 'accent' | 'ok' | 'warn' | 'danger'
-
-const TONE_FILL: Record<Tone, string> = {
-  ink: 'bg-ink text-white',
-  accent: 'bg-accent text-white',
-  ok: 'bg-ok text-white',
-  warn: 'bg-warn text-white',
-  danger: 'bg-danger text-white',
-}
-
-const TONE_OUTLINE: Record<Tone, string> = {
-  ink: 'border-ink bg-paper text-ink',
-  accent: 'border-accent bg-accent-soft text-accent',
-  ok: 'border-ok bg-accent-soft text-ok',
-  warn: 'border-warn bg-warn-soft text-warn',
-  danger: 'border-danger bg-danger-soft text-danger',
-}
 
 type Div = { className?: string; children?: ReactNode }
 
@@ -40,15 +17,18 @@ export function Card({
   className,
   children,
   emphasis,
-}: Div & { emphasis?: 'none' | 'border' | 'rule' | 'alert' }) {
+}: Div & { emphasis?: 'none' | 'border' | 'rule' | 'danger' }) {
   return (
     <div
       className={clsx(
-        'flex flex-col gap-2 rounded-lg border bg-surface p-3 shadow-card',
-        emphasis === 'border' && 'border-[1.5px] border-ink bg-paper',
-        emphasis === 'rule' && 'border-line-strong border-l-[3px] border-l-ink',
-        emphasis === 'alert' && 'border-line-strong border-l-[3px] border-l-danger bg-danger-soft',
-        (!emphasis || emphasis === 'none') && 'border-line-strong',
+        'flex flex-col gap-2.5 rounded-2xl border p-4 transition-shadow duration-200',
+        emphasis === 'border' && 'border-[1.5px] border-ink bg-paper shadow-[var(--shadow-lift)]',
+        emphasis === 'rule' &&
+          'border-line-strong border-l-[4px] border-l-accent bg-surface shadow-[var(--shadow-card)]',
+        emphasis === 'danger' &&
+          'border-danger/35 border-l-[4px] border-l-danger bg-danger-soft shadow-[var(--shadow-card)]',
+        (!emphasis || emphasis === 'none') &&
+          'border-line-strong bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
     >
@@ -63,7 +43,12 @@ export function Row({ className, children }: Div) {
 
 export function Label({ className, children }: Div) {
   return (
-    <div className={clsx('text-2xs font-bold tracking-[0.09em] text-muted uppercase', className)}>
+    <div
+      className={clsx(
+        'text-2xs font-bold tracking-[0.08em] text-muted-strong uppercase',
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -82,11 +67,11 @@ export function Chip({
       {...(onClick && on !== undefined ? { 'aria-pressed': on } : {})}
       onClick={onClick}
       className={clsx(
-        'inline-flex min-h-[32px] items-center rounded-full border px-3 py-1.5 text-sm whitespace-nowrap',
-        onClick && 'cursor-pointer transition-colors duration-150 ease-out',
+        'inline-flex min-h-[34px] items-center rounded-full border px-3.5 py-1 text-xs font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 ease-[var(--ease-out)]',
         on
-          ? 'border-ink bg-ink text-white'
-          : clsx('border-line-strong bg-paper text-ink', onClick && 'hover:border-ink hover:bg-line'),
+          ? 'border-ink bg-ink text-paper'
+          : 'border-line-strong bg-paper text-ink hover:border-ink',
+        onClick && 'active:scale-[0.97]',
         className,
       )}
     >
@@ -95,17 +80,30 @@ export function Chip({
   )
 }
 
+/** A metadata / status pill. `tone` layers colour onto the shape + word (never colour alone). */
 export function Tag({
   children,
   outline,
   tone = 'ink',
   className,
-}: Div & { outline?: boolean; tone?: Tone }) {
+}: Div & { outline?: boolean; tone?: 'ink' | 'danger' | 'warn' | 'accent' }) {
+  const solid: Record<string, string> = {
+    ink: 'bg-ink text-paper',
+    danger: 'bg-danger text-white',
+    warn: 'bg-warn text-white',
+    accent: 'bg-accent text-white',
+  }
+  const outlined: Record<string, string> = {
+    ink: 'border border-ink bg-paper text-ink',
+    danger: 'border border-danger bg-danger-soft text-danger',
+    warn: 'border border-warn bg-warn-soft text-warn',
+    accent: 'border border-accent bg-accent-soft text-accent',
+  }
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded px-2 py-1 text-2xs font-extrabold tracking-wide',
-        outline ? clsx('border', TONE_OUTLINE[tone]) : TONE_FILL[tone],
+        'inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-extrabold tracking-wide',
+        outline ? outlined[tone] : solid[tone],
         className,
       )}
     >
@@ -122,24 +120,18 @@ export function Button({
   href,
   className,
 }: Div & {
-  variant?: 'primary' | 'outline' | 'quiet' | 'accent'
+  variant?: 'primary' | 'outline' | 'accent'
   disabled?: boolean
   onClick?: () => void
   href?: string
 }) {
   const cls = clsx(
-    'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-base font-semibold',
-    'transition-colors duration-150 ease-out',
-    !disabled && variant === 'primary' && 'bg-ink text-white hover:bg-ink-soft active:bg-ink',
-    !disabled && variant === 'accent' && 'bg-accent text-white hover:brightness-110 active:brightness-95',
-    !disabled && variant === 'outline' && 'border border-ink bg-transparent text-ink hover:bg-line',
-    !disabled &&
-      variant === 'quiet' &&
-      'bg-transparent font-medium text-muted-strong hover:bg-line hover:text-ink',
-    // Gated actions stay visible and legible (product rule 7): a warm inert fill with
-    // readable text, never a 40%-opacity ghost of the active button.
-    disabled && 'pointer-events-none bg-fill text-muted-strong',
-    disabled && variant === 'outline' && 'border border-line-strong bg-transparent',
+    'inline-flex min-h-[44px] items-center justify-center rounded-full px-5 py-2.5 text-center text-sm font-semibold transition-[transform,background-color,box-shadow,border-color] duration-150 ease-[var(--ease-out)]',
+    !disabled && 'active:scale-[0.98]',
+    variant === 'primary' && 'bg-ink text-paper hover:bg-ink-soft',
+    variant === 'accent' && 'bg-accent text-white hover:bg-accent-2',
+    variant === 'outline' && 'border-[1.5px] border-ink bg-transparent text-ink hover:bg-ink/[0.05]',
+    disabled && 'cursor-not-allowed opacity-40',
     className,
   )
   if (href && !disabled) {
@@ -168,7 +160,7 @@ export function Field({
   return (
     <div
       className={clsx(
-        'rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base',
+        'rounded-lg border border-line-strong bg-paper px-3 py-2.5 text-sm',
         value ? 'text-ink' : 'text-muted',
         className,
       )}
@@ -178,50 +170,42 @@ export function Field({
   )
 }
 
-/**
- * The one text control. Before this, the same class string was retyped in eight places
- * at three different font sizes with inconsistent focus rings (Login, Parent, Schedule,
- * MedicinesEdit). `Field` above is its read-only twin.
- */
-export function Input({
-  as = 'input',
+/** Skeleton bar — also a meter when `fill` is set. */
+export function Bar({
+  width = '100%',
+  fill,
   className,
-  ...rest
-}: { as?: 'input' | 'textarea'; className?: string } & React.ComponentPropsWithoutRef<'input'> &
-  React.ComponentPropsWithoutRef<'textarea'>) {
-  const cls = clsx(
-    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink',
-    'transition-colors duration-150 ease-out outline-none placeholder:text-muted-strong',
-    'focus:border-accent focus:ring-[3px] focus:ring-accent-soft',
-    'disabled:pointer-events-none disabled:opacity-50',
-    className,
-  )
-  if (as === 'textarea') return <textarea className={cls} {...rest} />
-  return <input className={cls} {...rest} />
-}
-
-/** Skeleton bar (.g) — also used as a meter when `fill` is set. */
-export function Bar({ width = '100%', fill, className }: { width?: string; fill?: number; className?: string }) {
+}: {
+  width?: string
+  fill?: number
+  className?: string
+}) {
   return (
-    <div className={clsx('h-2 rounded bg-fill', className)} style={{ width }}>
+    <div
+      className={clsx('h-2.5 overflow-hidden rounded-full', fill === undefined && 'kv-shimmer', className)}
+      style={{ width, ...(fill !== undefined ? { background: 'var(--color-fill)' } : {}) }}
+    >
       {fill !== undefined && (
-        <div className="h-2 rounded bg-ink" style={{ width: `${Math.round(fill * 100)}%` }} />
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-500 ease-[var(--ease-out)]"
+          style={{ width: `${Math.round(fill * 100)}%` }}
+        />
       )}
     </div>
   )
 }
 
-/** Hatched placeholder (.im) — images, scans, logos. */
+/** Hatched placeholder — images, scans, logos. */
 export function Placeholder({ className, children }: Div) {
   return (
     <div
       className={clsx(
-        'flex items-center justify-center rounded-md border border-line-strong text-center text-sm text-muted',
+        'flex items-center justify-center rounded-lg border border-line-strong text-center text-xs text-muted',
         className,
       )}
       style={{
         backgroundImage:
-          'repeating-linear-gradient(45deg,#f4ecdd,#f4ecdd 6px,#e8dcc6 6px,#e8dcc6 12px)',
+          'repeating-linear-gradient(45deg,#f4ecd9,#f4ecd9 6px,#eadfc9 6px,#eadfc9 12px)',
       }}
     >
       {children}
@@ -248,33 +232,43 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   red: 'red',
 }
 
-function dotClass(kind: 'filled' | 'hollow' | 'empty', tone: Tone = 'ink') {
+type DotTone = 'ink' | 'accent' | 'danger' | 'warn'
+
+function dotClass(kind: 'filled' | 'hollow' | 'empty', tone: DotTone = 'ink') {
+  const solid: Record<DotTone, string> = {
+    ink: 'bg-ink',
+    accent: 'bg-accent',
+    danger: 'bg-danger',
+    warn: 'bg-warn',
+  }
+  const ring: Record<DotTone, string> = {
+    ink: 'border-ink',
+    accent: 'border-accent',
+    danger: 'border-danger',
+    warn: 'border-warn',
+  }
   return clsx(
-    'inline-block size-2 shrink-0 rounded-full',
-    kind === 'filled' && (tone === 'ink' ? 'bg-ink' : 'bg-ok'),
-    kind === 'hollow' &&
-      clsx(
-        'border-[1.5px] bg-paper',
-        tone === 'warn' ? 'border-warn' : tone === 'danger' ? 'border-danger' : 'border-ink',
-      ),
+    'inline-block size-2.5 shrink-0 rounded-full',
+    kind === 'filled' && solid[tone],
+    kind === 'hollow' && clsx('border-2 bg-paper', ring[tone]),
     kind === 'empty' && 'bg-fill-empty',
   )
 }
 
-/** Four dose states, never colour alone — the label always renders. */
+/** Four dose states, never colour alone — the word always renders. */
 export function DoseStatusChip({ status }: { status: DoseStatus }) {
   const kind = status === 'confirmed' ? 'filled' : status === 'deferred' ? 'empty' : 'hollow'
-  // `no_answer` is warn, not danger: unreachable is `unknown`, never `missed` (WIREFRAMES §8.13).
-  const tone: Tone =
-    status === 'confirmed' ? 'ok' : status === 'missed' ? 'danger' : status === 'no_answer' ? 'warn' : 'ink'
+  const tone: DotTone =
+    status === 'confirmed' ? 'accent' : status === 'missed' ? 'danger' : status === 'no_answer' ? 'warn' : 'ink'
+  const emphatic = status === 'missed' || status === 'no_answer'
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm">
+    <span className="inline-flex items-center gap-1.5 text-xs">
       <span className={dotClass(kind, tone)} />
       <span
         className={clsx(
-          status === 'missed' && 'font-semibold text-danger',
-          status === 'no_answer' && 'font-semibold text-warn',
-          (status === 'confirmed' || status === 'deferred') && 'text-muted-strong',
+          emphatic && status === 'missed' && 'font-semibold text-danger',
+          emphatic && status === 'no_answer' && 'font-semibold text-warn',
+          !emphatic && 'text-muted-strong',
         )}
       >
         {DOSE_LABEL[status]}
@@ -285,12 +279,12 @@ export function DoseStatusChip({ status }: { status: DoseStatus }) {
 
 export function SeverityChip({ severity }: { severity: Severity }) {
   if (severity === 'red') return <Tag tone="danger">red</Tag>
-  if (severity === 'watch') return <Tag outline tone="warn">watch</Tag>
+  if (severity === 'watch') return <Tag tone="warn" outline>watch</Tag>
   return <Label>{SEVERITY_LABEL.none}</Label>
 }
 
 /** Upcoming / neutral dot for timeline rows. */
-export function Dot({ kind, tone }: { kind: 'filled' | 'hollow' | 'empty'; tone?: Tone }) {
+export function Dot({ kind, tone = 'ink' }: { kind: 'filled' | 'hollow' | 'empty'; tone?: DotTone }) {
   return <span className={dotClass(kind, tone)} />
 }
 
@@ -298,9 +292,9 @@ export function Dot({ kind, tone }: { kind: 'filled' | 'hollow' | 'empty'; tone?
 
 export function LoadingBlock({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-2" aria-busy="true" aria-live="polite">
+    <div className="flex flex-col gap-3" aria-busy="true" aria-live="polite">
       {Array.from({ length: rows }).map((_, i) => (
-        <Bar key={i} width={`${90 - i * 18}%`} />
+        <Bar key={i} width={`${90 - i * 14}%`} />
       ))}
       <span className="sr-only">Loading</span>
     </div>
@@ -310,10 +304,10 @@ export function LoadingBlock({ rows = 3 }: { rows?: number }) {
 export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const message = error instanceof Error ? error.message : 'Something went wrong at our end.'
   return (
-    <Card emphasis="rule">
+    <Card emphasis="danger">
       <Label>Not loaded</Label>
-      <div className="text-base font-semibold">{message}</div>
-      <div className="text-sm text-muted-strong">
+      <div className="text-sm font-semibold">{message}</div>
+      <div className="text-xs text-muted-strong">
         Nothing has been lost — the record is on our servers. This screen just could not read it.
       </div>
       {onRetry && (
@@ -329,9 +323,9 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 export function EmptyBlock({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
-    <Card className="items-center gap-2 border-dashed py-8 text-center">
-      <div className="text-md font-bold">{title}</div>
-      <div className="max-w-xs text-sm text-muted-strong">{body}</div>
+    <Card className="items-center gap-2.5 border-dashed py-10 text-center">
+      <div className="font-display text-lg font-semibold">{title}</div>
+      <div className="max-w-xs text-xs leading-relaxed text-muted-strong">{body}</div>
       {action}
     </Card>
   )

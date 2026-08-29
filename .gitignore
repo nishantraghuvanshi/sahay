@@ -33,9 +33,18 @@ docs/checklists/*.zip
 CLAUDE.md
 .claude/
 
+# voice agent local datastore — holds real call transcripts, never ships
+agent/data/
+*.db
+*.db-shm
+*.db-wal
+
 # build artifacts
 *.tsbuildinfo
 
 # graphify knowledge graph — local tooling, rebuilt on demand
 .graphify/
 .gstack/
+*.env
+credentials.json
+.credentials
