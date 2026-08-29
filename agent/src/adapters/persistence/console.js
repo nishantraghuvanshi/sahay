@@ -95,6 +95,41 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return [];
   }
 
+  // ── Medications & dose events ────────────────────────────────────
+
+  async upsertMedication(med) {
+    this._noop('medication_upsert_skipped', {
+      patientId: med && med.patientId,
+      name: med && med.name,
+    });
+    return null;
+  }
+
+  async listMedications() {
+    return [];
+  }
+
+  async upsertDoseEvent(event) {
+    this._noop('dose_event_upsert_skipped', {
+      medicationId: event && event.medicationId,
+      slotTime: event && event.slotTime,
+    });
+    return null;
+  }
+
+  async setDoseStatus(medicationId, slotTime, status) {
+    this._noop('dose_status_set_skipped', { medicationId, slotTime, status });
+    return null;
+  }
+
+  async listDoseEvents() {
+    return [];
+  }
+
+  async dueDoseEvents() {
+    return [];
+  }
+
   /**
    * Record that a write was discarded, so console mode is visible in logs
    * rather than merely quiet.
