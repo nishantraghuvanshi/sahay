@@ -1,7 +1,7 @@
 'use strict';
 
 const STTPort = require('../../../core/ports/stt');
-const { extractChannel } = require('../../../utils/audio');
+const { extractChannel, pcmToWav } = require('../../../utils/audio');
 const logger = require('../../../utils/logger');
 
 /**
@@ -28,7 +28,7 @@ class SarvamSTTAdapter extends STTPort {
     this._maxReconnectAttempts = 3;
     this._reconnectBaseDelayMs = 500;
     this._reconnectTimer = null;
-    this._connecting = false;
+    this._connectPromise = null;
   }
 
   /**
@@ -56,53 +56,78 @@ class SarvamSTTAdapter extends STTPort {
   _connectSarvam() {
     const WebSocket = require('ws');
 
-    const url = 'wss://api.sarvam.ai/speech-to-text/streaming';
+    // Endpoint and auth verified against docs.sarvam.ai (api-reference/legacy/
+    // speech-to-text/transcribe/ws). The previous URL was
+    // '/speech-to-text/streaming', which does not exist — every connection was
+    // rejected with a 403 that looked like an invalid key. The key was fine.
+    // Auth is the api-subscription-key header; Bearer is not accepted here.
+    const params = new URLSearchParams({
+      model: this.config.model,
+      language_code: this.config.language,
+      mode: this.config.mode,
+      sample_rate: String(this.sampleRate),
+      high_vad_sensitivity: String(!!this.config.high_vad_sensitivity),
+    });
+    const url = `wss://api.sarvam.ai/speech-to-text/ws?${params.toString()}`;
     const headers = {
-      Authorization: `Bearer ${this.apiKey}`,
-      'API-Subscription-Key': this.apiKey,
+      'api-subscription-key': this.apiKey,
     };
 
-    this.ws = new WebSocket(url, { headers });
+    // Bind every handler to THIS socket, not to this.ws. A reconnect
+    // reassigns this.ws, so an older socket's 'open' would otherwise fire and
+    // send on the newer, still-CONNECTING socket — which throws
+    // "WebSocket is not open: readyState 0" out of an event handler and, being
+    // uncaught, takes the whole server process down with it.
+    const ws = new WebSocket(url, { headers });
+    this.ws = ws;
 
-    this.ws.on('open', () => {
-      // Send config message on connect
-      const configMessage = {
-        model: this.config.model,
-        language: this.config.language,
-        mode: this.config.mode,
-        sample_rate: this.sampleRate,
-        input_audio_codec: 'pcm_s16le',
-        high_vad_sensitivity: this.config.high_vad_sensitivity
-          ? 'true'
-          : 'false',
-      };
-      this.ws.send(JSON.stringify(configMessage));
+    ws.on('open', () => {
+      // Deliberately sends NOTHING. This endpoint has no config handshake —
+      // every setting travels in the URL query string, and every frame it
+      // receives is expected to be audio. Sending a config object here made
+      // Sarvam answer
+      //   {"type":"error","data":{"message":"Invalid request: 'audio' must not be..."}}
+      // and hang up, which presented as an endless connect/close reconnect loop.
       logger.log('stt_sarvam_connected', {
         model: this.config.model,
         language: this.config.language,
       });
     });
 
-    this.ws.on('message', (data) => {
+    ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
-        if (message.transcript && this.transcriptCallback) {
-          this.transcriptCallback(
-            message.transcript,
-            message.is_final,
-            'customer'
+
+        if (message.type === 'error') {
+          logger.error(
+            'stt_sarvam_remote_error',
+            new Error(message.data?.message || JSON.stringify(message))
           );
+          return;
+        }
+
+        // Transcripts arrive either flat or wrapped in a {type, data} envelope
+        // depending on the endpoint generation — accept both.
+        const payload = message.data || message;
+        if (payload.transcript && this.transcriptCallback) {
+          // This endpoint emits NO partial results: there is no is_final field,
+          // and every transcript message is already the final text for that
+          // speech segment. Forwarding payload.is_final passed `undefined`,
+          // which every downstream caller read as "partial" — so a completed
+          // utterance was re-entered as an interim result on every message and
+          // a turn could only ever be closed by the silence timeout.
+          this.transcriptCallback(payload.transcript, true, 'customer');
         }
       } catch (e) {
         logger.error('stt_sarvam_message_parse_error', e);
       }
     });
 
-    this.ws.on('error', (err) => {
+    ws.on('error', (err) => {
       logger.error('stt_sarvam_ws_error', err);
     });
 
-    this.ws.on('close', () => {
+    ws.on('close', () => {
       logger.log('stt_sarvam_ws_closed', {});
       // Auto-reconnect if not intentionally disposed and we have a callback
       if (!this._disposed && this.transcriptCallback) {
@@ -168,28 +193,89 @@ class SarvamSTTAdapter extends STTPort {
    * @param {Buffer} audioChunk - Raw 2-channel PCM audio from Vapi
    * @param {Function} onTranscript - (transcript, isFinal, channel) => void
    */
-  async transcribe(audioChunk, onTranscript) {
+
+  /**
+   * Open the socket at most once, however many chunks arrive while it is
+   * opening.
+   *
+   * The previous guard tested `readyState !== 1`, which is true throughout
+   * CONNECTING as well as when closed. Audio arrives every ~100ms and the
+   * handshake takes ~600ms, so every chunk in that window opened ANOTHER
+   * socket: 22 of them in 1.5 seconds in one observed session, each
+   * reassigning this.ws, each independently transcribing, and each a candidate
+   * to emit its own transcript for the same speech.
+   *
+   * Callers await the one in-flight connect instead.
+   *
+   * @private
+   */
+  _ensureConnected() {
+    if (this.ws && this.ws.readyState === 1 /* OPEN */) return Promise.resolve();
+    if (this._connectPromise) return this._connectPromise;
+
+    this._connectSarvam();
+    const ws = this.ws;
+
+    this._connectPromise = new Promise((resolve, reject) => {
+      const settle = () => {
+        this._connectPromise = null;
+      };
+      ws.once('open', () => {
+        settle();
+        resolve();
+      });
+      ws.once('error', (err) => {
+        settle();
+        reject(err);
+      });
+      // A socket closed before it ever opened must reject, or every caller
+      // awaiting this promise hangs forever holding a dead connection.
+      ws.once('close', () => {
+        settle();
+        reject(new Error('Sarvam socket closed before opening'));
+      });
+    });
+
+    return this._connectPromise;
+  }
+
+  async transcribe(audioChunk, onTranscript, opts = {}) {
     this.transcriptCallback = onTranscript;
 
-    // Connect to Sarvam if not yet connected
-    if (!this.ws || this.ws.readyState !== 1 /* OPEN */) {
-      this._connectSarvam();
-      // Wait for connection to open before sending audio
-      await new Promise((resolve, reject) => {
-        if (this.ws.readyState === 1) {
-          resolve();
-        } else {
-          this.ws.once('open', resolve);
-          this.ws.once('error', reject);
-        }
-      });
+    // Channel count is a property of the CALLER, not of Sarvam: Vapi streams
+    // 2-channel PCM, the playground streams mono. Defaulting to mono means a
+    // caller that forgets to say is merely un-de-interleaved, not decimated to
+    // every other sample — which is what happened to playground audio while
+    // this was hardcoded to 2.
+    const channels = opts.channels || 1;
+
+    try {
+      await this._ensureConnected();
+    } catch (err) {
+      // Dropping one audio chunk is survivable; throwing out of here is not —
+      // this runs per chunk, several times a second, mid-call.
+      logger.error('stt_sarvam_connect_failed', err);
+      return;
     }
 
-    // Extract caller channel (channel 0 from 2-channel PCM)
-    const callerAudio = extractChannel(audioChunk, 0, 2);
+    const callerAudio =
+      channels > 1 ? extractChannel(audioChunk, 0, channels) : audioChunk;
 
     if (this.ws.readyState === 1 /* OPEN */) {
-      this.ws.send(callerAudio);
+      // Sarvam's streaming endpoint takes base64 inside a JSON envelope, not
+      // raw binary frames:
+      //   {"audio": {"data": "<base64>", "sample_rate": N, "encoding": "linear16"}}
+      this.ws.send(
+        JSON.stringify({
+          audio: {
+            data: pcmToWav(Buffer.from(callerAudio), this.sampleRate).toString(
+              'base64'
+            ),
+            sample_rate: this.sampleRate,
+            encoding: 'audio/wav',
+          },
+        })
+      );
     }
   }
 

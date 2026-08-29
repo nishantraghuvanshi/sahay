@@ -76,4 +76,42 @@ function wavToRawPcm(wavBuffer) {
   return wavBuffer.subarray(dataOffset);
 }
 
-module.exports = { extractChannel, wavToRawPcm, findDataChunk };
+
+/**
+ * Wrap raw 16-bit little-endian PCM in a minimal RIFF/WAVE container.
+ *
+ * Sarvam's streaming endpoint validates `audio.encoding` against an enum whose
+ * only accepted value is 'audio/wav' — raw PCM identifiers like 'pcm_s16le' are
+ * rejected outright, and each streamed message is a standalone request, so each
+ * chunk needs its own 44-byte header rather than one header for the stream.
+ *
+ * @param {Buffer} pcm - raw 16-bit LE PCM samples
+ * @param {number} sampleRate
+ * @param {number} [channels=1]
+ * @returns {Buffer} a complete, self-contained WAV buffer
+ */
+function pcmToWav(pcm, sampleRate, channels = 1) {
+  const bitsPerSample = 16;
+  const blockAlign = (channels * bitsPerSample) / 8;
+  const byteRate = sampleRate * blockAlign;
+  const header = Buffer.alloc(44);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);          // PCM fmt chunk size
+  header.writeUInt16LE(1, 20);           // audio format 1 = PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
+module.exports = {
+  pcmToWav, extractChannel, wavToRawPcm, findDataChunk };
