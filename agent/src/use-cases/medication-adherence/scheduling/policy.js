@@ -47,6 +47,32 @@ function nextAttemptAt(slotTime, attemptCount) {
   return new Date(new Date(slotTime).getTime() + offsetMin * 60_000).toISOString();
 }
 
+/** "HH:MM", 24-hour, the same shape medications.times and quiet windows use throughout. */
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Whether a single parsed quiet-window element is usable: a non-null
+ * object whose `start` and `end` are both "HH:MM" strings. Rejecting a
+ * shape isWithinLocalWindow can't safely evaluate — a missing `end`, a
+ * non-object entry, a non-string bound — here, at the parse boundary, is
+ * what keeps that already-reviewed, already-tested helper's contract
+ * (`{start, end}` are well-formed "HH:MM" strings) intact rather than
+ * teaching it to re-validate what every other caller already guarantees.
+ *
+ * @param {*} window
+ * @returns {boolean}
+ */
+function isValidQuietWindow(window) {
+  return (
+    window !== null &&
+    typeof window === 'object' &&
+    typeof window.start === 'string' &&
+    typeof window.end === 'string' &&
+    HHMM_RE.test(window.start) &&
+    HHMM_RE.test(window.end)
+  );
+}
+
 /**
  * Parses patients.quiet_windows, a raw JSON string handed through
  * unparsed, exactly like medications.times. Null, empty, and malformed
@@ -56,6 +82,12 @@ function nextAttemptAt(slotTime, attemptCount) {
  * medication call for that patient — is worse than ignoring a setting that
  * could not be read.
  *
+ * The same discipline applies one level deeper: a malformed *element*
+ * inside an otherwise well-formed array (a dropped `end`, a `null` entry)
+ * is dropped rather than crashing the whole array or discarding every
+ * window the patient configured. A caregiver who set a good 06:00-07:00
+ * window and a corrupted second entry keeps the good window.
+ *
  * @param {string|null|undefined} raw
  * @returns {Array<{start: string, end: string}>}
  */
@@ -63,7 +95,8 @@ function parseQuietWindows(raw) {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidQuietWindow);
   } catch {
     return [];
   }

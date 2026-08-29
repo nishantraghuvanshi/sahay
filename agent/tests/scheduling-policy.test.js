@@ -188,6 +188,58 @@ describe('quiet_windows parsing: malformed or unreadable values fail open, never
   }
 });
 
+describe('quiet_windows element validation: a malformed window is dropped, not fatal', () => {
+  test('an element missing "end" does not throw, and is dropped (dose stays dialable)', () => {
+    const result = decideDial({
+      doseEvent: BASE_DOSE_EVENT,
+      medication: BASE_MEDICATION,
+      patient: {
+        ...BASE_PATIENT,
+        quiet_windows: JSON.stringify([{ start: '22:00' }]),
+      },
+      now: NOW,
+      activeSession: null,
+    });
+    assert.strictEqual(result.dial, true);
+    assert.strictEqual(result.action, 'dial');
+    assert.strictEqual(result.reason, 'rule: dose time reached');
+  });
+
+  test('a null element does not throw, and is dropped (dose stays dialable)', () => {
+    const result = decideDial({
+      doseEvent: BASE_DOSE_EVENT,
+      medication: BASE_MEDICATION,
+      patient: {
+        ...BASE_PATIENT,
+        quiet_windows: JSON.stringify([null]),
+      },
+      now: NOW,
+      activeSession: null,
+    });
+    assert.strictEqual(result.dial, true);
+    assert.strictEqual(result.action, 'dial');
+    assert.strictEqual(result.reason, 'rule: dose time reached');
+  });
+
+  test('one valid window survives alongside a malformed one, and still suppresses a non-priority dial', () => {
+    // 01:00Z + 5:30 = 06:30 Asia/Kolkata local — inside the valid 06:00-07:00 window.
+    const now = new Date('2026-08-30T01:00:00.000Z');
+    const result = decideDial({
+      doseEvent: BASE_DOSE_EVENT,
+      medication: { ...BASE_MEDICATION, is_priority: 0 },
+      patient: {
+        ...BASE_PATIENT,
+        quiet_windows: JSON.stringify([{ start: '06:00', end: '07:00' }, { start: '22:00' }]),
+      },
+      now,
+      activeSession: null,
+    });
+    assert.strictEqual(result.dial, false);
+    assert.strictEqual(result.action, 'skip');
+    assert.strictEqual(result.reason, 'rule: inside caregiver do-not-call window');
+  });
+});
+
 describe('nextAttemptAt', () => {
   test('matches RETRY_OFFSETS_MIN exactly, and returns null past the last offset', () => {
     assert.deepStrictEqual(RETRY_OFFSETS_MIN, [5, 15, 30]);
