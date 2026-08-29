@@ -12,6 +12,11 @@ import Home from './screens/Home'
 import CareRecord from './screens/CareRecord'
 import Observations from './screens/Observations'
 import DoseHistory from './screens/DoseHistory'
+import Alerts from './screens/Alerts'
+import Handoff from './screens/Handoff'
+import AlertDetail from './screens/AlertDetail'
+import Calls from './screens/Calls'
+import CallDetail from './screens/CallDetail'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -33,7 +38,7 @@ export default function App() {
       </Route>
 
       {/* handoff — no login, no chrome, its own layout (TRD §11) */}
-      <Route path="/h/:token" element={<Placeholder title="Handoff record" frame="TRD §11" />} />
+      <Route path="/h/:token" element={<Handoff />} />
 
       {/* the four tabs + everything reachable from them */}
       <Route element={<AppShell />}>
@@ -41,10 +46,10 @@ export default function App() {
         <Route path="/home" element={<Home />} />
         <Route path="/calendar" element={<Placeholder title="Calendar" frame="1g / 2f" />} />
         <Route path="/medicines/edit" element={<Placeholder title="Change medicines" frame="1G.2 / 2F.2" />} />
-        <Route path="/alerts" element={<Placeholder title="Alerts" frame="1h / 2g" />} />
-        <Route path="/alerts/:id" element={<Placeholder title="Alert detail" frame="1i / 2g" />} />
-        <Route path="/calls" element={<Placeholder title="Calls" frame="1j / 2h" />} />
-        <Route path="/calls/:id" element={<Placeholder title="Call detail" frame="1j / 2h" />} />
+        <Route path="/alerts" element={<Alerts />} />
+        <Route path="/alerts/:id" element={<AlertDetail />} />
+        <Route path="/calls" element={<Calls />} />
+        <Route path="/calls/:id" element={<CallDetail />} />
         <Route path="/record" element={<CareRecord />} />
         <Route path="/doses" element={<DoseHistory />} />
         <Route path="/observations" element={<Observations />} />

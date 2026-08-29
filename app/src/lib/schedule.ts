@@ -126,8 +126,3 @@ export function adherenceTrend(
   })
 }
 
-/** Days of stock left. Null when no count is recorded — never guess a number here. */
-export function daysOfStock(medication: Medication): number | null {
-  if (medication.stock_count == null || medication.slots.length === 0) return null
-  return Math.floor(medication.stock_count / medication.slots.length)
-}
