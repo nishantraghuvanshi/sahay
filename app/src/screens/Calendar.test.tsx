@@ -68,6 +68,24 @@ function mount(doses: DoseEvent[], escalations: Escalation[] = []) {
   )
 }
 
+describe('a dose that was taken', () => {
+  it('shows when it was confirmed, not only that it was', () => {
+    // Frame 1g. The time is when it was logged, which is deliberately not the slot:
+    // a dose due at 08:30 and confirmed at 09:10 was still late.
+    mount([
+      { ...UNKNOWN_DOSE, id: 'd-ok', status: 'confirmed', note: null, created_at: at(9, 10) },
+    ])
+
+    expect(screen.getAllByText('taken').length).toBeGreaterThan(1)
+    expect(screen.getAllByText(/9:10/).length).toBeGreaterThan(0)
+  })
+
+  it('does not invent a confirmation time for a dose nobody confirmed', () => {
+    mount([UNKNOWN_DOSE])
+    expect(screen.queryByText(/9:10/)).not.toBeInTheDocument()
+  })
+})
+
 describe('a dose that could not be established', () => {
   it('renders as not known, and never as missed', () => {
     // The whole point of the status. `missed` asserts the dose was not taken;

@@ -652,8 +652,26 @@ function Unreachable({
   )
 }
 
+/** Same short clock the dose history uses, so the two screens read alike. */
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
 function SlotStatus({ dose, now }: { dose: UpcomingDose; now: Date }) {
-  if (dose.event) return <DoseStatusChip status={dose.event.status} />
+  if (dose.event) {
+    /**
+     * Frame `1g`: a taken dose shows when it was confirmed, not just that it was.
+     * The time is `created_at` — the moment it was logged — which is deliberately
+     * not the slot: a dose due at 08:30 and confirmed at 09:10 was still late, and
+     * printing the slot time back would hide that.
+     */
+    const at = dose.event.status === 'confirmed' ? clock(dose.event.created_at) : null
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <DoseStatusChip status={dose.event.status} />
+        {at && <span className="text-[10.5px] text-muted">{at}</span>}
+      </span>
+    )
+  }
   const due = dose.at.getTime() <= now.getTime()
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-strong">
