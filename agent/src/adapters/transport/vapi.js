@@ -65,6 +65,8 @@ class VapiTransportAdapter extends TransportPort {
           try {
             if (isBinary) {
               // Binary frame = audio chunk
+              // Vapi streams 2-channel PCM; the caller declares this because the
+              // playground streams mono through the same adapter.
               await sttAdapter.transcribe(data, (transcript, isFinal, channel) => {
                 const response = {
                   type: 'transcriber-response',
@@ -73,7 +75,7 @@ class VapiTransportAdapter extends TransportPort {
                   transcriptType: isFinal ? 'final' : 'partial',
                 };
                 if (ws.readyState === 1) ws.send(JSON.stringify(response));
-              });
+              }, { channels: 2 });
             } else {
               // Text frame = JSON config message
               const message = JSON.parse(data.toString());
@@ -108,12 +110,61 @@ class VapiTransportAdapter extends TransportPort {
       app.post('/llm/chat/completions', async (req, res) => {
         const llmAdapter = this.providerRegistry.getActiveLLM();
         const llmConfig = this.providerRegistry.getLLMConfig();
+
+        // Vapi's custom-LLM contract is SSE, not a blocking JSON response —
+        // https://docs.vapi.ai/customization/tool-calling-integration: the
+        // response must be `Content-Type: text/event-stream`, one
+        // `data: <chunk>\n\n` per OpenAI-format chunk, terminated with
+        // `data: [DONE]\n\n`. The blocking `chatCompletion()` used to be
+        // called here instead of the already-built `chatCompletionStream()`
+        // (present on both the openai and sarvam adapters), so Vapi never
+        // got a stream to parse. `getActiveLLM()` returns whichever adapter
+        // is configured, so this works for either without naming one.
+        //
+        // The adapter's onToken callback only exposes accumulated text
+        // deltas and a final merged tool_calls array (see openai.js /
+        // sarvam.js), not the underlying provider's raw chunks, so this
+        // re-encodes each piece as its own OpenAI-format SSE chunk rather
+        // than piping a raw stream through — functionally equivalent, since
+        // Vapi merges tool-call deltas by index either way.
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
         try {
-          const response = await llmAdapter.chatCompletion(req.body, llmConfig, process.env);
-          res.json(response);
+          const result = await llmAdapter.chatCompletionStream(
+            req.body,
+            llmConfig,
+            process.env,
+            (textDelta) => {
+              res.write(`data: ${JSON.stringify({
+                choices: [{ index: 0, delta: { content: textDelta } }],
+              })}\n\n`);
+            }
+          );
+
+          if (result.tool_calls) {
+            const toolCallDeltas = result.tool_calls.map((tc, index) => ({
+              index,
+              id: tc.id,
+              type: tc.type,
+              function: tc.function,
+            }));
+            res.write(`data: ${JSON.stringify({
+              choices: [{ index: 0, delta: { tool_calls: toolCallDeltas }, finish_reason: 'tool_calls' }],
+            })}\n\n`);
+          }
+
+          res.write('data: [DONE]\n\n');
+          res.end();
         } catch (err) {
           logger.error('llm_error', err);
-          res.status(500).json({ error: err.message });
+          if (res.headersSent) {
+            res.write('data: [DONE]\n\n');
+            res.end();
+          } else {
+            res.status(500).json({ error: err.message });
+          }
         }
       });
     } else {
@@ -179,28 +230,45 @@ class VapiTransportAdapter extends TransportPort {
             });
             break;
 
+          // Vapi's real server message for a tool invocation is 'tool-calls'
+          // (plural) — see https://docs.vapi.ai/server-url/events. The
+          // singular 'tool-call' handled here too is kept only for backward
+          // compatibility with whatever shape this code was originally
+          // written against; it has never been confirmed against a live
+          // payload and may not be a real Vapi event at all.
+          case 'tool-calls':
           case 'tool-call': {
             const callId = message.call?.id;
-            const toolName = message.tool?.name;
-            const args = message.tool?.arguments || {};
+            const calls = this._extractToolCalls(message);
+            const results = [];
 
-            await eventBus.emit(EVENT_TYPES.TOOL_CALLED, {
-              callId,
-              tool: toolName,
-              args,
-            });
+            for (const call of calls) {
+              await eventBus.emit(EVENT_TYPES.TOOL_CALLED, {
+                callId,
+                tool: call.name,
+                args: call.arguments,
+              });
 
-            if (toolName === 'capture_field') {
-              await this._captureField(callId, args);
+              if (call.name === 'capture_field') {
+                await this._captureField(callId, call.arguments);
+              }
+
+              await recordTurn({
+                repository: this.repository,
+                callId,
+                role: 'assistant',
+                toolCalls: [{ name: call.name, arguments: call.arguments }],
+              });
+
+              // Per https://docs.vapi.ai/tools/custom-tools, the response
+              // must be { results: [{ toolCallId, result }] } with a
+              // single-line string result — the previous fallback to the
+              // generic { status: 'ok' } gave Vapi no toolCallId to match,
+              // so the assistant stalled waiting on every tool call.
+              results.push({ toolCallId: call.toolCallId, result: 'ok' });
             }
 
-            await recordTurn({
-              repository: this.repository,
-              callId,
-              role: 'assistant',
-              toolCalls: [{ name: toolName, arguments: args }],
-            });
-            break;
+            return res.status(200).json({ results });
           }
 
           // UNVERIFIED: 'transcript' / 'role' / 'transcriptType' are this
@@ -297,6 +365,67 @@ class VapiTransportAdapter extends TransportPort {
       value,
       allowedFields: INTAKE_FIELDS.map((f) => f.key),
     });
+  }
+
+  /**
+   * Normalize the tool-call list out of a 'tool-calls' (or legacy
+   * 'tool-call') webhook message.
+   *
+   * UNVERIFIABLE: docs.vapi.ai never returned the exact field carrying the
+   * call list on a real request body — 'toolCalls' and 'toolCallList' are
+   * both plausible, and the legacy singular event carries one call under
+   * 'tool' with no list at all. Every shape is read defensively rather than
+   * guessed at, and which one matched is logged so a single live call
+   * settles it — see agent/.superpowers/sdd/audit-vapi.md §4.
+   *
+   * @param {Object} message - Vapi webhook message
+   * @returns {Array<{toolCallId: string|null, name: string, arguments: Object}>}
+   * @private
+   */
+  _extractToolCalls(message) {
+    const list = message.toolCalls || message.toolCallList;
+    if (Array.isArray(list)) {
+      logger.log('tool_calls_shape_matched', {
+        shape: message.toolCalls ? 'toolCalls' : 'toolCallList',
+      });
+      return list.map((call) => {
+        const fn = call.function || call;
+        return {
+          toolCallId: call.id || call.toolCallId || null,
+          name: fn.name,
+          arguments: this._normalizeToolArgs(fn.arguments),
+        };
+      });
+    }
+
+    if (message.tool) {
+      logger.log('tool_calls_shape_matched', { shape: 'tool' });
+      return [{
+        toolCallId: message.toolCallId || message.tool.id || null,
+        name: message.tool.name,
+        arguments: this._normalizeToolArgs(message.tool.arguments),
+      }];
+    }
+
+    logger.log('tool_calls_shape_unmatched', { keys: Object.keys(message) });
+    return [];
+  }
+
+  /**
+   * A tool call's arguments may already be an object or a JSON string
+   * (the OpenAI-style shape 'toolCalls' would carry sends it as a string).
+   * @private
+   */
+  _normalizeToolArgs(args) {
+    if (typeof args === 'string') {
+      try {
+        return JSON.parse(args);
+      } catch (err) {
+        logger.error('tool_call_args_parse_error', err);
+        return {};
+      }
+    }
+    return args || {};
   }
 
   /**
@@ -478,7 +607,13 @@ class VapiTransportAdapter extends TransportPort {
       silenceTimeoutSeconds: strategyConfig.silenceTimeoutSeconds,
       maxDurationSeconds: strategyConfig.maxDurationSeconds,
       backgroundSound: strategyConfig.backgroundSound,
-      backgroundDenoisingEnabled: strategyConfig.denoiseEnabled,
+      // 'backgroundDenoisingEnabled' as a bare boolean is not a real Vapi
+      // property — verified against
+      // docs.vapi.ai/documentation/assistants/conversation-behavior/background-speech-denoising,
+      // which documents this nested shape instead.
+      backgroundSpeechDenoisingPlan: {
+        smartDenoisingPlan: { enabled: strategyConfig.denoiseEnabled },
+      },
       // Turn-taking: when the assistant starts speaking after user pauses
       startSpeakingPlan: {
         waitSeconds: 0.4,  // 400ms pause before responding (elderly-friendly)
@@ -524,14 +659,17 @@ class VapiTransportAdapter extends TransportPort {
       artifactPlan: {
         recordingEnabled: true,
       },
+      // Verified against docs.vapi.ai/assistants/call-analysis:
+      // summaryPlan takes a `summaryPrompt` string (not `messages`), and
+      // structuredDataPlan's schema goes under `structuredDataSchema` (not
+      // `schema`) — the previous field names matched neither documented
+      // shape, so both sub-plans were silently dropped.
       analysisPlan: {
         summaryPlan: {
-          messages: [
-            { role: 'system', content: 'Summarize the call in 1-2 sentences.' },
-          ],
+          summaryPrompt: 'Summarize the call in 1-2 sentences.',
         },
         structuredDataPlan: {
-          schema: {
+          structuredDataSchema: {
             type: 'object',
             properties: {
               outcome: {
