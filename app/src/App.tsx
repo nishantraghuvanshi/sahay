@@ -8,6 +8,10 @@ import Prescription from './screens/setup/Prescription'
 import Analysing from './screens/setup/Analysing'
 import Schedule from './screens/setup/Schedule'
 import Consent from './screens/setup/Consent'
+import Home from './screens/Home'
+import CareRecord from './screens/CareRecord'
+import Observations from './screens/Observations'
+import DoseHistory from './screens/DoseHistory'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -34,16 +38,16 @@ export default function App() {
       {/* the four tabs + everything reachable from them */}
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/home" replace />} />
-        <Route path="/home" element={<Placeholder title="Home" frame="1f / 2e" />} />
+        <Route path="/home" element={<Home />} />
         <Route path="/calendar" element={<Placeholder title="Calendar" frame="1g / 2f" />} />
         <Route path="/medicines/edit" element={<Placeholder title="Change medicines" frame="1G.2 / 2F.2" />} />
         <Route path="/alerts" element={<Placeholder title="Alerts" frame="1h / 2g" />} />
         <Route path="/alerts/:id" element={<Placeholder title="Alert detail" frame="1i / 2g" />} />
         <Route path="/calls" element={<Placeholder title="Calls" frame="1j / 2h" />} />
         <Route path="/calls/:id" element={<Placeholder title="Call detail" frame="1j / 2h" />} />
-        <Route path="/record" element={<Placeholder title="Care record" frame="FR-23" />} />
-        <Route path="/doses" element={<Placeholder title="Dose history" frame="FR-24" />} />
-        <Route path="/observations" element={<Placeholder title="What Mom said" frame="1s / 2j" />} />
+        <Route path="/record" element={<CareRecord />} />
+        <Route path="/doses" element={<DoseHistory />} />
+        <Route path="/observations" element={<Observations />} />
         <Route path="/settings" element={<Placeholder title="Settings" frame="1m / 2k" />} />
         {/* dev-only review surface, removed before the freeze */}
         <Route path="/kitchen-sink" element={<KitchenSink />} />
