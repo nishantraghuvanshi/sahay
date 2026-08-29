@@ -7,15 +7,20 @@ const yaml = require('js-yaml');
 const PROVIDER_TYPES = ['stt', 'llm', 'tts'];
 
 /**
- * How a provider is wired in.
+ * How a provider is wired in on the phone path.
  *
  *   bridge — audio/tokens flow through this server, so an adapter must exist
  *            in src/adapters/providers/** and a route is served for it.
- *   native — the orchestrator (Vapi, etc.) talks to the provider directly.
- *            No adapter, no route; we only name it in the assistant config.
+ *   native — the phone transport (Vapi, etc.) talks to the provider
+ *            directly; we only name it in the assistant config, no route.
  *
- * These are two different architectures, not two providers, which is why the
- * distinction is declared rather than inferred.
+ * This describes the PHONE transport's relationship to the provider, not
+ * every consumer's — the playground has no orchestrator of its own and
+ * always bridges its active providers, so a `native` provider may still
+ * have an adapter registered for the playground to use (see
+ * ProviderRegistry.getPlaygroundAdapter). These are two different
+ * architectures, not two providers, which is why the distinction is
+ * declared rather than inferred.
  */
 const INTEGRATIONS = ['bridge', 'native'];
 

@@ -9,11 +9,15 @@
 #   bridge — audio/tokens flow through THIS server. Requires an adapter under
 #            src/adapters/providers/<type>/<name>.js. Higher latency, but the
 #            provider stays swappable from this file and testable in /playground.
-#   native — the orchestrator talks to the provider directly. No adapter, no
-#            route. Lower latency, but not A/B-able from here.
+#   native — the phone orchestrator (Vapi) talks to the provider directly on
+#            that path. Lower latency there, but not A/B-able from this file
+#            on the phone path. The playground has no orchestrator of its own,
+#            so it always bridges its active providers regardless of this
+#            setting — a `native` provider may still have an adapter
+#            registered for the playground to use (see elevenlabs below).
 #
-# ProviderRegistry enforces this at boot in both directions: a bridge provider
-# with no adapter, or a native provider with one, fails fast and says which.
+# ProviderRegistry enforces at boot that every bridge provider has an
+# adapter — a bridge provider with none fails fast and says which.
 #
 # To add a bridge provider:
 #   1. Create src/adapters/providers/<type>/<name>.js implementing the port
@@ -106,12 +110,15 @@ tts:
     # Bridge server route: /api/tts/sarvam (HTTP webhook)
 
   elevenlabs:
-    integration: native        # no bridge adapter exists; Vapi runs it
+    integration: native        # Vapi runs it directly on the phone path
     model: "eleven_turbo_v2_5"  # Hindi-capable via Vapi; eleven_v3_conversational
                                  # (used previously) may not be exposed through Vapi — unverified
     voice_id: "QTKSa2Iyv0yoxvXY2V8a"  # validated on real elderly callers in a prior agent
     stability: 0.5
     similarity_boost: 0.75
     api_key_env: "ELEVENLABS_API_KEY"
-    # No bridge route — mark integration: bridge and add an adapter if you
-    # want ElevenLabs A/B-able against Sarvam from this file.
+    # A bridge adapter (src/adapters/providers/tts/elevenlabs.js) is
+    # registered for this provider despite `integration: native` — the phone
+    # path still never routes through it (Vapi calls ElevenLabs directly),
+    # but the playground has no orchestrator to run it for, so it always
+    # bridges via that adapter. See ProviderRegistry.getPlaygroundAdapter.

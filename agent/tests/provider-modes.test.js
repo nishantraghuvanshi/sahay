@@ -132,14 +132,30 @@ describe('ProviderRegistry enforces the integration contract', () => {
     );
   });
 
-  test('no native provider has a bridge adapter registered', () => {
+  test('a native provider having a registered bridge adapter is legal — the playground bridges regardless of integration', () => {
+    // This used to be enforced as an error (rule 2: no native provider may
+    // have an adapter), written back when there was one transport and
+    // `native` meant "we never touch this provider from our own server."
+    // With the playground as a second transport with no orchestrator of
+    // its own, elevenlabs is correctly BOTH `integration: native` (Vapi
+    // calls it directly on the phone path) AND bridge-adapter-backed (the
+    // playground always bridges, since it has no other option). Only rule
+    // 1 — every bridge provider must have an adapter — is still enforced;
+    // this asserts the relaxed rule 2 no longer throws and reports the
+    // expected legal case.
     const reg = new ProviderRegistry();
     const stray = reg.findNativeProvidersWithAdapters();
-    assert.deepStrictEqual(
-      stray,
-      [],
-      `native providers that also register an adapter: ${stray.join(', ')}`
-    );
+    assert.deepStrictEqual(stray, ['tts.elevenlabs']);
+  });
+
+  test('a bridge provider with no adapter still fails loudly (rule 1, unchanged)', () => {
+    const reg = new ProviderRegistry();
+    const originalDeepgram = reg.config.stt.deepgram;
+    // Flip a normally-native provider to bridge with no adapter registered
+    // for it, to prove rule 1 is still enforced independent of rule 2.
+    reg.config.stt.deepgram = { ...originalDeepgram, integration: 'bridge' };
+    const missing = reg.findUnbackedBridgeProviders();
+    assert.deepStrictEqual(missing, ['stt.deepgram']);
   });
 
   test('asking for a bridge adapter on a native provider fails loudly', () => {
