@@ -93,6 +93,7 @@ transport.start(server, engine, {
   app,
   providersConfig,
   strategy,
+  repository,
   webhookUrl: process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`,
 });
 

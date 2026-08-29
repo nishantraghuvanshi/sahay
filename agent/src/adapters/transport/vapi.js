@@ -1,6 +1,10 @@
 'use strict';
 
 const TransportPort = require('../../core/ports/transport');
+const { resolveInboundCall } = require('../../core/inbound/resolve-caller');
+const {
+  buildInboundVariables,
+} = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
 const logger = require('../../utils/logger');
 
@@ -33,6 +37,8 @@ class VapiTransportAdapter extends TransportPort {
     this.engine = engine;
     this.webhookUrl = config.webhookUrl;
     this.strategy = config.strategy;
+    this.repository = config.repository;
+    this.providersConfig = config.providersConfig;
     const { wss, app } = config;
 
     // --- WebSocket route: /api/stt ---
@@ -116,7 +122,7 @@ class VapiTransportAdapter extends TransportPort {
     // --- HTTP route: /webhook ---
     // Vapi sends server messages (end-of-call, tool-call, call-started, etc.)
     app.post('/webhook', async (req, res) => {
-      const message = req.body;
+      const message = req.body.message || req.body;
       const eventBus = this.engine.getEventBus();
 
       logger.log('webhook_received', {
@@ -126,6 +132,18 @@ class VapiTransportAdapter extends TransportPort {
 
       try {
         switch (message.type) {
+          // Inbound: Vapi asks who is calling and what assistant to answer
+          // with. Hard 7.5s budget — deterministic reads only, no model call.
+          case 'assistant-request': {
+            const started = Date.now();
+            const assistant = await this._buildInboundAssistant(message);
+            logger.log('assistant_request_answered', {
+              ms: Date.now() - started,
+              call_id: message.call?.id,
+            });
+            return res.json({ assistant });
+          }
+
           case 'call-started':
             await eventBus.emit(EVENT_TYPES.CONVERSATION_STARTED, {
               callId: message.call?.id,
@@ -172,6 +190,13 @@ class VapiTransportAdapter extends TransportPort {
         }
       } catch (err) {
         logger.error('webhook_handler_error', err);
+
+        // assistant-request is the one webhook with a caller waiting on the
+        // other end. Answering {status:"ok"} would hand Vapi no assistant and
+        // hide the failure; `error` is the documented shape and is visible.
+        if (message.type === 'assistant-request') {
+          return res.status(200).json({ error: 'Could not resolve caller' });
+        }
       }
 
       res.status(200).json({ status: 'ok' });
@@ -181,14 +206,63 @@ class VapiTransportAdapter extends TransportPort {
   }
 
   /**
+   * Answer an inbound assistant-request with a context-loaded assistant.
+   *
+   * Resolves the caller to a patient and, if they dropped a call inside the
+   * resume window, to that session — then returns a transient assistant in
+   * the matching mode with their context substituted into its first message.
+   *
+   * A session row is opened for THIS call too, so a drop here is itself
+   * resumable.
+   *
+   * Runs inside Vapi's hard 7.5s assistant-request budget: deterministic
+   * reads only, no model call.
+   *
+   * @param {Object} message - Vapi assistant-request message
+   * @returns {Promise<Object>} Transient Vapi assistant config
+   * @private
+   */
+  async _buildInboundAssistant(message) {
+    const phone =
+      message.call?.from?.phoneNumber || message.call?.customer?.number || null;
+
+    const resolution = await resolveInboundCall({
+      repository: this.repository,
+      phone,
+    });
+
+    const language = resolution.patient?.language || 'hi';
+    const variables = buildInboundVariables(resolution, language);
+
+    if (resolution.patient) {
+      await this.repository.createSession({
+        sessionId: message.call?.id || `inbound-${Date.now()}`,
+        patientId: resolution.patient.id,
+        callId: message.call?.id || null,
+        direction: 'inbound',
+      });
+    }
+
+    return this.buildAssistantConfig(
+      this.strategy,
+      this.providersConfig,
+      this.webhookUrl,
+      { mode: resolution.mode, variables }
+    );
+  }
+
+  /**
    * Build the Vapi assistant configuration from the active strategy and providers.
    *
    * @param {Object} strategy - Active ConversationStrategy
    * @param {Object} providers - Provider config
    * @param {string} webhookUrl - Public URL for webhooks
+   * @param {Object} [opts] - { mode, variables } for inbound and resume
    * @returns {Object} Vapi assistant config
    */
-  buildAssistantConfig(strategy, providers, webhookUrl) {
+  buildAssistantConfig(strategy, providers, webhookUrl, opts = {}) {
+    const mode = opts.mode || 'outbound';
+    const variables = opts.variables || {};
     const activeStt = providers.active.stt;
     const activeLlm = providers.active.llm;
     const activeTts = providers.active.tts;
@@ -221,7 +295,12 @@ class VapiTransportAdapter extends TransportPort {
         model: oai.model,
         temperature: oai.temperature,
         maxTokens: oai.max_tokens,
-        messages: [{ role: 'system', content: strategy.buildSystemPrompt(strategy.getVariables()) }],
+        messages: [
+          {
+            role: 'system',
+            content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
+          },
+        ],
       };
     } else {
       const llm = providers.llm[activeLlm];
@@ -229,7 +308,12 @@ class VapiTransportAdapter extends TransportPort {
         provider: 'custom-llm',
         model: llm.model,
         url: `${webhookUrl}/llm/chat/completions`,
-        messages: [{ role: 'system', content: strategy.buildSystemPrompt(strategy.getVariables()) }],
+        messages: [
+          {
+            role: 'system',
+            content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
+          },
+        ],
         temperature: llm.temperature,
         maxTokens: llm.max_tokens,
       };
@@ -254,7 +338,10 @@ class VapiTransportAdapter extends TransportPort {
     }
 
     // Build first message with variables substituted
-    const firstMessage = strategy.buildFirstMessage(strategy.getVariables());
+    const firstMessage = strategy.buildFirstMessage(
+      { ...strategy.getVariables(), ...variables },
+      mode
+    );
 
     return {
       name: 'Elderly Medication Adherence Agent',

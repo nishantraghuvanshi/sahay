@@ -18,8 +18,9 @@
  *   node scripts/setup-inbound.js
  *
  * Prerequisites:
- *   - VAPI_ASSISTANT_ID set in .env (from create-assistant.js)
  *   - TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN set in .env
+ *   - The Vapi number must have NO assistant assigned, so Vapi asks this
+ *     server who is calling instead of answering with a static assistant
  *   - TWILIO_PHONE set to your Twilio number (e.g., +1XXXXXXXXXX)
  */
 
@@ -97,13 +98,6 @@ async function updateVoiceUrl(phoneSid, voiceUrl) {
 }
 
 async function main() {
-  const assistantId = process.env.VAPI_ASSISTANT_ID;
-  if (!assistantId) {
-    console.error('Error: VAPI_ASSISTANT_ID not set in .env');
-    console.error('Run `node scripts/create-assistant.js` first.');
-    process.exit(1);
-  }
-
   const twilioPhone = process.env.TWILIO_PHONE;
   if (!twilioPhone) {
     console.error('Error: TWILIO_PHONE not set in .env');
@@ -113,7 +107,7 @@ async function main() {
 
   console.log('Setting up inbound hotline...');
   console.log(`  Twilio number: ${twilioPhone}`);
-  console.log(`  Vapi assistant: ${assistantId}`);
+  console.log('  Assistant: resolved per call via assistant-request');
   console.log('');
 
   // 1. List Twilio numbers to find the one matching TWILIO_PHONE
@@ -137,9 +131,14 @@ async function main() {
   console.log(`  SID: ${matchingNumber.sid}`);
   console.log('');
 
-  // 2. The Vapi Twilio voice webhook URL
-  // Vapi handles inbound Twilio calls at this URL
-  const vapiVoiceUrl = `https://api.vapi.ai/twilio/voice?assistantId=${assistantId}`;
+  // 2. The Vapi Twilio voice webhook URL.
+  //
+  // Deliberately WITHOUT assistantId. Pinning an assistant here makes every
+  // inbound call answer with the same static assistant — a second outbound
+  // call, greeting a known caller as a stranger. Leaving it off is what makes
+  // Vapi send an `assistant-request` to our server instead, so we can look the
+  // caller up and answer in inbound or resume mode with their record loaded.
+  const vapiVoiceUrl = 'https://api.vapi.ai/twilio/voice';
 
   console.log('Updating voice URL to route to Vapi...');
   console.log(`  Voice URL: ${vapiVoiceUrl}`);
@@ -152,12 +151,22 @@ async function main() {
   console.log('=== How it works ===');
   console.log(`1. Someone calls ${twilioPhone}`);
   console.log('2. Twilio sends the call to Vapi via the voice webhook');
-  console.log('3. Vapi answers with the medication adherence assistant');
-  console.log('4. The agent greets, asks about medication, captures outcome');
-  console.log('5. End-of-call report is sent to your bridge server /webhook');
+  console.log('3. Vapi POSTs an `assistant-request` to this server /webhook');
+  console.log('4. We resolve the caller -> patient, and any dropped session');
+  console.log('   still inside the resume window, then return an assistant in');
+  console.log('   inbound or resume mode with their context loaded');
+  console.log('5. End-of-call report is sent back to /webhook');
+  console.log('');
+  console.log('=== REQUIRED in the Vapi dashboard ===');
+  console.log('The number must have NO assistant assigned. If an assistant is');
+  console.log('attached, Vapi answers with it directly and never asks us who');
+  console.log('is calling — inbound silently degrades to a static greeting.');
+  console.log(`Set the number's Server URL to: ${process.env.WEBHOOK_URL || '<WEBHOOK_URL>'}/webhook`);
   console.log('');
   console.log('=== Testing ===');
   console.log(`Call ${twilioPhone} from any phone to test the agent.`);
+  console.log('Watch for an `assistant_request_answered` log line — if you see');
+  console.log('`webhook_unknown_type` instead, the number still has an assistant.');
   console.log('');
   console.log('=== Manual setup (alternative) ===');
   console.log('If the API approach does not work, you can also set this up manually:');

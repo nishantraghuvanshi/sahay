@@ -95,10 +95,28 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
    * @returns {string}
    */
   buildFirstMessage(variables, mode = 'outbound') {
-    return this._substitute(this.getModeBlock(mode).first_message, {
-      ...this.config.variables,
-      ...variables,
-    });
+    return this._tidy(
+      this._substitute(this.getModeBlock(mode).first_message, {
+        ...this.config.variables,
+        ...variables,
+      })
+    );
+  }
+
+  /**
+   * Close the gaps an empty variable leaves behind.
+   *
+   * Applied to first messages ONLY. System prompts are multi-line YAML blocks
+   * whose indentation is meaningful, so collapsing whitespace there would
+   * mangle them.
+   *
+   * @private
+   */
+  _tidy(text) {
+    return text
+      .replace(/ {2,}/g, ' ')
+      .replace(/\s+([.,?!।])/g, '$1')
+      .trim();
   }
 
   /**

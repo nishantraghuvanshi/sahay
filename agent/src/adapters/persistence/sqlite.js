@@ -339,7 +339,9 @@ class SqliteRepository extends OutcomeRepositoryPort {
         .prepare(
           `SELECT * FROM sessions
            WHERE patient_id = ? AND status = 'dropped' AND ended_at >= ?
-           ORDER BY ended_at DESC LIMIT 1`
+           -- id breaks ties: two sessions ending in the same millisecond
+           -- share an ISO timestamp, leaving ended_at alone non-deterministic.
+           ORDER BY ended_at DESC, id DESC LIMIT 1`
         )
         .get(patientId, cutoff) || null
     );
