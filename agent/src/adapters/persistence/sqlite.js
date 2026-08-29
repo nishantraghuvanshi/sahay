@@ -23,6 +23,23 @@ const DOSE_EVENT_STATUSES = [
 ];
 
 /**
+ * Applied at the read site, never backfilled, when patients.timezone is
+ * NULL — see the schema comment on that column. spec:
+ * .superpowers/sdd/scheduler/task-1-brief.md
+ */
+const DEFAULT_PATIENT_TIMEZONE = 'Asia/Kolkata';
+
+/**
+ * Immutable default-fill: a stored NULL timezone reads as
+ * DEFAULT_PATIENT_TIMEZONE without touching the row on disk.
+ * @param {Object} patientRow
+ * @returns {Object} a new object, never a mutation of patientRow
+ */
+function _withDefaultTimezone(patientRow) {
+  return { ...patientRow, timezone: patientRow.timezone || DEFAULT_PATIENT_TIMEZONE };
+}
+
+/**
  * SQLite Repository
  *
  * Phase 1 persistence adapter — stores call outcomes and conversation
@@ -123,6 +140,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
         caregiver_name TEXT,
         caregiver_phone TEXT,
         notes TEXT,
+        -- IANA zone name, e.g. "Asia/Kolkata". NULL defaults to
+        -- DEFAULT_PATIENT_TIMEZONE at the read site (findPatientByPhone /
+        -- listPatients) rather than being backfilled here.
+        timezone TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT
       );
@@ -262,6 +283,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // database already has the column from the CREATE TABLE above, so this
     // is a no-op there.
     this._ensureColumn('calls', 'recording_url', 'TEXT');
+    this._ensureColumn('patients', 'timezone', 'TEXT');
   }
 
   /**
@@ -329,12 +351,14 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async findPatientByPhone(phone) {
     const stmt = this.db.prepare('SELECT * FROM patients WHERE phone_e164 = ?');
-    return stmt.get(phone) || null;
+    const row = stmt.get(phone);
+    return row ? _withDefaultTimezone(row) : null;
   }
 
   /** @returns {Array} All patients. */
   async listPatients() {
-    return this.db.prepare('SELECT * FROM patients ORDER BY id ASC').all();
+    const rows = this.db.prepare('SELECT * FROM patients ORDER BY id ASC').all();
+    return rows.map(_withDefaultTimezone);
   }
 
   // ── Sessions ────────────────────────────────────────────────────
@@ -666,6 +690,30 @@ class SqliteRepository extends OutcomeRepositoryPort {
       slotTime: event.slotTime,
     });
     return this._getDoseEvent(event.medicationId, event.slotTime);
+  }
+
+  /**
+   * Delete a still-pending dose_events row by its natural key. Used only
+   * by the seed script to remove the row a medication's slot generated
+   * under the pre-fix bug (local "HH:MM" stamped directly as UTC) once the
+   * corrected UTC instant is recomputed for the same local slot — see
+   * generateSlots() in scripts/seed-medications.js. (medication_id,
+   * slot_time) is unique, so the corrected time lands as a new row rather
+   * than updating the stale one, and only a 'pending' row is ever removed
+   * here: a dose that was actually acted on is call history, never
+   * deleted by a re-seed.
+   *
+   * @param {number} medicationId
+   * @param {string} slotTime
+   * @returns {boolean} true if a row was deleted
+   */
+  async deleteStalePendingDoseEvent(medicationId, slotTime) {
+    const result = this.db
+      .prepare(
+        `DELETE FROM dose_events WHERE medication_id = ? AND slot_time = ? AND status = 'pending'`
+      )
+      .run(medicationId, slotTime);
+    return result.changes > 0;
   }
 
   /**
