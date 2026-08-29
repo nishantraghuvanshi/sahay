@@ -12,8 +12,10 @@ const { parseSSEStream } = require('../../../utils/sse');
  * Sarvam's API is OpenAI-compatible, so this is a transparent proxy that
  * injects the API key and overrides model/temperature/max_tokens from config.
  *
- * Sets reasoning_effort to "none" to disable thinking mode, which avoids
- * empty replies (reasoning can consume the max_tokens budget).
+ * reasoning_effort is sent only when configured. The API accepts 'low',
+ * 'medium' or 'high' and rejects 'none' with a 400 — thinking is disabled by
+ * omitting the field, not by naming it. Leaving it unset also avoids the
+ * empty-reply failure where reasoning consumes the whole max_tokens budget.
  *
  * Supports both blocking (chatCompletion) and streaming (chatCompletionStream)
  * modes. Streaming uses SSE for lower time-to-first-token.
@@ -39,7 +41,13 @@ class SarvamLLMAdapter extends LLMPort {
       model: config.model,
       temperature: config.temperature,
       max_tokens: config.max_tokens,
-      reasoning_effort: body.reasoning_effort || 'none',
+      // reasoning_effort is sent ONLY when configured. The API accepts
+      // 'low' | 'medium' | 'high' and rejects the string 'none' outright
+      // (400: "Input should be 'low', 'medium' or 'high'"), so the previous
+      // default made every request fail. Omitting it is how thinking is
+      // disabled — and on sarvam-105b even 'low' consumed the whole budget
+      // and returned content: null, which is silence on a phone call.
+      ...(config.reasoning_effort ? { reasoning_effort: config.reasoning_effort } : {}),
     };
 
     return withRetry(
@@ -98,7 +106,9 @@ class SarvamLLMAdapter extends LLMPort {
       model: config.model,
       temperature: config.temperature,
       max_tokens: config.max_tokens,
-      reasoning_effort: body.reasoning_effort || 'none',
+      // Same rule as the blocking path above: only send reasoning_effort when
+      // it is configured. 'none' is rejected with a 400.
+      ...(config.reasoning_effort ? { reasoning_effort: config.reasoning_effort } : {}),
       stream: true,
     };
 

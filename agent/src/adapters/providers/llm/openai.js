@@ -5,6 +5,43 @@ const logger = require('../../../utils/logger');
 const { withRetry } = require('../../../utils/retry');
 const { parseSSEStream } = require('../../../utils/sse');
 
+
+/**
+ * Shape the OpenAI request body from provider config.
+ *
+ * Two model families need different dialects of the same API, so every
+ * parameter here is opt-in from providers.yaml rather than hardcoded:
+ *
+ *   - Older chat models (gpt-4o-mini and friends) take `temperature` and
+ *     `max_tokens`.
+ *   - Reasoning models (the gpt-5 / o-series family) REJECT `max_tokens`
+ *     outright, accept only the default temperature, and take
+ *     `max_completion_tokens`.
+ *
+ * `reasoning_effort` matters more than it looks. Left unset, a reasoning model
+ * spends its entire completion budget thinking and returns content: "" — a
+ * caller hears silence, the call logs look healthy, and nothing errors. On a
+ * voice call that is both a correctness bug and a latency bug, so the config
+ * sets it to "minimal".
+ *
+ * A key absent from config is simply not sent, which is what lets one adapter
+ * serve both families without sniffing model-name prefixes.
+ */
+function buildRequestBody(body, config, extra = {}) {
+  const requestBody = { ...body, model: config.model, ...extra };
+
+  if (config.temperature != null) requestBody.temperature = config.temperature;
+  if (config.max_tokens != null) requestBody.max_tokens = config.max_tokens;
+  if (config.max_completion_tokens != null) {
+    requestBody.max_completion_tokens = config.max_completion_tokens;
+  }
+  if (config.reasoning_effort != null) {
+    requestBody.reasoning_effort = config.reasoning_effort;
+  }
+
+  return requestBody;
+}
+
 /**
  * OpenAI LLM Adapter
  *
@@ -34,12 +71,7 @@ class OpenAILLMAdapter extends LLMPort {
       throw new Error(`Missing env var: ${config.api_key_env}`);
     }
 
-    const requestBody = {
-      ...body,
-      model: config.model,
-      temperature: config.temperature,
-      max_tokens: config.max_tokens,
-    };
+    const requestBody = buildRequestBody(body, config);
 
     return withRetry(
       async (signal) => {
@@ -91,13 +123,7 @@ class OpenAILLMAdapter extends LLMPort {
       throw new Error(`Missing env var: ${config.api_key_env}`);
     }
 
-    const requestBody = {
-      ...body,
-      model: config.model,
-      temperature: config.temperature,
-      max_tokens: config.max_tokens,
-      stream: true,
-    };
+    const requestBody = buildRequestBody(body, config, { stream: true });
 
     const response = await fetch(`${config.base_url}/chat/completions`, {
       method: 'POST',

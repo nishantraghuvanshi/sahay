@@ -31,7 +31,7 @@
 active:
   transport: vapi
   stt: sarvam       # bridge  — Indic-specialised, audio via our server
-  llm: openai       # bridge  — uses the OpenAI adapter built in Phase 3a
+  llm: sarvam       # bridge  — Hindi-native; OpenAI project can only reach gpt-5-nano
   tts: elevenlabs   # native  — Vapi calls ElevenLabs directly
 
 # ── Transport (call orchestrator) ─────────────────────────────────
@@ -70,10 +70,16 @@ stt:
 llm:
   sarvam:
     integration: bridge
-    model: "sarvam-105b"
+    # sarvam-105b-conversations, not sarvam-105b: the plain 105b spends its
+    # whole budget on reasoning and returns content: null. 'sarvam-m' is
+    # deprecated and 400s. This model is tuned for spoken dialogue and follows
+    # the safety guardrails without being coaxed.
+    model: "sarvam-105b-conversations"
     base_url: "https://api.sarvam.ai/v1"
     temperature: 0.3
     max_tokens: 250
+    # reasoning_effort deliberately unset — see the adapter. Setting it at all
+    # on this family risks an empty reply, which a caller hears as silence.
     api_key_env: "SARVAM_API_KEY"
     # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
 
@@ -88,10 +94,18 @@ llm:
 
   openai:
     integration: bridge
-    model: "gpt-4o-mini"
+    # gpt-5-nano is the only chat model this OpenAI project can reach; the
+    # previous gpt-4o-mini returned 403 model_not_found.
+    model: "gpt-5-nano"
     base_url: "https://api.openai.com/v1"
-    temperature: 0.3
-    max_tokens: 250
+    # temperature is deliberately absent: this family accepts only the
+    # default (1) and 403s on anything else.
+    # max_tokens is likewise absent — rejected in favour of the newer name.
+    max_completion_tokens: 300
+    # REQUIRED, not a tuning knob. Without it the model spends the whole
+    # budget on reasoning tokens and returns an empty string: the caller
+    # hears nothing and no error is raised anywhere.
+    reasoning_effort: "minimal"
     api_key_env: "OPENAI_API_KEY"
     # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
 
