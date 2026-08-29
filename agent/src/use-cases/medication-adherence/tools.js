@@ -22,8 +22,9 @@ const TOOLS = [
         'CONFIRMED = user confirmed taking medication.',
         'DENIED = user said they have not taken it yet.',
         'UNCLEAR = user responded but their intent could not be determined.',
-        'ESCALATED_SYMPTOM = user reported a physical symptom. This alerts their family, so use it ONLY for an actual symptom.',
-        'INCOMPLETE = the conversation broke down (repeated confusion). This is NOT a medical event.',
+        'ESCALATED_SYMPTOM = user reported a MEDICAL EMERGENCY (chest pain, difficulty breathing, severe dizziness, fainting, bleeding, a fall, sudden weakness, slurred speech, severe pain, or confusion about who/where they are). This alerts their family, so use it ONLY for an actual medical emergency.',
+        'ESCALATED_DISTRESS = user expressed emotional distress, a wish to stop treatment, or thoughts of self-harm — with no physical medical emergency. This also alerts their family, so use it ONLY for actual distress, not a medical emergency.',
+        'INCOMPLETE = the conversation broke down (repeated confusion) or the patient could not be reached. This is NOT a medical event.',
         'Call this BEFORE your closing sentence.',
       ].join(' '),
       parameters: {
@@ -31,7 +32,7 @@ const TOOLS = [
         properties: {
           outcome: {
             type: 'string',
-            enum: ['CONFIRMED', 'DENIED', 'UNCLEAR', 'ESCALATED_SYMPTOM', 'INCOMPLETE'],
+            enum: ['CONFIRMED', 'DENIED', 'UNCLEAR', 'ESCALATED_SYMPTOM', 'ESCALATED_DISTRESS', 'INCOMPLETE'],
             description: 'The call outcome',
           },
           reason: {

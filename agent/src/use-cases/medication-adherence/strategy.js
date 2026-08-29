@@ -86,7 +86,24 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
       .filter(Boolean)
       .join('\n\n');
 
-    return this._substitute(composed, { ...this.config.variables, ...variables });
+    const vars = { ...this.config.variables, ...variables };
+    return this._substitute(composed, { ...vars, alert_delivered_line: this._resolveAlertDeliveredLine(vars) });
+  }
+
+  /**
+   * Resolve the delivery-conditioned escalation line (see config.guardrails).
+   *
+   * The caregiver alert fires AFTER the call ends (EscalationAlertPlugin), so
+   * at the moment the agent is speaking it can never truthfully claim
+   * delivery already happened. `alert_delivered` defaults to false in every
+   * config, which is what makes the honest "trying to reach" phrasing the
+   * one that actually gets said.
+   *
+   * @private
+   */
+  _resolveAlertDeliveredLine(vars) {
+    const line = vars.alert_delivered ? vars.alert_delivered_true_line : vars.alert_delivered_false_line;
+    return this._substitute(line || '', vars);
   }
 
   /**
@@ -140,7 +157,7 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
   }
 
   shouldEscalate(outcome) {
-    return outcome.label === OUTCOMES.ESCALATED_SYMPTOM;
+    return outcome.label === OUTCOMES.ESCALATED_SYMPTOM || outcome.label === OUTCOMES.ESCALATED_DISTRESS;
   }
 
   getConfig() {

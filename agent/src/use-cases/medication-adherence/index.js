@@ -22,7 +22,8 @@ module.exports = {
   // Inbound context and resume-after-drop read back prior state, so this
   // use case is incorrect rather than merely degraded without a database.
   requiresPersistence: true,
-  // EscalationAlertPlugin closes the loop on ESCALATED_SYMPTOM — without it
-  // the highest-stakes outcome is a database row nobody reads.
+  // EscalationAlertPlugin closes the loop on ESCALATED_SYMPTOM and
+  // ESCALATED_DISTRESS — without it the highest-stakes outcomes are a
+  // database row nobody reads.
   plugins: [EscalationAlertPlugin],
 };

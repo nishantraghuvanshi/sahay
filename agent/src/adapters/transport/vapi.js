@@ -434,7 +434,7 @@ class VapiTransportAdapter extends TransportPort {
       analysisPlan: {
         summary: 'Summarize the call in 1-2 sentences.',
         structuredData: {
-          outcome: 'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, INCOMPLETE, or NO_ANSWER',
+          outcome: 'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
           reason: 'Brief reason for the outcome',
         },
       },

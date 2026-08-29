@@ -120,6 +120,11 @@ describe('MedicationAdherenceStrategy config loading', () => {
     assert.ok(strategy.shouldEscalate({ label: 'ESCALATED_SYMPTOM' }));
   });
 
+  test('shouldEscalate returns true for ESCALATED_DISTRESS', () => {
+    const strategy = new MedicationAdherenceStrategy();
+    assert.ok(strategy.shouldEscalate({ label: 'ESCALATED_DISTRESS' }));
+  });
+
   test('shouldEscalate returns false for CONFIRMED', () => {
     const strategy = new MedicationAdherenceStrategy();
     assert.ok(!strategy.shouldEscalate({ label: 'CONFIRMED' }));
