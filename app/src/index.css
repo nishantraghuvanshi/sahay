@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+/* Tokens lifted from the wireframes (wireframe/*.dc.html) so the built app and the
+   grey-box frames stay the same visual language. */
+@theme {
+  --color-ink: #1a1a1a;
+  --color-canvas: #f0eee9;
+  --color-surface: #fafaf8;
+  --color-paper: #ffffff;
+  --color-line: #e4e4e0;
+  --color-line-strong: #d8d8d4;
+  --color-muted: #8d8d8d;
+  --color-muted-strong: #6d6d6d;
+  --color-fill: #dedede;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tap targets on a phone stay thumb-sized (LANE-C mobile checklist). */
+button,
+a {
+  touch-action: manipulation;
+}
