@@ -77,6 +77,29 @@ describe('openCall — inbound', () => {
     assert.strictEqual(result.fieldsSoFar.chief_complaint, 'बुखार');
   });
 
+  test('a resumed call returns the new call\'s session and the dropped call\'s session as distinct rows', async () => {
+    // F5: openCall used to return the newly-created session under the same
+    // "session" key resolveInboundCall uses for the resumable one it found —
+    // nothing read it, but a future caller asking for "the session" on a
+    // resume would silently get the wrong row. session and resumedSession
+    // must never be the same row here.
+    const repo = freshRepo();
+    await repo.upsertPatient(PATIENT);
+
+    await openCall({ repository: repo, phone: PATIENT.phone, direction: 'inbound', callId: 'call-5a' });
+    await captureField({ repository: repo, callId: 'call-5a', field: 'chief_complaint', value: 'बुखार', allowedFields: ALLOWED_FIELDS });
+    await closeCall({ repository: repo, callId: 'call-5a', endedReason: 'pipeline-error-openai-llm-failed' });
+
+    const result = await openCall({ repository: repo, phone: PATIENT.phone, direction: 'inbound', callId: 'call-5b' });
+
+    assert.strictEqual(result.mode, 'resume');
+    assert.ok(result.session, 'the new call must have opened its own session');
+    assert.strictEqual(result.session.session_id, 'call-5b');
+    assert.ok(result.resumedSession, 'the dropped call\'s session must be surfaced too');
+    assert.strictEqual(result.resumedSession.session_id, 'call-5a');
+    assert.notStrictEqual(result.session.session_id, result.resumedSession.session_id);
+  });
+
   test('a missing call id opens no session, even for a known patient', async () => {
     const repo = freshRepo();
     await repo.upsertPatient(PATIENT);

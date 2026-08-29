@@ -38,7 +38,11 @@ const logger = require('../../utils/logger');
  * @param {string|null} args.callId - This call/session's id
  * @param {number} [args.resumeWindowMinutes] - Passed through to resolveInboundCall
  * @param {Date} [args.now] - Injected clock, passed through to resolveInboundCall
- * @returns {Promise<Object>} { mode, patient, session, fieldsSoFar, lastCalls, isNewPatient }
+ * @returns {Promise<Object>} { mode, patient, session, resumedSession, fieldsSoFar, lastCalls, isNewPatient } —
+ *   `session` is the row opened (or attempted) for THIS call; `resumedSession`
+ *   (inbound only, otherwise always null) is the prior dropped session, if
+ *   any, that made `mode` resolve to 'resume'. These are two different rows
+ *   and must not be confused — see _openInboundCall's comment.
  */
 async function openCall({ repository, phone, direction = 'inbound', callId, resumeWindowMinutes, now }) {
   await _ensureCallRow({ repository, callId, phone });
@@ -91,12 +95,18 @@ async function _openInboundCall({ repository, phone, callId, resumeWindowMinutes
     logger.log('inbound_session_skipped_no_call_id', { phone });
   }
 
-  const session = resolution.patient && callId ? await repository.getSession(callId) : null;
+  // `resolution.session` (from resolveInboundCall) is the RESUMABLE session
+  // from a prior dropped call, if any — not the row just (maybe) created
+  // above for THIS call. Returning both under one name ("session") would
+  // silently hand a caller the wrong row depending on which one they meant;
+  // see this function's doc comment.
+  const newSession = resolution.patient && callId ? await repository.getSession(callId) : null;
 
   return {
     mode: resolution.mode,
     patient: resolution.patient,
-    session,
+    session: newSession,
+    resumedSession: resolution.session,
     fieldsSoFar: resolution.fieldsSoFar,
     lastCalls: resolution.lastCalls,
     isNewPatient: resolution.isNewPatient,
@@ -116,7 +126,7 @@ async function _openOutboundCall({ repository, phone, callId }) {
       // call_id (not callId) matches the field name this log line has always
       // used on the phone path — preserved here for byte-identical log output.
       logger.log('outbound_session_skipped_unknown_patient', { call_id: callId, phone });
-      return { mode: 'outbound', patient: null, session: null, fieldsSoFar: {}, lastCalls: [], isNewPatient: false };
+      return { mode: 'outbound', patient: null, session: null, resumedSession: null, fieldsSoFar: {}, lastCalls: [], isNewPatient: false };
     }
 
     await repository.createSession({ sessionId: callId, patientId: patient.id, callId, direction: 'outbound' });
@@ -125,13 +135,14 @@ async function _openOutboundCall({ repository, phone, callId }) {
       mode: 'outbound',
       patient,
       session: await repository.getSession(callId),
+      resumedSession: null,
       fieldsSoFar: {},
       lastCalls: [],
       isNewPatient: false,
     };
   } catch (err) {
     logger.error('outbound_session_create_error', err);
-    return { mode: 'outbound', patient: null, session: null, fieldsSoFar: {}, lastCalls: [], isNewPatient: false };
+    return { mode: 'outbound', patient: null, session: null, resumedSession: null, fieldsSoFar: {}, lastCalls: [], isNewPatient: false };
   }
 }
 
