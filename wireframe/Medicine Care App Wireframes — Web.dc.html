@@ -84,7 +84,7 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="dv-grp">Marketing, auth &amp; onboarding</div>
 <div class="dv-opts">
 
-<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Landing + login — split hero, Google first</div>
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Landing + login — split hero, phone → OTP → email → OTP</div>
 <div class="dt">
 <div class="brow"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="url">sahay.app</span><span class="sp">＋</span></div>
 <div class="app" style="flex-direction:column">
@@ -108,16 +108,16 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div style="font-size:18px;font-weight:700">Log in or sign up</div>
 <div style="color:#6d6d6d">One account, one parent to start.</div>
 <div style="height:6px"></div>
-<div class="btn">Continue with Google</div>
-<div class="ob">Continue with Apple</div>
-<div class="r" style="gap:10px"><div class="hr" style="flex:1"></div><span style="color:#9a9a9a;font-size:9.5px">then</span><div class="hr" style="flex:1"></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot k"></span><span style="flex:1">rohit@gmail.com</span><span class="tag o">verify mail</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="lbl" style="flex:1">Add your phone</span><span class="lbl">required</span></div><div class="in">+91 · 98••• •••••</div><div class="r"><span style="flex:1;color:#6d6d6d">6-digit OTP</span><span class="chip">Send</span></div></div>
-<div class="lbl">Language</div>
-<div class="r" style="gap:6px"><span class="chip on">English</span><span class="chip">हिन्दी</span><span class="chip">मराठी</span></div>
+<div class="c" style="padding:10px;gap:7px"><div class="r"><span class="tag">1</span><span class="lbl" style="flex:1">Phone number</span><span class="dot k"></span></div><div class="in" style="color:#222">+91 · 98765 43210</div></div>
+<div class="c" style="padding:10px;gap:7px"><div class="r"><span class="tag">2</span><span class="lbl" style="flex:1">Verify phone</span><span class="dot k"></span></div>
+<div class="r" style="gap:6px"><div class="in" style="flex:1;text-align:center;color:#222">4</div><div class="in" style="flex:1;text-align:center;color:#222">1</div><div class="in" style="flex:1;text-align:center;color:#222">9</div><div class="in" style="flex:1;text-align:center;color:#222">2</div><div class="in" style="flex:1;text-align:center;color:#222">0</div><div class="in" style="flex:1;text-align:center;color:#222">7</div></div>
+<div class="r"><span style="flex:1;color:#6d6d6d">Verified</span><span class="lbl">resend in 0:24</span></div></div>
+<div class="c" style="padding:10px;gap:7px;border:1.5px solid #1a1a1a"><div class="r"><span class="tag">3</span><span class="lbl" style="flex:1">Email address</span><span class="dot x"></span></div><div class="in">rohit@gmail.com</div><div class="btn" style="padding:8px">Send OTP to email</div></div>
+<div class="c" style="padding:10px;gap:7px;opacity:.45"><div class="r"><span class="tag o">4</span><span class="lbl" style="flex:1">Verify email</span><span class="dot"></span></div>
+<div class="r" style="gap:6px"><div class="in" style="flex:1">·</div><div class="in" style="flex:1">·</div><div class="in" style="flex:1">·</div><div class="in" style="flex:1">·</div><div class="in" style="flex:1">·</div><div class="in" style="flex:1">·</div></div></div>
 <div class="c"><div class="r"><span class="tag o">note</span><span style="flex:1;color:#6d6d6d">By continuing you consent to automated voice calls being placed to your parent.</span></div></div>
 <div class="vsp"></div>
-<div class="ann">Google first, phone after — same order as mobile <a class="dv-oid" href="#1a">1a</a>, so the two flows stay identical.</div>
+<div class="ann">Phone → OTP → email → OTP, same four steps as mobile <a class="dv-oid" href="#1a">1a</a>. No social login for now.</div>
 </div>
 </div>
 </div>
@@ -150,14 +150,14 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="c" style="flex:1"><div class="lbl">Known conditions</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">Diabetes</span><span class="chip on">BP</span><span class="chip">Thyroid</span><span class="chip">Arthritis</span><span class="chip">+ add</span></div></div>
 <div class="c" style="flex:1"><div class="lbl">Allergies &amp; things to avoid</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">Penicillin</span><span class="chip on">Sulfa drugs</span><span class="chip on">Peanuts</span><span class="chip">+ add</span></div></div>
 </div>
+<div class="c"><div class="lbl">Language the agent should speak</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">हिन्दी Hindi</span><span class="chip">English</span><span class="chip">मराठी Marathi</span><span class="chip">ਪੰਜਾਬੀ</span><span class="chip">+ more</span></div></div>
 <div class="c"><div class="lbl">Anything the agent should keep in mind</div><div class="in" style="height:54px;line-height:1.5">Hard of hearing on the left ear · gets confused after 9 PM · won't take tablets without food · call her "Amma"</div></div>
 <div class="c"><div class="r"><span style="font-weight:600;flex:1">Allow agent check-in calls</span><span style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div>
 <div class="hr"></div>
-<div class="r" style="gap:22px"><span style="color:#6d6d6d">Call window</span><span style="font-weight:600">9 AM – 8 PM</span><span style="color:#6d6d6d;margin-left:16px">Language</span><span style="font-weight:600">Hindi ▾</span><span style="color:#6d6d6d;margin-left:16px">Voice</span><span style="font-weight:600">Warm ▾</span></div></div>
-<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span style="font-weight:600;flex:1">Mom knows about these calls</span><span style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div><div style="color:#6d6d6d">Tell her before we start. She can ask us to stop on any call, and we stop.</div></div>
+<div class="r" style="gap:22px"><span style="color:#6d6d6d">Call window</span><span style="font-weight:600">9 AM – 8 PM</span><span style="color:#6d6d6d;margin-left:16px">Voice</span><span style="font-weight:600">Warm ▾</span></div></div>
 <div class="c"><div class="r"><span class="lbl" style="flex:1">Escalate to if I don't respond</span><span class="lbl">optional</span><span class="chip">+ add family member</span></div><div class="r"><div class="av"></div><span style="flex:1">Priya (sister)</span><span class="lbl">after 15 min</span><span style="color:#8d8d8d">✕</span></div><div style="color:#8d8d8d;font-size:9.5px">Skip this — you can add people later.</div></div>
 <div class="vsp"></div>
-<div class="r"><span class="lbl" style="flex:1">You can change all of this later in Settings</span><span class="ob">Back</span><span class="btn">Next — add prescription</span></div>
+<div class="r"><span class="lbl" style="flex:1">Name, age, relation, phone and language required · 2 left</span><span class="ob">Back</span><span class="btn" style="opacity:.4">Next — add prescription</span></div>
 </div>
 <div class="col" style="width:300px;flex:none">
 <div class="lbl">Preview · first call script</div>
