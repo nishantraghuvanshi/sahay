@@ -56,29 +56,32 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 </style></helmet>
 
 <section class="dv-turn" id="t1">
-<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">MediWatch — child-side care app, full flow</span></div>
-<p class="dv-sub">One parent, child's phone only. Five tabs: Home · Calendar · Alerts · Order · Calls. Grey-box fidelity; blue handwriting = behaviour notes, not UI.</p>
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Sahay — child-side care app, full flow</span></div>
+<p class="dv-sub">One parent, child's phone only. Medicines, calls and what she said — no ordering, no mood scoring. Four tabs: Home · Calendar · Alerts · Calls. Grey-box fidelity; blue handwriting = behaviour notes, not UI.</p>
 
 <div class="dv-grp">Onboarding &amp; prescription intake</div>
 <div class="dv-opts">
 
-<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Login / signup — phone OTP first</div>
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Login / signup — Google first, phone + mail verified after</div>
 <div class="ph">
 <div class="sb"><span>9:41</span><span>▮▮ ▾ ▰</span></div>
-<div class="bd" style="padding:22px 20px;gap:14px">
+<div class="bd" style="padding:22px 20px;gap:11px">
 <div class="im" style="width:52px;height:52px;border-radius:12px">logo</div>
 <div style="font-size:20px;font-weight:700;line-height:1.2;margin-top:4px">Keep an eye on<br>your parent's meds</div>
 <div class="g" style="width:78%"></div><div class="g" style="width:52%"></div>
-<div style="height:8px"></div>
-<div class="lbl">Mobile number</div>
-<div class="in">+91 · 98••• •••••</div>
-<div class="btn">Send OTP</div>
-<div class="r" style="gap:10px"><div class="hr" style="flex:1"></div><span style="color:#9a9a9a;font-size:9.5px">or</span><div class="hr" style="flex:1"></div></div>
-<div class="ob">Continue with Google</div>
+<div style="height:6px"></div>
+<div class="btn">Continue with Google</div>
 <div class="ob">Continue with Apple</div>
+<div class="r" style="gap:10px"><div class="hr" style="flex:1"></div><span style="color:#9a9a9a;font-size:9.5px">then</span><div class="hr" style="flex:1"></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="dot k"></span><span style="flex:1">rohit@gmail.com</span><span class="tag o">verify mail</span></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="lbl" style="flex:1">Add your phone</span><span class="lbl">required</span></div>
+<div class="in">+91 · 98••• •••••</div>
+<div class="r"><span style="flex:1;color:#6d6d6d">6-digit OTP</span><span class="chip">Send</span></div></div>
+<div class="lbl">Language</div>
+<div class="r" style="gap:6px"><span class="chip on">English</span><span class="chip">हिन्दी</span><span class="chip">मराठी</span></div>
 <div class="vsp"></div>
 <div style="font-size:9px;color:#9a9a9a;line-height:1.5">By continuing you agree to Terms &amp; the consent to place automated voice calls to your parent.</div>
-<div class="ann">Consent line matters — agent calls a third party.</div>
+<div class="ann">Google is the fast path. Phone still required — escalations and the agent both need a reachable number.</div>
 </div>
 </div></div>
 
@@ -101,8 +104,10 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="hr"></div>
 <div class="r"><span style="color:#6d6d6d">Call window</span><span class="sp">9 AM – 8 PM</span></div>
 <div class="r"><span style="color:#6d6d6d">Language</span><span class="sp">Hindi ▾</span></div></div>
-<div class="r"><span class="lbl" style="flex:1">Escalate to if I don’t respond</span><span class="chip">+ family</span></div>
+<div class="c" style="padding:9px;border-left:3px solid #1a1a1a"><div class="r"><span style="font-weight:600;flex:1">Mom knows about these calls</span><span style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div><div style="color:#6d6d6d;font-size:9.5px;line-height:1.45">Tell her before we start. She can ask us to stop at any time, on any call.</div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="lbl" style="flex:1">Escalate to if I don’t respond</span><span class="lbl">optional</span></div><div class="r" style="gap:6px"><span class="chip">+ family member</span><span class="chip">+ doctor</span><span class="chip">+ neighbour</span></div><div style="color:#8d8d8d;font-size:9.5px">Skip this — you can add people later.</div></div>
 <div class="vsp"></div><div class="btn">Next — add prescription</div>
+<div class="ann">Parent consent is a real gate (she is the one being called), family escalation is not.</div>
 </div>
 </div></div>
 
@@ -118,7 +123,7 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="c" style="padding:8px"><div class="r"><div class="im" style="width:34px;height:42px">pg 2</div><div style="flex:1;display:flex;flex-direction:column;gap:5px"><span style="font-weight:600">Lab_notes.pdf</span><div class="g" style="width:45%"></div></div><span class="sp" style="color:#8d8d8d">✕</span></div></div>
 <div class="c"><div class="r"><span class="tag o">tip</span><span style="flex:1;color:#6d6d6d">Flatten the page and keep dosage lines in frame.</span></div></div>
 <div class="vsp"></div><div class="btn">Analyse prescription</div>
-<div class="ann">Same uploader is reused by the Order tab (<a class="dv-oid" href="#1k">1k</a>).</div>
+<div class="ann">Three ways in — camera, gallery, files. Same uploader is reused whenever a new prescription arrives.</div>
 </div>
 </div></div>
 
@@ -138,47 +143,49 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip">Metformin 500</span><span class="chip">Amlodipine 5</span><span class="chip">Thyronorm 50</span><span class="chip">Atorvas… ?</span><span class="chip">+1</span></div>
 <div class="r"><span class="tag">2 unclear</span><span style="flex:1;color:#6d6d6d">You'll confirm these next.</span></div></div>
 <div class="vsp"></div>
-<div class="ob">Run in background</div>
-<div class="ann">Never block on OCR — user can leave and get a push when ready.</div>
+<div class="ann">Stays on screen until it finishes — ~2s, and the next step depends on what it found.</div>
 </div>
 </div></div>
 
 <div class="dv-opt" id="1e"><div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Approve schedule — editable table</div>
 <div class="ph">
 <div class="sb"><span>9:46</span><span>▮▮ ▾ ▰</span></div>
-<div class="tp"><span style="color:#8d8d8d">←</span><span class="tt">Review schedule</span><span class="sp lbl">5 meds</span></div>
+<div class="tp"><span style="color:#8d8d8d">←</span><span class="tt">Review schedule</span><span class="sp chip">Calendar ▾</span></div>
 <div class="bd" style="gap:0;padding:0">
-<div style="padding:10px 12px;background:#f6f6f4;border-bottom:1px solid #e4e4e0" class="r"><span class="tag">check</span><span style="flex:1;color:#6d6d6d">2 rows unclear · 5 need a stock count</span></div>
-<div class="r" style="padding:8px 12px;border-bottom:1px solid #e4e4e0"><span class="lbl" style="flex:1">Frequency · times · end date · stock at home</span><span class="lbl">✎ edit</span></div>
+<div style="padding:10px 12px;background:#f6f6f4;border-bottom:1px solid #e4e4e0" class="r"><span class="tag">check</span><span style="flex:1;color:#6d6d6d">2 rows unclear — fix these before you sign off</span></div>
+<div class="r" style="padding:8px 12px;border-bottom:1px solid #e4e4e0"><span class="lbl" style="flex:1">Dose · frequency · times · food rule · end date</span><span class="lbl">✎ edit</span></div>
 <div style="padding:10px 12px;border-bottom:1px solid #eeeeea">
 <div class="r"><div style="flex:1"><div style="font-weight:600">Metformin</div><div style="color:#9a9a9a;font-size:9.5px">500 mg tablet · after food</div></div><div style="text-align:right"><div style="font-weight:600">1 tab</div><div class="lbl">per dose</div></div><span style="color:#8d8d8d;width:14px;text-align:right">✎</span></div>
-<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">2× daily</span><span class="chip">8:00</span><span class="chip">21:00</span><span class="chip">till 19 Sep</span><span class="chip">42 left</span></div>
+<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">2× daily</span><span class="chip">8:00</span><span class="chip">21:00</span><span class="chip">till 19 Sep</span></div>
 </div>
 <div style="padding:10px 12px;border-bottom:1px solid #eeeeea">
 <div class="r"><div style="flex:1"><div style="font-weight:600">Amlodipine</div><div style="color:#9a9a9a;font-size:9.5px">5 mg tablet</div></div><div style="text-align:right"><div style="font-weight:600">1 tab</div><div class="lbl">per dose</div></div><span style="color:#8d8d8d;width:14px;text-align:right">✎</span></div>
-<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">1× daily</span><span class="chip">8:00</span><span class="chip">till ongoing</span><span class="chip">8 left</span></div>
+<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">1× daily</span><span class="chip">8:00</span><span class="chip">till ongoing</span></div>
 </div>
 <div style="padding:10px 12px;border-bottom:1px solid #eeeeea;background:#f6f6f4;border-left:3px solid #1a1a1a">
 <div class="r"><div style="flex:1"><div style="font-weight:600">Atorvas… <span class="tag">unclear</span></div><div style="color:#9a9a9a;font-size:9.5px">Atorvastatin 10 mg?</div></div><div style="text-align:right"><div style="font-weight:600">1 tab</div><div class="lbl">per dose</div></div><span style="color:#8d8d8d;width:14px;text-align:right">✎</span></div>
-<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">1× daily</span><span class="chip">22:00</span><span class="chip">till 19 Nov</span><span class="chip">30 left</span></div>
+<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">1× daily</span><span class="chip">22:00</span><span class="chip">till 19 Nov</span></div>
 </div>
 <div style="padding:10px 12px;border-bottom:1px solid #eeeeea">
 <div class="r"><div style="flex:1"><div style="font-weight:600">Thyronorm</div><div style="color:#9a9a9a;font-size:9.5px">50 mcg · empty stomach</div></div><div style="text-align:right"><div style="font-weight:600">1 tab</div><div class="lbl">per dose</div></div><span style="color:#8d8d8d;width:14px;text-align:right">✎</span></div>
-<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">1× daily</span><span class="chip">6:30</span><span class="chip">till ongoing</span><span class="chip">26 left</span></div>
+<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">1× daily</span><span class="chip">6:30</span><span class="chip">till ongoing</span></div>
 </div>
 <div style="padding:10px 12px;border-bottom:1px solid #eeeeea">
 <div class="r"><div style="flex:1"><div style="font-weight:600">Insulin</div><div style="color:#9a9a9a;font-size:9.5px">injection pen</div></div><div style="text-align:right"><div style="font-weight:600">8 u</div><div class="lbl">per dose</div></div><span style="color:#8d8d8d;width:14px;text-align:right">✎</span></div>
-<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">2× daily</span><span class="chip">7:30</span><span class="chip">19:30</span><span class="chip">till ongoing</span><span class="chip">1 pen</span></div>
+<div class="r" style="flex-wrap:wrap;gap:5px;margin-top:7px"><span class="chip">2× daily</span><span class="chip">7:30</span><span class="chip">19:30</span><span class="chip">till ongoing</span></div>
 </div>
-<div style="padding:10px 12px"><div class="r" style="gap:6px;flex-wrap:wrap"><span class="chip">+ Add medicine</span><span class="chip">Set all end dates</span><span class="chip">Count stock later</span></div></div>
+<div style="padding:10px 12px"><div class="r" style="gap:6px;flex-wrap:wrap"><span class="chip">+ Add medicine</span><span class="chip">Set all end dates</span><span class="chip">View as calendar</span></div></div>
 <div class="vsp"></div>
-<div style="padding:12px;border-top:1px solid #e4e4e0;display:flex;flex-direction:column;gap:8px"><div class="ann" style="font-size:11.5px">✎ sheet: dose, frequency, times, food rule, end date, tablets at home → stock drives refill alerts.</div><div class="btn">Approve &amp; start tracking</div></div>
+<div style="padding:12px;border-top:1px solid #e4e4e0;display:flex;flex-direction:column;gap:9px">
+<div class="c" style="padding:9px;border-left:3px solid #1a1a1a"><div class="r" style="align-items:flex-start;gap:8px"><span class="dot x" style="margin-top:3px"></span><span style="flex:1;line-height:1.45"><span style="font-weight:600">I confirm these 5 medicines, doses and timings are correct</span><br><span style="color:#6d6d6d;font-size:9.5px">Nothing is called about until you tick this.</span></span></div></div>
+<div class="btn" style="opacity:.45">Approve &amp; start calling</div>
+<div class="ann" style="font-size:11.5px">Explicit sign-off, not a warning: without the tick the button does nothing and no call is ever placed.</div></div>
 </div>
 </div></div>
 
 </div>
 
-<div class="dv-grp">Daily use — the five tabs</div>
+<div class="dv-grp">Daily use — the four tabs</div>
 <div class="dv-opts">
 
 <div class="dv-opt" id="1f"><div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Home — next dose leads</div>
@@ -190,18 +197,18 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="r"><span class="lbl">Next dose · in 22 min</span><span class="sp tag o">2:00 PM</span></div>
 <div style="font-size:17px;font-weight:700">Metformin 500 mg</div>
 <div style="color:#6d6d6d">1 tablet · after lunch</div>
-<div class="r" style="gap:7px"><div class="btn" style="flex:1.4">Mark taken</div><div class="ob" style="flex:1">Snooze</div><div class="ob" style="flex:1">Call Mom</div></div>
+<div class="r" style="gap:7px"><div class="btn" style="flex:1.4">Mark taken</div><div class="ob" style="flex:1">Call Mom</div></div>
+<div class="ob">Schedule a call for this dose later</div>
 <div class="hr"></div>
 <div class="r"><span style="color:#6d6d6d;flex:1">Agent will call at 2:05 PM if unconfirmed</span><span class="lbl">edit</span></div>
 </div>
-<div class="r"><span class="lbl">Later today</span><span class="sp lbl">see calendar</span></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot"></span><span style="width:44px">7:30 PM</span><span style="flex:1;font-weight:600">Insulin 8 u</span><span class="chip">confirm</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot"></span><span style="width:44px">9:00 PM</span><span style="flex:1;font-weight:600">Metformin 500</span><span class="chip">confirm</span></div></div>
 <div class="c" style="padding:9px;border-left:3px solid #1a1a1a"><div class="r"><span class="tag">1 alert</span><span style="flex:1">Missed 6:30 AM Thyronorm</span><span style="color:#8d8d8d">›</span></div></div>
 <div class="c"><div class="r"><span class="lbl" style="flex:1">Last check-in call · 9:12 AM</span><span class="sp chip">transcript</span></div><div class="r"><span style="flex:1;color:#6d6d6d">"Took the morning ones, knee hurts a bit."</span></div></div>
-<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="lbl" style="flex:1">Mood this week</span><span class="tag">watch</span></div><div class="r" style="gap:4px;align-items:flex-end;height:26px"><span style="flex:1;background:#dedede;height:60%"></span><span style="flex:1;background:#dedede;height:75%"></span><span style="flex:1;background:#dedede;height:45%"></span><span style="flex:1;background:#dedede;height:40%"></span><span style="flex:1;background:#1a1a1a;height:30%"></span><span style="flex:1;background:#1a1a1a;height:35%"></span><span style="flex:1;background:#dedede;height:55%"></span></div><div class="r"><span style="flex:1;color:#6d6d6d">3 mentions of feeling lonely · doses 86%</span><span style="color:#8d8d8d">›</span></div></div>
+<div class="c"><div class="r"><span class="lbl" style="flex:1">Today</span><span class="sp chip">Open calendar</span></div><div class="r"><span style="flex:1;color:#6d6d6d">3 of 5 doses confirmed · 2 still to come</span></div></div>
+<div class="vsp"></div>
+<div class="ann">One dose leads. The rest of the day lives in the calendar (<a class="dv-oid" href="#1g">1g</a>) — no second list to keep in sync.</div>
 </div>
-<div class="tb"><div class="on"><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
+<div class="tb"><div class="on"><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Calls</div></div>
 </div></div>
 
 <div class="dv-opt" id="1g"><div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Calendar — day timeline + month switch</div>
@@ -227,42 +234,46 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="vsp"></div>
 <div class="r" style="gap:10px;padding-top:8px;border-top:1px solid #e4e4e0"><span class="r" style="gap:4px"><span class="dot k"></span><span class="lbl">taken</span></span><span class="r" style="gap:4px"><span class="dot x"></span><span class="lbl">missed</span></span><span class="r" style="gap:4px"><span class="dot"></span><span class="lbl">upcoming</span></span><span class="sp chip">+ dose</span></div>
 </div>
-<div class="tb"><div><span class="ic"></span>Home</div><div class="on"><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
+<div class="tb"><div><span class="ic"></span>Home</div><div class="on"><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Calls</div></div>
 </div></div>
 
-<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Alerts feed — severity grouped</div>
+<div class="dv-opt" id="1h"><div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Alerts feed — date filter + severity</div>
 <div class="ph">
 <div class="sb"><span>1:41</span><span>▮▮ ▾ ▰</span></div>
 <div class="tp"><span class="tt">Alerts</span><span class="sp chip">Mark all read</span></div>
-<div style="padding:9px 12px;border-bottom:1px solid #e4e4e0;display:flex;gap:6px;overflow:hidden"><span class="chip on">All 6</span><span class="chip">Critical 1</span><span class="chip">Meds 3</span><span class="chip">Calls 1</span><span class="chip">Refill 1</span></div>
+<div style="padding:8px 12px;border-bottom:1px solid #f0f0ec;display:flex;gap:6px;align-items:center"><span class="lbl">Show</span><span class="chip on">Day</span><span class="chip">Month</span><span class="chip">Year</span><span class="chip">All time</span></div>
+<div style="padding:8px 12px;border-bottom:1px solid #e4e4e0;display:flex;gap:6px;overflow:hidden"><span class="chip on">All 5</span><span class="chip">Critical 1</span><span class="chip">Meds 3</span><span class="chip">Calls 1</span></div>
 <div class="bd">
 <div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><span class="tag">critical</span><span class="sp lbl">6 min ago</span></div><div style="font-weight:700;font-size:13px">"I feel dizzy and my chest is tight"</div><div style="color:#6d6d6d">Said during the 1:35 PM check-in call. Agent stayed on the line.</div><div class="r" style="gap:7px"><div class="btn" style="flex:1">Call Mom now</div><div class="ob" style="flex:1">Open detail</div></div></div>
 <div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="tag o">missed dose</span><span class="sp lbl">7:15 AM</span></div><div style="font-weight:600">Thyronorm 50 mcg not taken</div><div style="color:#6d6d6d">Agent asked twice; Mom said she'd forgotten the strip.</div><div class="r" style="gap:7px"><span class="chip">Mark taken</span><span class="chip">Reschedule</span></div></div>
 <div class="c"><div class="r"><span class="tag o">no answer</span><span class="sp lbl">Yesterday</span></div><div style="font-weight:600">2 check-in calls unanswered</div><div class="r" style="gap:7px"><span class="chip">Retry now</span><span class="chip">Escalate to Priya</span></div></div>
-<div class="c"><div class="r"><span class="tag o">refill</span><span class="sp lbl">Aug 17</span></div><div style="font-weight:600">Amlodipine — 3 days left</div><div class="r" style="gap:7px"><span class="chip">Order refill</span><span class="chip">Snooze 3d</span></div></div>
+<div class="c"><div class="r"><span class="tag o">missed dose</span><span class="sp lbl">Yesterday</span></div><div style="font-weight:600">Metformin 9:00 PM not confirmed</div><div class="r" style="gap:7px"><span class="chip">Mark taken</span><span class="chip">Schedule a call</span></div></div>
+<div class="vsp"></div>
+<div class="ann">Date filter above severity — "did anything happen this month?" is the question people actually arrive with.</div>
 </div>
-<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div class="on"><span class="ic"></span>Alerts</div><div><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
+<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div class="on"><span class="ic"></span>Alerts</div><div><span class="ic"></span>Calls</div></div>
 </div></div>
 
-<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>Alert detail — transcript + sentiment</div>
+<div class="dv-opt" id="1i"><div class="dv-olabel"><a class="dv-oid" href="#1i">1i</a>Alert detail — verbatim transcript + cited rule</div>
 <div class="ph">
 <div class="sb"><span>1:42</span><span>▮▮ ▾ ▰</span></div>
 <div class="tp"><span style="color:#8d8d8d">←</span><span class="tt">Alert detail</span><span class="sp tag">critical</span></div>
 <div class="bd">
 <div><div style="font-size:15px;font-weight:700">Possible chest discomfort</div><div style="color:#8d8d8d">Today · 1:35 PM · agent call #214 · 2 min 11 s</div></div>
-<div class="c"><div class="lbl">Why this was flagged</div><div style="color:#6d6d6d">Keywords "dizzy", "chest tight" + falling sentiment across the call. Rule: <span style="font-weight:600">Emergency keyword</span>.</div></div>
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="lbl" style="flex:1">Why this was flagged</span><span class="tag">P1</span></div><div style="line-height:1.45"><span style="font-weight:600">rule: chest complaint with age over 40</span></div><div style="color:#6d6d6d;font-size:9.5px">Triggered on the words she used. No interpretation, no diagnosis.</div></div>
 <div class="c" style="gap:9px"><div class="r"><span class="lbl" style="flex:1">Transcript excerpt</span><span class="chip">Play audio ▶</span></div>
 <div class="r" style="align-items:flex-start;gap:7px"><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Did you take the 8 o'clock tablets?</span></div>
 <div class="r" style="align-items:flex-start;gap:7px"><span class="tag">mom</span><span style="flex:1">Yes… but since morning I feel dizzy.</span></div>
 <div class="r" style="align-items:flex-start;gap:7px"><span class="tag o">agent</span><span style="flex:1;color:#4d4d4d">Any pain in the chest or arm?</span></div>
 <div class="r" style="align-items:flex-start;gap:7px"><span class="tag">mom</span><span style="flex:1">Chest feels tight when I walk.</span></div>
 <div class="lbl">full transcript ›</div></div>
-<div class="c"><div class="r"><span class="lbl" style="flex:1">Sentiment</span><span style="font-weight:700">Worried · 72%</span></div><div style="height:8px;border-radius:4px;background:#e4e4e0;overflow:hidden"><div style="width:72%;height:100%;background:#1a1a1a"></div></div><div class="r"><span class="lbl">calm</span><span class="sp lbl">distressed</span></div></div>
-<div class="c"><div class="lbl">Context</div><div class="r"><span style="flex:1;color:#6d6d6d">BP meds taken on time · 3 dizziness mentions this week</span></div></div>
+<div class="c"><div class="lbl">Told to</div><div class="r"><span class="dot k"></span><span style="flex:1">You · WhatsApp</span><span class="lbl">1:37 PM ✓</span></div><div class="r"><span class="dot"></span><span style="flex:1;color:#6d6d6d">Priya · in 9 min</span></div></div>
+<div class="c"><div class="lbl">Context from the record</div><div class="r"><span style="flex:1;color:#6d6d6d">BP meds taken on time · 3 dizziness mentions this week</span></div></div>
 <div class="vsp"></div>
 <div class="btn">Call Mom now</div>
-<div class="r" style="gap:8px"><div class="ob" style="flex:1">Escalate to Priya</div><div class="ob" style="flex:1">Book doctor</div></div>
+<div class="r" style="gap:8px"><div class="ob" style="flex:1">Copy handoff link</div><div class="ob" style="flex:1">Escalate to Priya</div></div>
 <div class="ob">Mark resolved</div>
+<div class="ann">The rule string is the point — it turns a judgement call into something auditable.</div>
 </div>
 </div></div>
 
@@ -272,56 +283,17 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="tp"><span class="tt">Calls &amp; messages</span><span class="sp chip">+ check-in now</span></div>
 <div style="padding:9px 12px;border-bottom:1px solid #e4e4e0;display:flex;gap:6px"><span class="chip on" style="flex:1;text-align:center">Agent calls</span><span class="chip" style="flex:1;text-align:center">Messages</span></div>
 <div class="bd">
-<div class="c" style="padding:9px"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Today 1:35 PM</span><span class="lbl">2:11</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Flagged: chest tightness</span><span class="r" style="gap:3px"><span class="dot k"></span><span class="dot k"></span><span class="dot k"></span><span class="dot k"></span><span class="dot"></span></span></div><div class="r" style="gap:6px"><span class="chip">Transcript</span><span class="chip">Audio ▶</span><span class="sp tag">alert</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Today 9:12 AM</span><span class="lbl">1:04</span></div><div class="r"><span style="flex:1;color:#6d6d6d">All morning doses confirmed</span><span class="r" style="gap:3px"><span class="dot k"></span><span class="dot k"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="r" style="gap:6px"><span class="chip">Transcript</span><span class="chip">Audio ▶</span></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Today 1:35 PM</span><span class="lbl">2:11</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Flagged: chest tightness</span></div><div class="r" style="gap:6px"><span class="chip">Transcript</span><span class="chip">Audio ▶</span><span class="sp tag">alert</span></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Today 9:12 AM</span><span class="lbl">1:04</span></div><div class="r"><span style="flex:1;color:#6d6d6d">All morning doses confirmed</span></div><div class="r" style="gap:6px"><span class="chip">Transcript</span><span class="chip">Audio ▶</span></div></div>
 <div class="c" style="padding:9px;opacity:.75"><div class="r"><span class="tag o">agent</span><span style="flex:1;font-weight:600">Yesterday 8:05 PM</span><span class="lbl">no answer</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Retried twice · voicemail left</span></div></div>
 <div class="c" style="padding:9px"><div class="r"><span class="tag">you</span><span style="flex:1;font-weight:600">Yesterday 6:40 PM</span><span class="lbl">7:22</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Direct call to Mom</span></div></div>
 <div class="hr"></div>
 <div class="lbl">Messages preview</div>
 <div class="c" style="padding:9px"><div class="r"><div class="av"></div><div style="flex:1"><div style="font-weight:600">Mom</div><div style="color:#8d8d8d">Voice note · 0:12</div></div><span class="tag">2</span></div></div>
 <div class="c" style="padding:9px"><div class="r"><div class="av"></div><div style="flex:1"><div style="font-weight:600">Priya (sister)</div><div style="color:#8d8d8d">"I'll visit on Sunday"</div></div></div></div>
-<div class="ann">Sentiment dots per call = the "suspicious" signal at a glance.</div>
+<div class="ann">Every call keeps its transcript. What she said is the record — no mood score sitting on top of it.</div>
 </div>
-<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Order</div><div class="on"><span class="ic"></span>Calls</div></div>
-</div></div>
-
-<div class="dv-opt" id="1k"><div class="dv-olabel"><a class="dv-oid" href="#1k">1k</a>Order — prescription out, quotes back</div>
-<div class="ph">
-<div class="sb"><span>1:46</span><span>▮▮ ▾ ▰</span></div>
-<div class="tp"><span class="tt">Order medicines</span><span class="sp chip">Past orders</span></div>
-<div class="bd">
-<div class="c"><div class="r"><span class="tag o">step 1</span><span style="flex:1;font-weight:600">Send a prescription</span></div><div class="r" style="gap:8px"><div class="ob" style="flex:1">Use Dr_Mehta_Aug12</div><div class="ob" style="flex:1">New scan</div></div><div style="color:#8d8d8d;font-size:9.5px">Shared only with pharmacies you pick.</div></div>
-<div class="r"><span class="lbl">Step 2 · 3 quotes received</span><span class="sp lbl">refresh</span></div>
-<div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><div class="im" style="width:28px;height:28px">ph</div><div style="flex:1"><div style="font-weight:600">Apollo, Sector 12</div><div style="color:#8d8d8d;font-size:9.5px">All 5 items · delivers today 6 PM</div></div><div style="text-align:right"><div style="font-weight:700">₹1,240</div><div class="lbl">best</div></div></div><div class="r" style="gap:6px"><span class="chip">Itemised</span><span class="chip">Substitutes 1</span></div></div>
-<div class="c"><div class="r"><div class="im" style="width:28px;height:28px">ph</div><div style="flex:1"><div style="font-weight:600">MedPlus</div><div style="color:#8d8d8d;font-size:9.5px">4 of 5 · Insulin out of stock</div></div><div style="font-weight:700">₹1,180</div></div></div>
-<div class="c"><div class="r"><div class="im" style="width:28px;height:28px">ph</div><div style="flex:1"><div style="font-weight:600">Local Janta Chemist</div><div style="color:#8d8d8d;font-size:9.5px">All 5 · pickup only</div></div><div style="font-weight:700">₹1,095</div></div></div>
-<div class="hr"></div>
-<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="tag o">low stock</span><span style="flex:1">Amlodipine — 3 days left</span><span class="chip">add</span></div><div class="r"><span class="tag o">low stock</span><span style="flex:1">Insulin — 6 days left</span><span class="chip">add</span></div></div>
-<div class="vsp"></div><div class="btn">Continue with Apollo · ₹1,240</div>
-</div>
-<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div class="on"><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
-</div></div>
-
-<div class="dv-opt" id="1l"><div class="dv-olabel"><a class="dv-oid" href="#1l">1l</a>Checkout — deliver to parent</div>
-<div class="ph">
-<div class="sb"><span>1:47</span><span>▮▮ ▾ ▰</span></div>
-<div class="tp"><span style="color:#8d8d8d">←</span><span class="tt">Checkout</span><span class="sp lbl">Apollo</span></div>
-<div class="bd">
-<div class="c"><div class="r"><span class="lbl" style="flex:1">5 items</span><span class="lbl">edit</span></div>
-<div class="r"><span style="flex:1">Metformin 500 · 60 tab</span><span>₹210</span></div>
-<div class="r"><span style="flex:1">Amlodipine 5 · 30 tab</span><span>₹95</span></div>
-<div class="r"><span style="flex:1">Thyronorm 50 · 30 tab</span><span>₹140</span></div>
-<div class="r"><span style="flex:1">Atorvastatin 10 · 30 tab</span><span>₹165</span></div>
-<div class="r"><span style="flex:1">Insulin pen · 1</span><span>₹630</span></div></div>
-<div class="c"><div class="r"><span class="lbl" style="flex:1">Deliver to</span><span class="chip">change</span></div><div style="font-weight:600">Mom · 14 Rose Villa, Pune</div><div style="color:#8d8d8d">+91 90••• ••••• · leave with neighbour if away</div></div>
-<div class="c"><div class="r"><span class="lbl" style="flex:1">Slot</span></div><div class="r" style="gap:6px"><span class="chip on">Today 6–8 PM</span><span class="chip">Tomorrow AM</span></div></div>
-<div class="c"><div class="r"><span class="lbl" style="flex:1">Payment</span></div><div class="r" style="gap:6px"><span class="chip on">UPI</span><span class="chip">Card</span><span class="chip">COD</span></div></div>
-<div class="c"><div class="r"><span style="flex:1;font-weight:600">Auto-refill this list monthly</span><span class="sp" style="width:32px;height:18px;border-radius:99px;background:#d8d8d4;position:relative"><span style="position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div></div>
-<div class="vsp"></div>
-<div class="r"><span style="flex:1;color:#6d6d6d">Items ₹1,240 · delivery ₹0</span><span style="font-size:15px;font-weight:700">₹1,240</span></div>
-<div class="btn">Place order</div>
-<div class="ann">On delivery → schedule stock counts refresh, refill alerts clear.</div>
-</div>
+<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div class="on"><span class="ic"></span>Calls</div></div>
 </div></div>
 
 <div class="dv-opt" id="1m"><div class="dv-olabel"><a class="dv-oid" href="#1m">1m</a>Settings — agent &amp; escalation controls</div>
@@ -349,32 +321,23 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 </div>
 </div></div>
 
-<div class="dv-opt" id="1s"><div class="dv-olabel"><a class="dv-oid" href="#1s">1s</a>Mood &amp; wellbeing — the week, from call sentiment</div>
+<div class="dv-opt" id="1s"><div class="dv-olabel"><a class="dv-oid" href="#1s">1s</a>What Mom said — verbatim, newest first</div>
 <div class="ph">
 <div class="sb"><span>1:50</span><span>▮▮ ▾ ▰</span></div>
-<div class="tp"><span style="color:#8d8d8d">←</span><span class="tt">Mood this week</span><span class="sp chip">Aug 14–20 ▾</span></div>
+<div class="tp"><span style="color:#8d8d8d">←</span><span class="tt">What Mom said</span><span class="sp chip">Month ▾</span></div>
+<div style="padding:8px 12px;border-bottom:1px solid #e4e4e0;display:flex;gap:6px"><span class="chip on">All 14</span><span class="chip">Red 1</span><span class="chip">Watch 4</span></div>
 <div class="bd">
-<div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><span class="tag">needs attention</span><span class="sp lbl">from 18 calls</span></div><div style="font-size:14px;font-weight:700;line-height:1.35">Mom sounded low and lonely in the second half of the week</div><div style="color:#6d6d6d">Mood down 2 steps vs last week. Mentions of being alone rose from 1 to 3.</div></div>
-<div class="c"><div class="r"><span class="lbl" style="flex:1">Daily mood</span><span class="lbl">avg · low-calm</span></div>
-<div class="r" style="gap:6px;align-items:flex-end;height:78px">
-<span style="flex:1;background:#dedede;height:62%;border-radius:3px 3px 0 0"></span>
-<span style="flex:1;background:#dedede;height:78%;border-radius:3px 3px 0 0"></span>
-<span style="flex:1;background:#dedede;height:70%;border-radius:3px 3px 0 0"></span>
-<span style="flex:1;background:#dedede;height:44%;border-radius:3px 3px 0 0"></span>
-<span style="flex:1;background:#1a1a1a;height:30%;border-radius:3px 3px 0 0"></span>
-<span style="flex:1;background:#1a1a1a;height:34%;border-radius:3px 3px 0 0"></span>
-<span style="flex:1;background:#dedede;height:52%;border-radius:3px 3px 0 0"></span>
-</div>
-<div class="r"><span class="lbl" style="flex:1">Th</span><span class="lbl" style="flex:1">F</span><span class="lbl" style="flex:1">Sa</span><span class="lbl" style="flex:1">Su</span><span class="lbl" style="flex:1">M</span><span class="lbl" style="flex:1">Tu</span><span class="lbl" style="flex:1">W</span></div>
-<div class="r" style="gap:10px"><span class="r" style="gap:4px"><span class="dot k"></span><span class="lbl">low day</span></span><span class="r" style="gap:4px"><span class="dot"></span><span class="lbl">usual range</span></span></div></div>
-<div class="c"><div class="lbl">What came up often</div><div class="r" style="flex-wrap:wrap;gap:6px"><span class="chip on">Loneliness 3×</span><span class="chip on">Poor sleep 4×</span><span class="chip on">Knee pain 2×</span><span class="chip">Grandkids 5×</span><span class="chip">TV serial 3×</span></div></div>
-<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="tag o">flagged</span><span class="sp lbl">Mon 6:05 PM</span></div><div style="font-weight:600">“The house is very quiet these days.”</div><div class="r"><span style="flex:1;color:#6d6d6d">Sentiment: lonely · 64%</span><span class="chip">Transcript</span></div></div>
+<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="tag">red</span><span class="sp lbl">Today 1:36 PM</span></div><div style="font-size:13px;font-weight:700;line-height:1.4">“Chest feels tight when I walk.”</div><div class="r"><span style="flex:1;color:#6d6d6d">Call #214 · escalated to you</span><span class="chip">Transcript</span></div></div>
+<div class="c"><div class="r"><span class="tag o">watch</span><span class="sp lbl">Today 9:13 AM</span></div><div style="font-weight:600;line-height:1.4">“Took the morning ones, knee hurts a bit.”</div><div class="r"><span style="flex:1;color:#6d6d6d">Call #213</span><span class="chip">Transcript</span></div></div>
+<div class="c"><div class="r"><span class="tag o">watch</span><span class="sp lbl">Mon 6:05 PM</span></div><div style="font-weight:600;line-height:1.4">“The house is very quiet these days.”</div><div class="r"><span style="flex:1;color:#6d6d6d">Call #207</span><span class="chip">Transcript</span></div></div>
+<div class="c"><div class="r"><span class="lbl">none</span><span class="sp lbl">Sun 1:20 PM</span></div><div style="line-height:1.4">“Knee is worse in the rain.”</div></div>
+<div class="c"><div class="r"><span class="lbl">none</span><span class="sp lbl">Sat 9:10 AM</span></div><div style="line-height:1.4">“Slept well, grandson called.”</div></div>
 <div class="vsp"></div>
 <div class="btn">Call Mom now</div>
-<div class="r" style="gap:8px"><div class="ob" style="flex:1">Add a daily chat call</div><div class="ob" style="flex:1">Tell Priya</div></div>
+<div class="ob">Share this week with Priya</div>
 </div>
 </div>
-<div class="ann" style="max-width:320px">Weekly digest also arrives as a Sunday push — entry points: Home card (<a class="dv-oid" href="#1f">1f</a>) and Alerts. Low days are cross-checked against missed evening doses.</div></div>
+<div class="ann" style="max-width:320px">Her words, timestamped, with a severity chip — no mood score, no percentage. A number nobody can trace back to a sentence is not evidence.</div></div>
 
 </div>
 
@@ -387,17 +350,15 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="tp"><div class="av"></div><div style="font-weight:600;flex:1">Mom</div><span class="tag">1 critical</span></div>
 <div class="bd">
 <div class="c" style="border:1.5px solid #1a1a1a;background:#f4f4f2"><div class="r"><span class="tag">needs you</span><span class="sp lbl">6 min ago</span></div><div style="font-size:15px;font-weight:700">Mom mentioned chest tightness</div><div class="r" style="gap:7px"><div class="btn" style="flex:1">Call now</div><div class="ob" style="flex:1">Detail</div></div></div>
-<div class="c"><div class="r"><span class="tag o">missed</span><span style="flex:1">6:30 AM Thyronorm</span><span class="chip">fix</span></div><div class="r"><span class="tag o">refill</span><span style="flex:1">Amlodipine 3 days</span><span class="chip">order</span></div></div>
+<div class="c"><div class="r"><span class="tag o">missed</span><span style="flex:1">6:30 AM Thyronorm</span><span class="chip">fix</span></div><div class="r"><span class="tag o">no answer</span><span style="flex:1">Yesterday 8:05 PM call</span><span class="chip">retry</span></div></div>
 <div class="hr"></div>
-<div class="r"><span class="lbl" style="flex:1">Today's doses</span><span class="lbl">3 / 5</span></div>
-<div class="c" style="padding:9px"><div class="r"><span style="width:44px">2:00 PM</span><span style="flex:1;font-weight:600">Metformin 500</span><span class="chip">taken?</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span style="width:44px">7:30 PM</span><span style="flex:1">Insulin 8 u</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span style="width:44px">9:00 PM</span><span style="flex:1">Metformin 500</span></div></div>
-<div class="c" style="border-left:3px solid #1a1a1a"><div class="r"><span class="lbl" style="flex:1">Mood this week</span><span class="tag">watch</span></div><div class="r"><span style="flex:1;color:#6d6d6d">Lower mood since Thu · lonely 3×</span><span class="chip">View</span></div></div>
+<div class="c" style="border:1.5px solid #1a1a1a"><div class="lbl">Next · 2:00 PM</div><div style="font-size:15px;font-weight:700">Metformin 500 mg</div><div class="r" style="gap:7px"><div class="btn" style="flex:1">Mark taken</div><div class="ob" style="flex:1">Call Mom</div></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="lbl" style="flex:1">Today</span><span class="sp chip">Open calendar</span></div><div class="r"><span style="flex:1;color:#6d6d6d">3 of 5 confirmed</span></div></div>
+<div class="c" style="padding:9px"><div class="r"><span class="lbl" style="flex:1">Last thing she said</span><span class="sp chip">Transcript</span></div><div class="r"><span style="flex:1;color:#6d6d6d">"Took the morning ones, knee hurts a bit."</span></div></div>
 <div class="vsp"></div>
 <div class="ann">Calmer on good days (empty state = "nothing needs you"), louder on bad ones. Compare with <a class="dv-oid" href="#1f">1f</a>.</div>
 </div>
-<div class="tb"><div class="on"><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
+<div class="tb"><div class="on"><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div><span class="ic"></span>Calls</div></div>
 </div></div>
 
 <div class="dv-opt" id="1o"><div class="dv-olabel"><a class="dv-oid" href="#1o">1o</a>Nav alt — hub home, no tab bar</div>
@@ -410,13 +371,13 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Alerts</div><div class="r"><span class="tag">1</span><span style="color:#8d8d8d;font-size:9.5px">critical</span></div></div>
 <div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Calendar</div><div style="color:#8d8d8d;font-size:9.5px">Aug 20</div></div>
 <div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Calls</div><div style="color:#8d8d8d;font-size:9.5px">last 9:12 AM</div></div>
-<div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Order meds</div><div style="color:#8d8d8d;font-size:9.5px">2 running low</div></div>
-<div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Messages</div><div class="r"><span class="tag">2</span></div></div>
+<div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">What she said</div><div style="color:#8d8d8d;font-size:9.5px">1 red this week</div></div>
+<div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Care record</div><div style="color:#8d8d8d;font-size:9.5px">5 medicines</div></div>
 <div class="c" style="height:86px"><div class="ic"></div><div style="font-weight:600;margin-top:auto">Prescriptions</div><div style="color:#8d8d8d;font-size:9.5px">2 files</div></div>
 </div>
 <div class="vsp"></div>
 <div class="btn">Trigger a check-in call now</div>
-<div class="ann">Fewer, bigger targets; costs a tap to reach Calendar/Alerts. Five tabs (<a class="dv-oid" href="#1f">1f</a>) wins on frequency, hub wins on clarity.</div>
+<div class="ann">Fewer, bigger targets; costs a tap to reach Calendar/Alerts. Four tabs (<a class="dv-oid" href="#1f">1f</a>) wins on frequency, hub wins on clarity.</div>
 </div>
 </div></div>
 
@@ -436,7 +397,7 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 <div class="vsp"></div>
 <div class="ann">Doses, calls and alerts in one stream — better story, worse triage than <a class="dv-oid" href="#1h">1h</a>.</div>
 </div>
-<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div class="on"><span class="ic"></span>Alerts</div><div><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
+<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div class="on"><span class="ic"></span>Alerts</div><div><span class="ic"></span>Calls</div></div>
 </div></div>
 
 <div class="dv-opt" id="1q"><div class="dv-olabel"><a class="dv-oid" href="#1q">1q</a>Intake alt — camera-first, results in a sheet</div>
@@ -454,25 +415,6 @@ body{margin:0;background:#f0eee9;font-family:system-ui,sans-serif}
 </div>
 </div>
 <div class="ann" style="padding:8px 10px">Merges <a class="dv-oid" href="#1c">1c</a>+<a class="dv-oid" href="#1d">1d</a> into one screen — fastest, but harder to fix a bad scan.</div>
-</div></div>
-
-<div class="dv-opt" id="1r"><div class="dv-olabel"><a class="dv-oid" href="#1r">1r</a>Order alt — auto refill cart from the schedule</div>
-<div class="ph">
-<div class="sb"><span>1:46</span><span>▮▮ ▾ ▰</span></div>
-<div class="tp"><span class="tt">Refills</span><span class="sp chip">Upload instead</span></div>
-<div class="bd">
-<div class="c" style="border:1.5px solid #1a1a1a"><div class="r"><span class="lbl" style="flex:1">Cart built from Mom's schedule</span><span class="tag o">auto</span></div><div class="r"><span style="flex:1;color:#6d6d6d">From doses per day and the stock you entered.</span><span class="chip">Update stock</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot x"></span><div style="flex:1"><div style="font-weight:600">Amlodipine 5 mg</div><div style="color:#8d8d8d;font-size:9.5px">3 days left · 30 tab</div></div><span class="chip on">in cart</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot x"></span><div style="flex:1"><div style="font-weight:600">Insulin pen</div><div style="color:#8d8d8d;font-size:9.5px">6 days left · 1 pen</div></div><span class="chip on">in cart</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot"></span><div style="flex:1"><div style="font-weight:600">Metformin 500</div><div style="color:#8d8d8d;font-size:9.5px">21 days left</div></div><span class="chip">add</span></div></div>
-<div class="c" style="padding:9px"><div class="r"><span class="dot"></span><div style="flex:1"><div style="font-weight:600">Thyronorm 50</div><div style="color:#8d8d8d;font-size:9.5px">18 days left</div></div><span class="chip">add</span></div></div>
-<div class="c"><div class="r"><span style="flex:1;font-weight:600">Repeat every 30 days</span><span class="sp" style="width:32px;height:18px;border-radius:99px;background:#1a1a1a;position:relative"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:99px;background:#fff;display:block"></span></span></div><div style="color:#8d8d8d;font-size:9.5px">Confirms with you 2 days before each order.</div></div>
-<div class="vsp"></div>
-<div class="r"><span style="flex:1;color:#6d6d6d">2 items · Apollo</span><span style="font-size:15px;font-weight:700">₹725</span></div>
-<div class="btn">Review &amp; order</div>
-<div class="ann">Zero-effort refills; needs an accurate stock count. <a class="dv-oid" href="#1k">1k</a> is safer for new prescriptions.</div>
-</div>
-<div class="tb"><div><span class="ic"></span>Home</div><div><span class="ic"></span>Calendar</div><div><span class="ic"></span>Alerts</div><div class="on"><span class="ic"></span>Order</div><div><span class="ic"></span>Calls</div></div>
 </div></div>
 
 </div>
