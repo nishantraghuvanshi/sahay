@@ -17,8 +17,7 @@ export default function AppShell() {
       <div className="flex h-full">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
-          <main className="min-h-0 flex-1 overflow-auto p-5">
+          <main className="min-h-0 flex-1 overflow-auto p-6">
             <Outlet />
           </main>
         </div>
@@ -84,14 +83,6 @@ function PatientCard() {
             : 'Not signed off'}
       </div>
     </div>
-  )
-}
-
-function TopBar() {
-  return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-5">
-      <Wordmark size={21} />
-    </header>
   )
 }
 

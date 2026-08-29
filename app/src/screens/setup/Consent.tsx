@@ -152,7 +152,7 @@ export default function Consent() {
             {' '}{name}.
           </p>
 
-          <div className="sticky bottom-0 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="sticky bottom-0 z-10 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-14px_18px_-14px_rgb(26_23_18/0.18)]">
             <Button
               disabled={!ready}
               onClick={() => navigate('/home')}

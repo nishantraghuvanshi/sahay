@@ -58,20 +58,20 @@ export default function Parent() {
             label="Name"
             value={draft.parentName}
             onChange={(v) => patch({ parentName: v })}
-            placeholder="Sharma"
+            placeholder="e.g. Sharma"
             required
           />
           <FieldInput
             label="They are called"
             value={draft.honorific}
             onChange={(v) => patch({ honorific: v })}
-            placeholder="ji"
+            placeholder="e.g. ji"
           />
           <FieldInput
             label="Age"
             value={draft.age}
             onChange={(v) => patch({ age: v.replace(/\D/g, '').slice(0, 3) })}
-            placeholder="68"
+            placeholder="e.g. 68"
             inputMode="numeric"
             required
           />
@@ -95,7 +95,7 @@ export default function Parent() {
             label="Parent&rsquo;s phone — the agent calls this"
             value={draft.parentPhone}
             onChange={(v) => patch({ parentPhone: v })}
-            placeholder="+91 98765 43210"
+            placeholder="Their +91 mobile number"
             inputMode="tel"
             required
             hint={
@@ -110,7 +110,7 @@ export default function Parent() {
             label="Where they live"
             value={draft.address}
             onChange={(v) => patch({ address: v })}
-            placeholder="14 Rose Villa, Baner, Pune"
+            placeholder="e.g. 14 Rose Villa, Baner, Pune"
           />
         </div>
       </Card>
@@ -185,14 +185,14 @@ export default function Parent() {
           label="Doctor's name"
           value={draft.doctorName}
           onChange={(v) => patch({ doctorName: v })}
-          placeholder="Dr Rao"
+          placeholder="e.g. Dr Rao"
           card
         />
         <FieldInput
           label="Doctor's phone"
           value={draft.doctorPhone}
           onChange={(v) => patch({ doctorPhone: v })}
-          placeholder="+91 98450 12345"
+          placeholder="Their +91 phone number"
           inputMode="tel"
           card
         />
@@ -206,7 +206,7 @@ export default function Parent() {
           onChange={(e) => patch({ notes: e.target.value })}
           rows={3}
           placeholder='Hard of hearing on the left ear · gets confused after 9 PM · call them "Amma"'
-          className="w-full resize-none rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base leading-relaxed outline-none placeholder:text-muted focus:border-ink"
+          className="w-full resize-none rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base leading-relaxed outline-none placeholder:text-muted-strong focus:border-ink"
         />
       </Card>
 
@@ -282,7 +282,7 @@ export default function Parent() {
         <p className="text-sm text-muted-strong">Skip this — you can add people later.</p>
       </Card>
 
-      <div className="sticky bottom-0 mt-2 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 z-10 mt-2 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-14px_18px_-14px_rgb(26_23_18/0.18)]">
         <Row>
           <Label className="flex-1">Name, age, relation, phone and language required</Label>
           {!ready && <Label>{missing.length} left</Label>}
@@ -336,7 +336,7 @@ function AddContact({ onAdd }: { onAdd: (c: { name: string; relationship: string
           value={phone}
           inputMode="tel"
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="+91 98765 43210"
+          placeholder="Their +91 mobile number"
           aria-label="Contact phone number"
           className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
         />

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
+import { Phone as PhoneIcon } from 'lucide-react'
 import {
   Button,
   Card,
@@ -64,6 +65,43 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 lg:grid lg:grid-cols-[1.4fr_1fr] lg:items-start lg:gap-4">
+      {/* -------------------------------------------------------------- needs you
+          The one thing that leads. On a bad day the open alert outranks the next
+          dose — it renders first, and on desktop it owns the full width so a bad
+          day is loud and unmistakable (wireframe 1f hierarchy rule). */}
+      {openAlert && (
+        <Card
+          emphasis={openAlert.level === 'P1' ? 'alert' : 'border'}
+          className="gap-2 lg:col-span-2 lg:gap-3 lg:p-4"
+        >
+          <Row>
+            <Tag
+              tone={
+                openAlert.level === 'P1' ? 'danger' : openAlert.level === 'P2' ? 'warn' : 'ink'
+              }
+            >
+              {openAlert.level}
+            </Tag>
+            <Label className="ml-auto">
+              {openAlert.sent_at ? relativeTime(new Date(openAlert.sent_at)) : 'just now'}
+            </Label>
+          </Row>
+          <div className="text-md leading-snug font-bold lg:text-xl">{openAlert.reason}</div>
+          <div className="text-sm text-muted-strong">
+            Told to {openAlert.sent_to} by {openAlert.channel} · {openAlert.delivery_status}
+          </div>
+          <Row className="gap-2 lg:max-w-md">
+            <Button className="flex-1 gap-2 whitespace-nowrap" href={`tel:${patient.phone_e164}`}>
+              <PhoneIcon size={16} strokeWidth={2.2} aria-hidden="true" />
+              Call {name}
+            </Button>
+            <Button variant="outline" className="flex-1" href={`/alerts/${openAlert.id}`}>
+              Open
+            </Button>
+          </Row>
+        </Card>
+      )}
+
       <div className="flex flex-col gap-3">
         {/* ---------------------------------------------------------- next dose */}
         {meds.length === 0 ? (
@@ -96,11 +134,13 @@ export default function Home() {
                   : 'Any time'}
             </div>
             <Row className="flex-wrap gap-2">
-              <Button className="flex-1" disabled>
-                Mark taken
-              </Button>
-              <Button variant="outline" className="flex-1" href={`tel:${patient.phone_e164}`}>
+              {/* The live action carries the weight; the gated one stays inert (rule 7). */}
+              <Button className="flex-1 gap-2" href={`tel:${patient.phone_e164}`}>
+                <PhoneIcon size={16} strokeWidth={2.2} aria-hidden="true" />
                 Call {name}
+              </Button>
+              <Button variant="outline" className="flex-1" disabled>
+                Mark taken
               </Button>
             </Row>
             <span className="text-sm text-muted-strong">
@@ -124,9 +164,9 @@ export default function Home() {
         {/* ------------------------------------------------- today so far (1f) */}
         <Card className="gap-2.5">
           <Row>
-            <Label className="flex-1">Today so far · since 6 AM</Label>
+            <Label className="flex-1 whitespace-nowrap">Today so far</Label>
             {summary.data && (
-              <Label>
+              <Label className="tnum text-right">
                 {summary.data.doses_confirmed}/{summary.data.doses_total} doses ·{' '}
                 {summary.data.calls} {summary.data.calls === 1 ? 'call' : 'calls'} ·{' '}
                 {summary.data.alerts} {summary.data.alerts === 1 ? 'alert' : 'alerts'}
@@ -152,39 +192,9 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {/* --------------------------------------------------------- needs you */}
-        {openAlert && (
-          <Card emphasis={openAlert.level === 'P1' ? 'alert' : 'border'} className="gap-2">
-            <Row>
-              <Tag
-                tone={
-                  openAlert.level === 'P1' ? 'danger' : openAlert.level === 'P2' ? 'warn' : 'ink'
-                }
-              >
-                {openAlert.level}
-              </Tag>
-              <Label className="ml-auto">
-                {openAlert.sent_at ? relativeTime(new Date(openAlert.sent_at)) : 'just now'}
-              </Label>
-            </Row>
-            <div className="text-md leading-snug font-bold">{openAlert.reason}</div>
-            <div className="text-sm text-muted-strong">
-              Told to {openAlert.sent_to} by {openAlert.channel} · {openAlert.delivery_status}
-            </div>
-            <Row className="gap-2">
-              <Button className="flex-1" href={`tel:${patient.phone_e164}`}>
-                Call {name} now
-              </Button>
-              <Button variant="outline" className="flex-1" href={`/alerts/${openAlert.id}`}>
-                Open
-              </Button>
-            </Row>
-          </Card>
-        )}
-
         {/* ------------------------------------------------- last check-in call */}
         {lastCall && (
-          <Card emphasis="rule" className="gap-2">
+          <Card className="gap-2">
             <Row>
               <Label className="flex-1">
                 Last check-in · {new Date(lastCall.started_at).toLocaleTimeString([], {
@@ -293,9 +303,12 @@ function SummaryRow({ item }: { item: DaySummaryItem }) {
           className={clsx(
             'block text-base leading-snug',
             item.kind === 'escalation' && 'font-semibold',
+            // Her words are verbatim, and they look like it — quoted, in the display
+            // face, never restyled into a log line (product rule 4).
+            item.kind === 'observation' && 'font-display text-md',
           )}
         >
-          {item.text}
+          {item.kind === 'observation' ? <>&ldquo;{item.text}&rdquo;</> : item.text}
         </span>
         {item.kind === 'dose' && item.status && (
           <span className="mt-0.5 block">

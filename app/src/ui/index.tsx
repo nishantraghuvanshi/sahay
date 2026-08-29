@@ -130,11 +130,16 @@ export function Button({
   const cls = clsx(
     'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-base font-semibold',
     'transition-colors duration-150 ease-out',
-    variant === 'primary' && 'bg-ink text-white hover:bg-ink-soft active:bg-ink',
-    variant === 'accent' && 'bg-accent text-white hover:brightness-110 active:brightness-95',
-    variant === 'outline' && 'border border-ink bg-transparent text-ink hover:bg-line',
-    variant === 'quiet' && 'bg-transparent font-medium text-muted-strong hover:bg-line hover:text-ink',
-    disabled && 'pointer-events-none opacity-40',
+    !disabled && variant === 'primary' && 'bg-ink text-white hover:bg-ink-soft active:bg-ink',
+    !disabled && variant === 'accent' && 'bg-accent text-white hover:brightness-110 active:brightness-95',
+    !disabled && variant === 'outline' && 'border border-ink bg-transparent text-ink hover:bg-line',
+    !disabled &&
+      variant === 'quiet' &&
+      'bg-transparent font-medium text-muted-strong hover:bg-line hover:text-ink',
+    // Gated actions stay visible and legible (product rule 7): a warm inert fill with
+    // readable text, never a 40%-opacity ghost of the active button.
+    disabled && 'pointer-events-none bg-fill text-muted-strong',
+    disabled && variant === 'outline' && 'border border-line-strong bg-transparent',
     className,
   )
   if (href && !disabled) {
@@ -186,7 +191,7 @@ export function Input({
   React.ComponentPropsWithoutRef<'textarea'>) {
   const cls = clsx(
     'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink',
-    'transition-colors duration-150 ease-out outline-none placeholder:text-muted',
+    'transition-colors duration-150 ease-out outline-none placeholder:text-muted-strong',
     'focus:border-accent focus:ring-[3px] focus:ring-accent-soft',
     'disabled:pointer-events-none disabled:opacity-50',
     className,

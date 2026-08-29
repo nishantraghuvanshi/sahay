@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { Button, Card, Label, Row, Tag } from '../../ui'
+import { Button, Card, Label, Row, Tag, Wordmark } from '../../ui'
 import { isEmail, isOtp, toE164, useSetupDraft } from '../../setup/store'
 
 /**
@@ -45,9 +45,7 @@ export default function Login() {
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-md flex-col gap-3 p-5">
-      <div className="grid size-12 place-items-center rounded-xl bg-ink text-xl font-bold text-white">
-        K
-      </div>
+      <Wordmark size={26} className="self-start" />
       <h1 className="text-2xl leading-tight font-bold">
         Keep an eye on
         <br />
@@ -64,7 +62,7 @@ export default function Login() {
           value={phone}
           disabled={draft.phoneVerified}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="+91 98765 43210"
+          placeholder="Your +91 mobile number"
           aria-label="Your phone number"
           className={inputCls}
         />
@@ -90,7 +88,9 @@ export default function Login() {
           value={phoneOtp}
           onChange={setPhoneOtp}
           disabled={phoneOtpStep !== 'active'}
-          label="Code sent to your phone"
+          label={
+            phoneOtpStep === 'locked' ? 'We text a code once you send the OTP' : 'Code sent to your phone'
+          }
           onComplete={(code) => {
             if (isOtp(code)) patch({ phoneVerified: true })
           }}
@@ -106,7 +106,7 @@ export default function Login() {
           value={email}
           disabled={draft.emailVerified || emailStep === 'locked'}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
+          placeholder="Your email address"
           aria-label="Your email address"
           className={inputCls}
         />
@@ -125,7 +125,9 @@ export default function Login() {
           value={emailOtp}
           onChange={setEmailOtp}
           disabled={emailOtpStep !== 'active'}
-          label="Code sent to your email"
+          label={
+            emailOtpStep === 'locked' ? 'We email a code once you verify your phone' : 'Code sent to your email'
+          }
           onComplete={(code) => {
             if (isOtp(code)) patch({ emailVerified: true })
           }}
@@ -134,20 +136,25 @@ export default function Login() {
       </Step>
 
       <div className="mt-auto flex flex-col gap-3 pt-4">
-        <p className="text-2xs leading-relaxed text-muted">
+        <p className="text-2xs leading-relaxed text-muted-strong">
           By continuing you agree to the Terms and consent to automated voice calls being placed to
           your parent.
         </p>
         <Button disabled={!allDone} onClick={() => navigate('/setup/parent')}>
           Continue
         </Button>
+        {!allDone && (
+          <span className="text-center text-sm text-muted-strong">
+            {draft.phoneVerified ? 'Verify your email to continue.' : 'Verify your phone and email to continue.'}
+          </span>
+        )}
       </div>
     </main>
   )
 }
 
 const inputCls =
-  'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md text-ink outline-none placeholder:text-muted focus:border-ink disabled:text-muted-strong'
+  'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md text-ink outline-none placeholder:text-muted-strong focus:border-ink disabled:text-muted-strong'
 
 function Step({
   n,
