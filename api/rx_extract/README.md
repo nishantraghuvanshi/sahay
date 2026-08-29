@@ -82,13 +82,6 @@ from the label. That is the whole argument for the human confirmation gate.
 
 `requests` and `pydantic`. Nothing else.
 
-## History
-
-Began as the team's `rx-extract` research project — the eval harness, the 50-document
-synthetic dataset and the accuracy work still live there and are not part of this
-package. What is here is the pipeline itself, brought in as a first-class Kinvox module.
-`normalize.py`, the validation rules and the HTTP surface were built for Kinvox.
-
 ## Tests
 
 `api/tests/test_rx_extract.py` — 33 tests, all mocked, zero network calls. Inject a fake
