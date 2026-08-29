@@ -104,6 +104,20 @@ function humanise(code: string): string {
     case 'delivery_failed':
       return 'We could not send to that number. Check it and try again.'
 
+    // ---- password (api/auth/routes.py)
+    case 'invalid_credentials':
+      // Deliberately vague, matching the server: naming which half was wrong
+      // would say whether the account exists.
+      return 'That phone or email and password do not match.'
+    case 'account_locked':
+      return 'Too many attempts. Try again in 15 minutes, or sign in with a code.'
+    case 'password_too_short':
+      return 'Use at least 8 characters.'
+    case 'password_too_long':
+      return 'That password is too long.'
+    case 'name_required':
+      return 'Please enter your name.'
+
     // ---- onboarding (api/caregiver/routes.py)
     case 'consent_missing':
       return 'All three consents are needed before we can call.'

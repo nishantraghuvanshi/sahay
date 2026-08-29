@@ -13,6 +13,7 @@ import {
   Row,
   SeverityChip,
   Tag,
+  useParentLanguage,
 } from '../ui'
 import { useEscalations, useObservations } from '../api/hooks'
 import { relativeTime } from '../lib/schedule'
@@ -294,6 +295,7 @@ function AlertRow({
   quote: Observation | null
   now: Date
 }) {
+  const parentLang = useParentLanguage()
   const at = escalation.sent_at ? new Date(escalation.sent_at) : null
   const status = escalation.delivery_status
 
@@ -327,7 +329,7 @@ function AlertRow({
             <SeverityChip severity={quote.severity} />
           </span>
           <blockquote
-            lang="hi"
+            lang={parentLang}
             className="min-w-0 flex-1 border-l-2 border-line-strong pl-2 text-base leading-relaxed break-words"
           >
             “{quote.text}”

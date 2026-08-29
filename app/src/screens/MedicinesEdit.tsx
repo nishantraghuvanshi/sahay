@@ -415,7 +415,7 @@ export default function MedicinesEdit() {
           type="button"
           onClick={() => navigate('/calendar')}
           aria-label="Back"
-          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-lg text-muted"
+          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-lg text-muted-strong"
         >
           ←
         </button>
@@ -518,7 +518,7 @@ export default function MedicinesEdit() {
                 </Label>
               </Row>
 
-              <p className="px-1 text-xs text-muted">
+              <p className="px-1 text-xs text-muted-strong">
                 Priority is the one dose the agent chases hardest — only one may hold it. Stopped
                 medicines keep their history; nothing already logged is deleted.
               </p>
@@ -627,7 +627,7 @@ export default function MedicinesEdit() {
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <span className="truncate text-base font-semibold">{f.name}</span>
                       <Bar fill={f.progress / 100} />
-                      <span className="text-2xs text-muted">
+                      <span className="text-2xs text-muted-strong">
                         {done ? `${mb(f.size)} · read ✓` : `uploading · ${f.progress}%`}
                       </span>
                     </div>
@@ -635,7 +635,7 @@ export default function MedicinesEdit() {
                       type="button"
                       onClick={() => removeFile(f.id)}
                       aria-label={`Remove ${f.name}`}
-                      className="grid size-7 shrink-0 place-items-center rounded-md text-base text-muted"
+                      className="grid size-7 shrink-0 place-items-center rounded-md text-base text-muted-strong"
                     >
                       ✕
                     </button>
@@ -748,13 +748,13 @@ function MedicineRow({
   onDiscard: () => void
 }) {
   const input =
-    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink placeholder:text-muted'
+    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink placeholder:text-muted-strong'
 
   /* A stopped row is a receipt, not a form: it stays legible, says why it is greyed out in
      words as well as in opacity, and offers exactly one action — restore. */
   if (row.stopped) {
     return (
-      <Card className={clsx('gap-2.5 opacity-70', GRID)}>
+      <Card className={clsx('gap-2.5 bg-canvas', GRID)}>
         <div className="flex min-w-0 flex-col gap-1">
           <Row className="flex-wrap gap-2">
             <span className="text-md font-semibold line-through break-words">
@@ -762,9 +762,9 @@ function MedicineRow({
             </span>
             <Tag outline>stopped</Tag>
           </Row>
-          <span className="text-2xs text-muted">{row.dose || '—'}</span>
+          <span className="text-2xs text-muted-strong">{row.dose || '—'}</span>
         </div>
-        <div className="text-base text-muted sm:col-span-3">no longer scheduled · from today</div>
+        <div className="text-base text-muted-strong sm:col-span-3">no longer scheduled · from today</div>
         <div className="hidden sm:block" />
         <Row>
           <Chip onClick={() => onStopped(false)}>↺ Restore</Chip>
@@ -833,7 +833,7 @@ function MedicineRow({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemoveSlot(i)}
                     aria-label={`Remove time ${slot}`}
-                    className="text-sm text-muted"
+                    className="text-sm text-muted-strong"
                   >
                     ✕
                   </button>
@@ -885,7 +885,7 @@ function MedicineRow({
               type="button"
               onClick={onDiscard}
               aria-label={`Discard ${row.name || 'new medicine'}`}
-              className="ml-auto text-sm text-muted underline"
+              className="ml-auto text-sm text-muted-strong underline"
             >
               Discard
             </button>

@@ -212,7 +212,7 @@ export default function Settings() {
             <>
               <Row className="flex-wrap gap-2">
                 <Field value={windowStart} className="w-[84px] text-center" />
-                <span className="text-base text-muted">to</span>
+                <span className="text-base text-muted-strong">to</span>
                 <Field value={windowEnd} className="w-[84px] text-center" />
               </Row>
               <span className="text-sm text-muted-strong">

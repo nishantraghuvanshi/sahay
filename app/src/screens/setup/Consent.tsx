@@ -59,9 +59,10 @@ export default function Consent() {
     setSaveError(null)
     try {
       await authApi.post('/app/onboarding', {
-        // The draft has no field for the caregiver's own name — screen 1b asks
-        // for the parent's, and only for the caregiver's *relation* to them.
-        // Sent empty so the API's COALESCE leaves whatever is on record alone.
+        // Signup step 5 already set the caregiver's name, so this is sent empty
+        // on purpose — the API COALESCEs it and leaves the stored name alone.
+        // Sending '' here rather than dropping the field keeps the shape stable
+        // for a future edit-profile screen that will want to change it.
         caregiver_name: '',
         relation: draft.relation,
         parent_name: draft.parentName,
@@ -221,7 +222,7 @@ export default function Consent() {
               </p>
             )}
             {!ready && (
-              <span className="text-center text-sm text-muted">
+              <span className="text-center text-sm text-muted-strong">
                 {!optionChosen
                   ? 'Choose when we should call first'
                   : `${remaining} consent${remaining === 1 ? '' : 's'} left`}
@@ -358,7 +359,7 @@ function TimeSheet({
         <div className="mx-auto h-1 w-8 rounded bg-line-strong sm:hidden" />
         <Row>
           <span className="flex-1 text-md font-bold">When are they usually free?</span>
-          <button type="button" aria-label="Close" onClick={onClose} className="px-1 text-muted">
+          <button type="button" aria-label="Close" onClick={onClose} className="px-1 text-muted-strong">
             ✕
           </button>
         </Row>
@@ -398,7 +399,7 @@ function TimeSheet({
               {from} – {to}
             </span>
           </Row>
-          <p className="text-2xs text-muted">Times outside the window are not offered.</p>
+          <p className="text-2xs text-muted-strong">Times outside the window are not offered.</p>
         </Card>
 
         <Button disabled={!picked} onClick={() => picked && onPick(picked)} className="w-full">

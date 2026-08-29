@@ -18,6 +18,9 @@ export default function RequireAuth() {
   if (session === undefined) return null
 
   if (session === null) {
+    // Always /login. `/` is the marketing landing page — a different job, and not
+    // where someone who was reaching for a specific screen wants to be dropped.
+    //
     // `from` so a deep link survives the detour — someone opening a link to an
     // alert lands on that alert after signing in, not on the home screen.
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />

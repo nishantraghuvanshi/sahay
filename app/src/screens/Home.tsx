@@ -14,6 +14,7 @@ import {
   Row,
   SeverityChip,
   Tag,
+  useParentLanguage,
 } from '../ui'
 import {
   useCalls,
@@ -34,6 +35,7 @@ import type { DaySummaryItem } from '../api/types'
  * A calm day is mostly whitespace and one reassuring line; a bad day opens with a red banner.
  */
 export default function Home() {
+  const parentLang = useParentLanguage()
   const record = useCareRecord()
   const doses = useDoseHistory()
   const summary = useDaySummary()
@@ -65,6 +67,11 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+      {/* The only screen with no visible page title: on desktop the sidebar carries the
+          name, on a phone the row below does, and neither is a heading. Without this a
+          screen reader announces the most-visited screen in the app as nothing at all. */}
+      <h1 className="sr-only">{name} — today</h1>
+
       {/* ------------------------------------------ header (1f): who, how, ⚙ settings.
           Desktop has the sidebar for both, so this row is phone-only. */}
       <Row className="lg:hidden">
@@ -88,7 +95,10 @@ export default function Home() {
         <Card emphasis="danger" className="kv-rise gap-3">
           <Row className="flex-wrap gap-2">
             <Tag tone="danger">{openAlert.level}</Tag>
-            <Label className="text-danger">Needs you now</Label>
+            {/* Ink, not danger. On the rose ground this label measured 4.10:1 and failed
+                AA at 11px — and the red was redundant anyway: the P1 badge, the card's
+                ground and its left mark are all already saying it. Ink reads 15.20:1. */}
+            <Label className="text-ink">Needs you now</Label>
             <Label className="ml-auto tnum">
               {openAlert.sent_at ? relativeTime(new Date(openAlert.sent_at)) : 'just now'}
             </Label>
@@ -229,7 +239,7 @@ export default function Home() {
               {lastCallObservation ? (
                 <>
                   <blockquote
-                    lang="hi"
+                    lang={parentLang}
                     className="text-md leading-relaxed font-semibold break-words"
                   >
                     “{lastCallObservation.text}”
@@ -262,7 +272,7 @@ export default function Home() {
               <Label className="tnum">{saidThisWeek.length}</Label>
             </Row>
             {saidThisWeek[0] ? (
-              <blockquote lang="hi" className="text-sm leading-relaxed font-semibold break-words">
+              <blockquote lang={parentLang} className="text-sm leading-relaxed font-semibold break-words">
                 “{saidThisWeek[0].text}”
               </blockquote>
             ) : (
@@ -315,7 +325,7 @@ function SummaryRow({ item }: { item: DaySummaryItem }) {
 
   const body = (
     <Row className="items-start gap-3 py-1.5">
-      <span className="tnum w-12 shrink-0 pt-px text-2xs font-bold tracking-wide text-muted">
+      <span className="tnum w-12 shrink-0 pt-px text-2xs font-bold tracking-wide text-muted-strong">
         {time}
       </span>
       <span

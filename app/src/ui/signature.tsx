@@ -86,7 +86,7 @@ export function QuoteBlock({
         {children}
       </blockquote>
       {attribution && (
-        <figcaption className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+        <figcaption className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-strong">
           {attribution}
         </figcaption>
       )}

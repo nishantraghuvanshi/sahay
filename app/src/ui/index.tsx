@@ -81,7 +81,9 @@ export function Chip({
           ? 'border-ink bg-ink text-paper'
           : 'border-line-strong bg-paper text-ink hover:border-ink',
         onClick && 'active:scale-[0.97]',
-        onClick ? 'min-h-[40px]' : 'min-h-[34px]',
+        // A chip you can press is a control and takes the 44px floor; a chip that only
+        // reads a value is text and stays compact, so rows of them do not sprawl.
+        onClick ? 'min-h-[44px]' : 'min-h-[34px]',
         className,
       )}
     >
@@ -99,9 +101,9 @@ export function Tag({
 }: Div & { outline?: boolean; tone?: 'ink' | 'danger' | 'warn' | 'accent' }) {
   const solid: Record<string, string> = {
     ink: 'bg-ink text-paper',
-    danger: 'bg-danger text-white',
-    warn: 'bg-warn text-white',
-    accent: 'bg-accent text-white',
+    danger: 'bg-danger text-paper',
+    warn: 'bg-warn text-paper',
+    accent: 'bg-accent text-paper',
   }
   const outlined: Record<string, string> = {
     ink: 'border border-ink bg-paper text-ink',
@@ -190,7 +192,9 @@ export function Field({
     <div
       className={clsx(
         'rounded-lg border border-line-strong bg-paper px-3 py-2.5 text-sm',
-        value ? 'text-ink' : 'text-muted',
+        // An empty field still has to be read. `muted` measures 3.9:1 on paper and
+        // fails AA; `muted-strong` is the floor for anything with words in it.
+        value ? 'text-ink' : 'text-muted-strong',
         className,
       )}
     >
@@ -229,12 +233,14 @@ export function Placeholder({ className, children }: Div) {
   return (
     <div
       className={clsx(
-        'flex items-center justify-center rounded-lg border border-line-strong text-center text-xs text-muted',
+        'flex items-center justify-center rounded-lg border border-line-strong text-center text-xs text-muted-strong',
         className,
       )}
+      // The hatch is the only place in the app that drew its own colours. Both stripes
+      // are ramp steps now, so it follows the palette instead of shadowing it.
       style={{
         backgroundImage:
-          'repeating-linear-gradient(45deg,#f4ecd9,#f4ecd9 6px,#eadfc9 6px,#eadfc9 12px)',
+          'repeating-linear-gradient(45deg,var(--color-canvas),var(--color-canvas) 6px,var(--color-fill) 6px,var(--color-fill) 12px)',
       }}
     >
       {children}
@@ -332,8 +338,15 @@ export function LoadingBlock({ rows = 3 }: { rows?: number }) {
 
 export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const message = error instanceof Error ? error.message : 'Something went wrong at our end.'
+  /**
+   * `rule`, not `danger`. The rose ground and rose left mark are the P1 language — they
+   * mean the parent said something about her chest. A screen that could not reach the
+   * API is not that, and spending the alarm colour on a failed fetch is how the one
+   * signal this product cannot afford to dilute gets diluted. An error here is a
+   * bookkeeping problem: mark it with the ink rule and say so calmly.
+   */
   return (
-    <Card emphasis="danger">
+    <Card emphasis="rule">
       <Label>Not loaded</Label>
       <div className="text-sm font-semibold">{message}</div>
       <div className="text-xs text-muted-strong">
@@ -362,3 +375,4 @@ export function EmptyBlock({ title, body, action }: { title: string; body: strin
 
 /* Signature components live in their own file; re-exported so screens keep one import. */
 export * from './signature'
+export * from './useParentLanguage'

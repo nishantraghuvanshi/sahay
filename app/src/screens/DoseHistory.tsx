@@ -211,7 +211,7 @@ export default function DoseHistory() {
               )}
 
               {filter !== 'all' && group.shown.length < group.events.length && (
-                <div className="text-2xs text-muted">
+                <div className="text-2xs text-muted-strong">
                   Showing {group.shown.length} of {group.events.length} rows for this day.
                 </div>
               )}
@@ -248,7 +248,7 @@ export default function DoseHistory() {
 function DoseRow({ event, medication }: { event: DoseEvent; medication: Medication | undefined }) {
   const body = (
     <div className="grid grid-cols-[3.75rem_minmax(0,1fr)] gap-x-3 py-2.5 sm:py-2">
-      <span className="pt-0.5 text-2xs font-bold tracking-wide text-muted">
+      <span className="pt-0.5 text-2xs font-bold tracking-wide text-muted-strong">
         {clock(event.slot_time)}
       </span>
 
@@ -279,7 +279,7 @@ function DoseRow({ event, medication }: { event: DoseEvent; medication: Medicati
           </p>
         )}
 
-        <div className="text-2xs text-muted">
+        <div className="text-2xs text-muted-strong">
           logged {clock(event.created_at)}
           {event.call_session_id ? ' · on the call — open it' : ' · no call attached'}
         </div>

@@ -59,11 +59,16 @@ export function AuthSteps({
   const [email, setEmail] = useState(draft.email)
   const [emailOtp, setEmailOtp] = useState('')
 
-  const [busy, setBusy] = useState<null | 'phone' | 'phoneOtp' | 'email' | 'emailOtp'>(null)
+  const [name, setName] = useState('')
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState<
+    null | 'phone' | 'phoneOtp' | 'email' | 'emailOtp' | 'details'
+  >(null)
   const [phoneErr, setPhoneErr] = useState<Err>(null)
   const [phoneOtpErr, setPhoneOtpErr] = useState<Err>(null)
   const [emailErr, setEmailErr] = useState<Err>(null)
   const [emailOtpErr, setEmailOtpErr] = useState<Err>(null)
+  const [detailsErr, setDetailsErr] = useState<Err>(null)
 
   /** Cooldown the server handed back. Counting from our own constant would let
    *  the button re-enable before the server would accept another send. */
@@ -92,7 +97,17 @@ export function AuthSteps({
       ? 'active'
       : 'locked'
 
-  const allDone = phoneVerified && emailVerified
+  // The caregiver's own name is the signal that step 5 is finished — it is the
+  // one field with no other source. `caregivers.name` defaults to '' at signup,
+  // and Settings and the Care record have been reading the fixture's "Shubh".
+  const detailsDone = Boolean(session?.name?.trim())
+  const detailsStep: StepState = detailsDone
+    ? 'done'
+    : phoneVerified && emailVerified
+      ? 'active'
+      : 'locked'
+
+  const allDone = phoneVerified && emailVerified && detailsDone
 
   /** Where signing in should land. A deep link that bounced through the guard
    *  comes back as `state.from`, so the alert someone opened is still the
@@ -173,6 +188,20 @@ export function AuthSteps({
 
   // A fragment, not a wrapper: `page` relies on being a direct child of the
   // screen's flex column so the footer's mt-auto reaches the bottom of the page.
+  const saveDetails = async () => {
+    setBusy('details')
+    setDetailsErr(null)
+    try {
+      const res = await auth.completeSignup(name.trim(), pw, draft.relation || undefined)
+      queryClient.setQueryData(SESSION_KEY, res.caregiver)
+      setPw('') // no reason to keep it in memory once the server has the hash
+    } catch (err) {
+      setDetailsErr(message(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <>
       <Step n={1} title="Phone number" state={phoneStep} error={phoneErr}>
@@ -268,6 +297,49 @@ export function AuthSteps({
         )}
       </Step>
 
+      <Step n={5} title="Your details" state={detailsStep} error={detailsErr}>
+        <input
+          value={name}
+          disabled={detailsStep !== 'active'}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Your name"
+          autoComplete="name"
+          aria-label="Your name"
+          className={inputCls}
+        />
+        <input
+          type="password"
+          value={pw}
+          disabled={detailsStep !== 'active'}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="Create a password"
+          // `new-password` so a manager offers to generate one rather than
+          // autofilling whatever it has for this domain.
+          autoComplete="new-password"
+          aria-label="Create a password"
+          className={inputCls}
+        />
+        {detailsStep === 'active' && (
+          <>
+            <span className="text-sm text-muted-strong">
+              At least 8 characters. You will use this to sign in next time — the code
+              was only to prove the number is yours.
+            </span>
+            <Button
+              disabled={!name.trim() || pw.length < 8 || busy !== null}
+              onClick={() => void saveDetails()}
+            >
+              {busy === 'details' ? 'Saving…' : 'Save and continue'}
+            </Button>
+          </>
+        )}
+        {detailsDone && session && (
+          <span className="text-sm text-muted-strong">
+            Signed in as {session.name}.
+          </span>
+        )}
+      </Step>
+
       <div className={clsx('flex flex-col gap-3', variant === 'page' ? 'mt-auto pt-4' : 'pt-1')}>
         <p className="text-sm leading-relaxed text-muted-strong">
           By continuing you agree to the Terms and consent to automated voice calls being placed to
@@ -300,7 +372,7 @@ function Step({
   return (
     <Card
       emphasis={state === 'active' ? 'border' : 'none'}
-      className={clsx('gap-2', state === 'locked' && 'opacity-60')}
+      className={clsx('gap-2', state === 'locked' && 'bg-canvas')}
       aria-disabled={state === 'locked'}
     >
       <Row>
@@ -309,7 +381,7 @@ function Step({
         {state === 'done' ? (
           <span className="text-sm font-semibold">verified</span>
         ) : state === 'locked' ? (
-          <span className="text-sm text-muted">locked</span>
+          <span className="text-sm text-muted-strong">locked</span>
         ) : null}
       </Row>
       {children}
@@ -420,7 +492,7 @@ function Resend({
   return (
     <Row>
       {left > 0 ? (
-        <span className="text-sm text-muted">Resend in 0:{String(left).padStart(2, '0')}</span>
+        <span className="text-sm text-muted-strong">Resend in 0:{String(left).padStart(2, '0')}</span>
       ) : (
         <button
           type="button"

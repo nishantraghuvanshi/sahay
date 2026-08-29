@@ -6,6 +6,7 @@ import { useSession } from './auth/SessionProvider'
 import Landing from './screens/landing/Landing'
 import KitchenSink from './screens/KitchenSink'
 import Login from './screens/setup/Login'
+import Signup from './screens/setup/Signup'
 import Parent from './screens/setup/Parent'
 import Prescription from './screens/setup/Prescription'
 import Analysing from './screens/setup/Analysing'
@@ -40,7 +41,9 @@ export default function App() {
       <Route index element={<Root />} />
 
       {/* auth + onboarding — no shell chrome */}
+      {/* "Get started" creates an account; "Log in" is the returning caregiver. */}
       <Route path="/login" element={DEV_MODE ? <Navigate to="/setup/prescription" replace /> : <Login />} />
+      <Route path="/signup" element={DEV_MODE ? <Navigate to="/setup/prescription" replace /> : <Signup />} />
       {/* Onboarding writes against the signed-in caregiver, so it is behind the
           same gate as the app itself — step 2 of login is what opens it. */}
       <Route element={<RequireAuth />}>

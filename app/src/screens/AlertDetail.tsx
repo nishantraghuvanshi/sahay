@@ -12,6 +12,7 @@ import {
   LoadingBlock,
   Row,
   Tag,
+  useParentLanguage,
 } from '../ui'
 import { useCalls, useCareRecord, useEscalations, useHandoff, useIntake } from '../api/hooks'
 import { INTAKE_FIELD_COUNT } from '../api/types'
@@ -179,6 +180,7 @@ function excerpt(lines: TranscriptLine[], trigger: number): { lines: TranscriptL
 /* ------------------------------------------------------------------- screen */
 
 export default function AlertDetail() {
+  const parentLang = useParentLanguage()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
@@ -307,7 +309,7 @@ export default function AlertDetail() {
         </Row>
 
         <h1
-          lang="hi"
+          lang={parentLang}
           className="text-xl leading-snug font-bold break-words hyphens-none sm:text-2xl"
         >
           {chiefComplaint ? `“${chiefComplaint}”` : `${escalation.level} alert raised`}
@@ -382,7 +384,7 @@ export default function AlertDetail() {
                     </span>
                     {/* Verbatim. Rendered in the language it was spoken in — never translated. */}
                     <span
-                      lang="hi"
+                      lang={parentLang}
                       className={clsx(
                         'min-w-0 flex-1 rounded text-base leading-relaxed break-words hyphens-none whitespace-pre-wrap',
                         line.agent && !matched && 'text-muted-strong',
@@ -590,11 +592,12 @@ export default function AlertDetail() {
 
 /** One of the twelve. A field we do not hold reads "not captured", never blank. */
 function IntakeFieldRow({ spec, value }: { spec: FieldSpec; value: string | null }) {
+  const parentLang = useParentLanguage()
   const inherited = isInherited(spec.provenance)
   return (
     <div className="flex flex-col gap-1 border-b border-line py-2 last:border-b-0">
       <Row className="items-start gap-2">
-        <span className="w-4 shrink-0 text-2xs font-bold text-muted tabular-nums">{spec.n}</span>
+        <span className="w-4 shrink-0 text-2xs font-bold text-muted-strong tabular-nums">{spec.n}</span>
         <span className="min-w-0 flex-1 text-sm font-semibold">{spec.label}</span>
         <span className="shrink-0">
           {/* Filled = the agent had to ask. Outlined = we already held it. */}
@@ -606,7 +609,7 @@ function IntakeFieldRow({ spec, value }: { spec: FieldSpec; value: string | null
       <div className="pl-6">
         {value ? (
           <span
-            lang={spec.verbatim ? 'hi' : undefined}
+            lang={spec.verbatim ? parentLang : undefined}
             className={clsx(
               'block text-base leading-relaxed break-words hyphens-none',
               spec.verbatim && 'font-semibold',
@@ -615,7 +618,7 @@ function IntakeFieldRow({ spec, value }: { spec: FieldSpec; value: string | null
             {spec.verbatim ? `“${value}”` : value}
           </span>
         ) : (
-          <span className="block text-base text-muted italic">not captured</span>
+          <span className="block text-base text-muted-strong italic">not captured</span>
         )}
       </div>
     </div>

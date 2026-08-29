@@ -140,7 +140,7 @@ export default function Prescription() {
           type="button"
           onClick={() => navigate('/setup/parent')}
           aria-label="Back"
-          className="-ml-1 grid size-11 shrink-0 place-items-center rounded-md text-lg text-muted"
+          className="-ml-1 grid size-11 shrink-0 place-items-center rounded-md text-lg text-muted-strong"
         >
           ←
         </button>
@@ -280,7 +280,7 @@ export default function Prescription() {
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <span className="truncate text-base font-semibold">{f.name}</span>
                     <Bar fill={f.progress / 100} />
-                    <span className="text-2xs text-muted">
+                    <span className="text-2xs text-muted-strong">
                       {done ? `${mb(f.size)} · read ✓` : `uploading · ${f.progress}%`}
                     </span>
                   </div>
@@ -288,7 +288,7 @@ export default function Prescription() {
                     type="button"
                     onClick={() => removeFile(f.id)}
                     aria-label={`Remove ${f.name}`}
-                    className="grid size-11 shrink-0 place-items-center rounded-md text-base text-muted"
+                    className="grid size-11 shrink-0 place-items-center rounded-md text-base text-muted-strong"
                   >
                     ✕
                   </button>
@@ -316,9 +316,9 @@ export default function Prescription() {
         Analyse prescription
       </Button>
       {files.some((f) => f.progress < 100) && (
-        <p className="text-center text-sm text-muted">Waiting for the upload to finish…</p>
+        <p className="text-center text-sm text-muted-strong">Waiting for the upload to finish…</p>
       )}
-      <p className="text-2xs text-muted">
+      <p className="text-2xs text-muted-strong">
         Three ways in — camera, gallery, files. The same uploader is reused whenever a new
         prescription arrives.
       </p>

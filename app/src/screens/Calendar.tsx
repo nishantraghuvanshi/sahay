@@ -251,7 +251,7 @@ export default function Calendar() {
             />
           ))}
         </div>
-        <p className="px-1 text-2xs text-muted">
+        <p className="px-1 text-2xs text-muted-strong">
           Tap a day to see it below. The figure under each day counts confirmed doses out of the
           doses due that day.
         </p>
@@ -287,7 +287,7 @@ export default function Calendar() {
             <div key={group.slot}>
               {i > 0 && <Divider />}
               <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 py-2">
-                <span className="pt-2 text-2xs font-bold tracking-wide text-muted">
+                <span className="pt-2 text-2xs font-bold tracking-wide text-muted-strong">
                   {slotLabel(group.slot)}
                 </span>
                 <div className="flex min-w-0 flex-col gap-1.5">
@@ -319,7 +319,7 @@ export default function Calendar() {
           ))
         )}
 
-        <div className="text-2xs text-muted">
+        <div className="text-2xs text-muted-strong">
           What was said on the call, and any note against a dose, is on the{' '}
           <Link to="/doses" className="font-semibold underline">
             dose history
@@ -334,7 +334,7 @@ export default function Calendar() {
       <Card className="hidden gap-2 sm:flex">
         <Row className="items-baseline gap-2">
           <Label className="flex-1">The week · every dose at every time</Label>
-          <span className="text-2xs text-muted">days already past are dimmed</span>
+          <span className="text-2xs text-muted-strong">days already past are shaded</span>
         </Row>
 
         <div className="-mx-1 overflow-x-auto px-1">
@@ -354,14 +354,14 @@ export default function Calendar() {
                     className={clsx(
                       'rounded-lg px-1 py-1 text-center',
                       isToday && 'bg-ink text-white',
-                      !isToday && isPast && 'text-muted-strong opacity-70',
+                      !isToday && isPast && 'text-muted-strong',
                       !isToday && dayKey(day) === dayKey(selected) && 'border border-ink',
                     )}
                   >
                     <div
                       className={clsx(
                         'text-2xs font-bold tracking-[0.09em] uppercase',
-                        isToday ? 'text-white/70' : 'text-muted',
+                        isToday ? 'text-white/70' : 'text-muted-strong',
                       )}
                     >
                       {day.toLocaleDateString([], { weekday: 'short' })}
@@ -380,7 +380,7 @@ export default function Calendar() {
                 key={slot}
                 className="grid grid-cols-[3.75rem_repeat(7,minmax(0,1fr))] items-stretch gap-x-1.5 border-b border-line py-1.5"
               >
-                <span className="pt-2 text-2xs font-bold tracking-wide text-muted">{slot}</span>
+                <span className="pt-2 text-2xs font-bold tracking-wide text-muted-strong">{slot}</span>
                 {week.map((day, i) => {
                   const cell = bySlot[i]?.get(slot) ?? []
                   const isToday = dayKey(day) === dayKey(today)
@@ -391,11 +391,11 @@ export default function Calendar() {
                       className={clsx(
                         'rounded-md border p-1.5',
                         isToday ? 'border-[1.5px] border-ink bg-paper' : 'border-line-strong',
-                        isPast && !isToday && 'opacity-70',
+                        isPast && !isToday && 'bg-canvas',
                       )}
                     >
                       {cell.length === 0 ? (
-                        <span className="text-2xs text-muted">—</span>
+                        <span className="text-2xs text-muted-strong">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {cell.map((dose) => (
@@ -416,7 +416,7 @@ export default function Calendar() {
           </div>
         </div>
 
-        <p className="text-2xs text-muted">
+        <p className="text-2xs text-muted-strong">
           Doses are shown where the prescription puts them. To move a time, change the medicine —
           nothing on this grid can be dragged, because nothing here would save.
         </p>
@@ -572,7 +572,7 @@ function DayChip({
       <span
         className={clsx(
           'text-2xs font-bold tracking-[0.09em] uppercase',
-          selected ? 'text-white/70' : 'text-muted',
+          selected ? 'text-white/70' : 'text-muted-strong',
         )}
       >
         {day.toLocaleDateString([], { weekday: 'narrow' })}

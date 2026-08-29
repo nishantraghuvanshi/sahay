@@ -17,7 +17,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, field_validator
 
 from api import db
-from api.auth import otp, session as sess
+from api.auth import otp, password as pw, session as sess
 from api.auth.deps import CaregiverDep, IpDep, SettingsDep
 from api.auth.otp import Channel, VerifyResult
 from api.services import delivery
@@ -187,6 +187,130 @@ async def otp_verify(
             email_verified_at=row["email_verified_at"],
         ).as_json(),
     }
+
+
+class CompleteSignupBody(BaseModel):
+    """Step 5 — the caregiver's own details.
+
+    Everything before this proves the phone and the email belong to them. This is
+    where they say who they are: `caregivers.name` had no other source, so the
+    Settings and Care record screens were reading a name that only ever existed
+    in the mock fixture.
+    """
+
+    name: str
+    password: str
+    relationship: str | None = None
+
+
+class LoginBody(BaseModel):
+    """`identifier` is a phone in E.164 or an email — whichever they signed up with."""
+
+    identifier: str
+    password: str
+
+
+@router.post("/complete-signup")
+async def complete_signup(body: CompleteSignupBody, caregiver: CaregiverDep):
+    """Name + password, once the OTPs have proved both channels.
+
+    Session-required by design: a password can only ever be set by someone who
+    has already proved they hold the phone. That is what stops it becoming a way
+    to claim an account you do not own.
+    """
+    name = body.name.strip()
+    if not name:
+        return {"ok": False, "error": "name_required"}
+
+    problem = pw.problem_with(body.password)
+    if problem:
+        return {"ok": False, "error": problem}
+
+    digest, salt = pw.hash_password(body.password)
+
+    async with db.transaction() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE caregivers
+               SET name = $2,
+                   relationship = COALESCE(NULLIF($3, ''), relationship),
+                   password_hash = $4, password_salt = $5, password_set_at = now(),
+                   failed_logins = 0, locked_until = NULL
+             WHERE id = $1
+         RETURNING id, name, phone_e164, email, relationship,
+                   phone_verified_at, email_verified_at
+            """,
+            caregiver.id,
+            name,
+            (body.relationship or "").strip(),
+            digest,
+            salt,
+        )
+
+    return {"ok": True, "caregiver": _as_json(row)}
+
+
+@router.post("/login")
+async def login(body: LoginBody, request: Request, response: Response, settings: SettingsDep):
+    """Returning caregiver: identifier + password.
+
+    Every failure answers `invalid_credentials`, whatever actually went wrong —
+    unknown account, no password set, wrong password. Naming the real reason
+    would turn this endpoint into a way to enumerate who has an account, which
+    is the same leak `/auth/otp/start` is shaped to avoid.
+    """
+    identifier = body.identifier.strip()
+    invalid = {"ok": False, "error": "invalid_credentials"}
+
+    async with db.transaction() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, name, phone_e164, email, relationship,
+                   phone_verified_at, email_verified_at,
+                   password_hash, password_salt, failed_logins, locked_until
+              FROM caregivers
+             WHERE phone_e164 = $1 OR lower(email) = lower($1)
+             FOR UPDATE
+            """,
+            identifier,
+        )
+        if row is None or row["password_hash"] is None:
+            # No account, or one that never set a password. Same answer either way.
+            return invalid
+
+        if pw.is_locked(row["locked_until"]):
+            return {"ok": False, "error": "account_locked"}
+
+        if not pw.verify_password(body.password, row["password_hash"], row["password_salt"]):
+            failed = row["failed_logins"] + 1
+            await conn.execute(
+                "UPDATE caregivers SET failed_logins = $2, locked_until = $3 WHERE id = $1",
+                row["id"],
+                failed,
+                pw.lockout_until() if failed >= pw.MAX_FAILED_LOGINS else None,
+            )
+            return invalid
+
+        await conn.execute(
+            "UPDATE caregivers SET failed_logins = 0, locked_until = NULL WHERE id = $1",
+            row["id"],
+        )
+        token = await sess.issue(conn, settings, row["id"], request.headers.get("user-agent"))
+        sess.set_cookie(response, settings, token)
+
+    return {"ok": True, "caregiver": _as_json(row)}
+
+
+def _as_json(row) -> dict:
+    return sess.Caregiver(
+        id=str(row["id"]),
+        name=row["name"],
+        phone_e164=row["phone_e164"],
+        email=row["email"],
+        relationship=row["relationship"],
+        phone_verified_at=row["phone_verified_at"],
+        email_verified_at=row["email_verified_at"],
+    ).as_json()
 
 
 @router.get("/me")

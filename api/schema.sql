@@ -210,3 +210,19 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 -- "log me out everywhere", and the per-caregiver session list in settings.
 CREATE INDEX IF NOT EXISTS idx_sessions_caregiver
   ON auth_sessions(caregiver_id) WHERE revoked_at IS NULL;
+
+-- ============ caregiver password (login for returning caregivers) ============
+-- OTP proves the phone once, at signup. A password is what a returning caregiver
+-- uses so they are not waiting on an SMS every session.
+
+-- scrypt, not a bare hash: a password is low-entropy, so the defence has to be
+-- that guessing is slow. Salt is per-caregiver, stored beside the digest.
+ALTER TABLE caregivers ADD COLUMN IF NOT EXISTS password_hash   BYTEA;
+ALTER TABLE caregivers ADD COLUMN IF NOT EXISTS password_salt   BYTEA;
+ALTER TABLE caregivers ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ;
+
+-- Online guessing is throttled per account. Without this, a password is one
+-- long-lived secret with unlimited attempts — strictly weaker than the OTP it
+-- sits beside, which dies after five.
+ALTER TABLE caregivers ADD COLUMN IF NOT EXISTS failed_logins SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE caregivers ADD COLUMN IF NOT EXISTS locked_until  TIMESTAMPTZ;

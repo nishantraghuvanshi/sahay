@@ -355,7 +355,7 @@ function MedicineRow({ med }: { med: Medication }) {
       {/* priority — a word, never a colour */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <Label className="sm:hidden">Priority</Label>
-        {med.is_priority ? <Tag>priority</Tag> : <span className="text-base text-muted">—</span>}
+        {med.is_priority ? <Tag>priority</Tag> : <span className="text-base text-muted-strong">—</span>}
       </div>
     </div>
   )

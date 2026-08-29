@@ -111,7 +111,7 @@ export default function Analysing() {
             <span>scanned page preview</span>
             <span className="text-2xs">(detected dose lines boxed)</span>
           </Placeholder>
-          <div className="text-2xs text-muted">
+          <div className="text-2xs text-muted-strong">
             {draft.files.length > 0
               ? `Reading ${draft.files.length} file${draft.files.length > 1 ? 's' : ''} · ${draft.files
                   .map((f) => f.name)
@@ -134,7 +134,7 @@ export default function Analysing() {
                       className={clsx(
                         'flex-1 text-base',
                         running && 'font-semibold',
-                        !complete && !running && 'text-muted',
+                        !complete && !running && 'text-muted-strong',
                       )}
                     >
                       {stage.label}
@@ -151,7 +151,7 @@ export default function Analysing() {
           <Card>
             <Label>Found so far</Label>
             <Row className="flex-wrap gap-1.5">
-              {revealed === 0 && <span className="text-sm text-muted">still reading…</span>}
+              {revealed === 0 && <span className="text-sm text-muted-strong">still reading…</span>}
               {DETECTED.slice(0, revealed).map((m) => (
                 <Chip key={m.id}>
                   {m.name} {m.dose}
@@ -185,7 +185,7 @@ export default function Analysing() {
       <Button className="w-full" disabled={!allDone} onClick={() => navigate('/setup/schedule')}>
         Approve schedule
       </Button>
-      <p className="text-2xs text-muted">
+      <p className="text-2xs text-muted-strong">
         Enabled once matching finishes. Nothing is saved to the care record until you sign the
         schedule off.
       </p>

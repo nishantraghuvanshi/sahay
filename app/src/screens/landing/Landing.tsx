@@ -91,7 +91,7 @@ function SiteFooter() {
         <span className="text-sm text-muted-strong">
           The care line that already knows.
         </span>
-        <span className="ml-auto text-xs text-muted">
+        <span className="ml-auto text-xs text-muted-strong">
           Built at The Hive Hackathon by ApplyBee AI
         </span>
       </div>
@@ -123,7 +123,7 @@ function Hero() {
         </p>
 
         <div className="mt-1 flex flex-wrap gap-2.5">
-          <Button variant="accent" href="/login">
+          <Button variant="accent" href="/signup">
             Start free
           </Button>
           <Button variant="outline" href="#how-it-works">
@@ -162,7 +162,7 @@ function Hero() {
 
       {/* right — the real auth column, 376px as drawn */}
       <div className="flex w-full flex-col gap-3 bg-surface px-5 py-10 sm:px-8 lg:w-[376px] lg:shrink-0 lg:px-[34px] lg:py-11">
-        <div className="text-lg font-bold">Log in or sign up</div>
+        <div className="text-lg font-bold">Create your account</div>
         <p className="text-sm text-muted-strong">One account, one parent to start.</p>
         <div className="h-1" />
         <AuthSteps variant="inset" />
@@ -387,7 +387,7 @@ function Pricing() {
             </ul>
             <Button
               variant={t.featured ? 'accent' : 'outline'}
-              href="/login"
+              href="/signup"
               className="mt-auto w-full"
             >
               {t.cta}
@@ -395,7 +395,7 @@ function Pricing() {
           </Card>
         ))}
       </div>
-      <p className="text-xs text-muted">
+      <p className="text-xs text-muted-strong">
         Paid plans start after the trial. UPI checkout is not connected yet &mdash; choosing a
         plan takes you to sign-up.
       </p>

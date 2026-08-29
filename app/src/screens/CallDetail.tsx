@@ -10,6 +10,7 @@ import {
   Row,
   SeverityChip,
   Tag,
+  useParentLanguage,
 } from '../ui'
 import { useCalls, useCareRecord, useDoseHistory, useObservations } from '../api/hooks'
 import type { CallSession, DoseEvent, Medication, Observation } from '../api/types'
@@ -344,6 +345,7 @@ export default function CallDetail() {
  * quieter and outlined — so nothing here depends on colour.
  */
 function TranscriptTurn({ turn, who }: { turn: Turn; who: string | null }) {
+  const parentLang = useParentLanguage()
   return (
     <div
       className={clsx(
@@ -364,7 +366,7 @@ function TranscriptTurn({ turn, who }: { turn: Turn; who: string | null }) {
       </Row>
       {/* Verbatim. No clamp, no truncation, no ellipsis — the full line always renders. */}
       <p
-        lang="hi"
+        lang={parentLang}
         className={clsx(
           'text-md leading-relaxed break-words hyphens-none whitespace-pre-wrap',
           turn.isAgent ? 'text-muted-strong' : 'font-semibold',
@@ -436,7 +438,7 @@ function DoseLine({ dose, medication }: { dose: DoseEvent; medication: Medicatio
   return (
     <Link to="/doses" className="-mx-1 block rounded px-1 py-1.5 hover:bg-line/40">
       <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-2xs font-bold tracking-wide text-muted">
+        <span className="text-2xs font-bold tracking-wide text-muted-strong">
           {clock(dose.slot_time)}
         </span>
         <span className="text-md font-semibold break-words">
@@ -458,6 +460,7 @@ function DoseLine({ dose, medication }: { dose: DoseEvent; medication: Medicatio
 
 /** One observation this call kept — the sentence verbatim, exactly as the record holds it. */
 function ObservationLine({ observation }: { observation: Observation }) {
+  const parentLang = useParentLanguage()
   return (
     <Link to="/observations" className="-mx-1 block rounded px-1 py-1 hover:bg-line/40">
       <Row className="flex-wrap gap-x-2 gap-y-1">
@@ -466,7 +469,7 @@ function ObservationLine({ observation }: { observation: Observation }) {
         <Label className="ml-auto">{clock(observation.created_at)}</Label>
       </Row>
       <blockquote
-        lang="hi"
+        lang={parentLang}
         className={clsx(
           'mt-1 text-md leading-relaxed break-words hyphens-none whitespace-pre-wrap',
           observation.severity === 'red' ? 'font-bold' : 'font-semibold',

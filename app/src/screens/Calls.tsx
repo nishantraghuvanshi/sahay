@@ -242,7 +242,7 @@ function CallRow({
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
           {inbound ? <Tag>they called</Tag> : <Tag outline>we called</Tag>}
           <span className="text-md font-bold">{absoluteLabel(at, now)}</span>
-          <span className="text-sm text-muted">{relativeHint(at, now)}</span>
+          <span className="text-sm text-muted-strong">{relativeHint(at, now)}</span>
           <span className="ml-auto shrink-0 text-sm font-semibold">
             {!wasAnswered ? 'no answer' : ms !== null ? spanWords(ms) : 'still open'}
           </span>
@@ -264,7 +264,7 @@ function CallRow({
 
         {/* honest about the ring: this is time the line was open, not time anyone spoke */}
         {!wasAnswered && ms !== null && (
-          <div className="text-sm text-muted">
+          <div className="text-sm text-muted-strong">
             The line was open {spanWords(ms)} — ringing, not talking.
           </div>
         )}

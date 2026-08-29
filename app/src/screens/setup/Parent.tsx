@@ -219,7 +219,7 @@ export default function Parent() {
             className="size-4 accent-[#1a1a1a]"
           />
           <span className="flex-1 text-md font-semibold">Allow agent check-in calls</span>
-          <span className="text-sm text-muted">{draft.callsEnabled ? 'on' : 'off'}</span>
+          <span className="text-sm text-muted-strong">{draft.callsEnabled ? 'on' : 'off'}</span>
         </label>
         <p className="text-sm text-muted-strong">
           Turn this off and we set everything up but place no calls. You can switch it on later.
@@ -263,13 +263,13 @@ export default function Parent() {
         {draft.escalation.map((c, i) => (
           <Row key={i}>
             <span className="flex-1 text-base font-semibold">{c.name}</span>
-            <span className="text-sm text-muted">
+            <span className="text-sm text-muted-strong">
               {c.relationship} · after {c.after}
             </span>
             <button
               type="button"
               aria-label={`Remove ${c.name}`}
-              className="px-1 text-muted"
+              className="px-1 text-muted-strong"
               onClick={() => patch({ escalation: draft.escalation.filter((_, j) => j !== i) })}
             >
               ✕
@@ -429,7 +429,7 @@ function FieldInput({
         placeholder={placeholder}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md outline-none placeholder:text-muted focus:border-ink"
+        className="w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md outline-none placeholder:text-muted-strong focus:border-ink"
       />
       {hint && <span className="text-2xs text-muted-strong">{hint}</span>}
     </div>

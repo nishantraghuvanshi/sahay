@@ -12,6 +12,7 @@ import {
   LoadingBlock,
   Row,
   SeverityChip,
+  useParentLanguage,
 } from '../ui'
 import { useCalls, useEscalations, useObservations } from '../api/hooks'
 import { relativeTime } from '../lib/schedule'
@@ -159,9 +160,7 @@ export default function Observations() {
       {/* ------------------------------------------------------ what this screen is */}
       <Card className="gap-1.5">
         <Label>What she said</Label>
-        <div className="text-md leading-snug font-bold">
-          Her own words, as she said them.
-        </div>
+        <h1 className="text-md leading-snug font-bold">Her own words, as she said them.</h1>
         <div className="text-sm leading-relaxed text-muted-strong">
           Every line below is stored exactly as it was heard — nothing is translated,
           shortened, summarised or scored. The words are the record.
@@ -239,6 +238,7 @@ function ObservationRow({
   escalation: Escalation | null
   now: Date
 }) {
+  const parentLang = useParentLanguage()
   const at = new Date(observation.created_at)
 
   return (
@@ -253,7 +253,7 @@ function ObservationRow({
 
       {/* Verbatim. No clamp, no truncate, no ellipsis — the full sentence always renders. */}
       <blockquote
-        lang="hi"
+        lang={parentLang}
         className={clsx(
           'text-lg leading-relaxed break-words hyphens-none whitespace-pre-wrap sm:text-lg',
           observation.severity === 'red' ? 'font-bold' : 'font-semibold',

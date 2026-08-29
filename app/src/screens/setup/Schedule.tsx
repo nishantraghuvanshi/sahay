@@ -172,7 +172,7 @@ export default function Schedule() {
 
               <Row className="flex-wrap">
                 <Chip onClick={addMedicine}>+ Add medicine</Chip>
-                <span className="text-xs text-muted">
+                <span className="text-xs text-muted-strong">
                   Priority is the one dose the agent chases hardest — only one may hold it.
                 </span>
               </Row>
@@ -250,7 +250,7 @@ function MedicineRow({
   onRemove: () => void
 }) {
   const input =
-    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink placeholder:text-muted'
+    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink placeholder:text-muted-strong'
 
   return (
     <Card emphasis={med.unclear ? 'rule' : 'none'} className={clsx('gap-2.5', GRID)}>
@@ -312,7 +312,7 @@ function MedicineRow({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemoveSlot(i)}
                     aria-label={`Remove time ${slot}`}
-                    className="text-sm text-muted"
+                    className="text-sm text-muted-strong"
                   >
                     ✕
                   </button>
