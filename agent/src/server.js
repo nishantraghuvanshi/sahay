@@ -13,6 +13,7 @@ dotenv.config();
 const { loadProvidersConfig } = require('./core/config/loader');
 const ConversationEngine = require('./core/engine/engine');
 const PluginRegistry = require('./core/plugins/registry');
+const { assertPersistenceSatisfied } = require('./core/persistence-guard');
 
 // Adapters
 const ProviderRegistry = require('./adapters/providers/registry');
@@ -46,6 +47,10 @@ const useSqlite = process.env.DB_PATH || process.env.DATABASE_URL;
 const repository = useSqlite
   ? new SqliteRepository({ dbPath: process.env.DB_PATH || process.env.DATABASE_URL })
   : new ConsoleRepository();
+
+// 4b. Refuse to run a use case whose behaviour would be silently wrong
+//     without persistence (inbound context, resume-after-drop).
+assertPersistenceSatisfied(useCase, repository);
 
 // 5. Set up plugin registry (after the repository — plugins depend on it)
 const plugins = new PluginRegistry();

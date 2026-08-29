@@ -19,6 +19,9 @@ const EscalationAlertPlugin = require('./plugins/escalation-alert');
 module.exports = {
   name: 'medication-adherence',
   strategy: MedicationAdherenceStrategy,
+  // Inbound context and resume-after-drop read back prior state, so this
+  // use case is incorrect rather than merely degraded without a database.
+  requiresPersistence: true,
   // EscalationAlertPlugin closes the loop on ESCALATED_SYMPTOM — without it
   // the highest-stakes outcome is a database row nobody reads.
   plugins: [EscalationAlertPlugin],

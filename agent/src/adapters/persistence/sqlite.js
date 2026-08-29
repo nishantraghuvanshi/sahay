@@ -4,6 +4,9 @@ const { DatabaseSync } = require('node:sqlite');
 const OutcomeRepositoryPort = require('../../core/ports/repository');
 const logger = require('../../utils/logger');
 
+/** States a session may be moved into once it is no longer active. */
+const SESSION_END_STATES = ['completed', 'dropped', 'abandoned'];
+
 /**
  * SQLite Repository
  *
@@ -39,6 +42,11 @@ class SqliteRepository extends OutcomeRepositoryPort {
     this.db.exec('PRAGMA foreign_keys = ON;');
 
     this._migrate();
+  }
+
+  /** @returns {boolean} SQLite stores across calls. */
+  get isPersistent() {
+    return true;
   }
 
   /**
@@ -85,7 +93,293 @@ class SqliteRepository extends OutcomeRepositoryPort {
       CREATE INDEX IF NOT EXISTS idx_calls_outcome ON calls(outcome_label);
       CREATE INDEX IF NOT EXISTS idx_calls_created ON calls(created_at);
       CREATE INDEX IF NOT EXISTS idx_messages_call ON messages(call_id);
+
+      -- The record an inbound call is answered from. Without this, an inbound
+      -- caller is a stranger and there is nothing to "already know".
+      CREATE TABLE IF NOT EXISTS patients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone_e164 TEXT UNIQUE NOT NULL,
+        name TEXT,
+        drug_name TEXT,
+        language TEXT,
+        caregiver_name TEXT,
+        caregiver_phone TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT
+      );
+
+      -- Session state machine:
+      --   active ──normal end──► completed
+      --      │
+      --   disconnect ──► dropped ──redial in window──► active
+      --                     │
+      --             window expires ──► abandoned
+      --
+      -- Timestamps here are ISO-8601 UTC written from JS, NOT sqlite
+      -- datetime('now'), so the resume window can be compared against an
+      -- injected clock and tested without sleeping.
+      CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT UNIQUE NOT NULL,
+        patient_id INTEGER,
+        call_id TEXT,
+        direction TEXT,
+        status TEXT NOT NULL,
+        fields_so_far TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        ended_at TEXT,
+        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+      );
+
+      -- Resume lookup runs before the agent's first word, inside Vapi's
+      -- 7.5s assistant-request budget. It must not scan call history.
+      CREATE INDEX IF NOT EXISTS idx_sessions_patient_status
+        ON sessions(patient_id, status);
+      CREATE INDEX IF NOT EXISTS idx_sessions_ended ON sessions(ended_at);
     `);
+  }
+
+  // ── Patients ────────────────────────────────────────────────────
+
+  /**
+   * Insert or update a patient, keyed on phone.
+   * @param {Object} patient - { phone, name, drugName, language, caregiverName, caregiverPhone, notes }
+   */
+  async upsertPatient(patient) {
+    const stmt = this.db.prepare(`
+      INSERT INTO patients (
+        phone_e164, name, drug_name, language, caregiver_name, caregiver_phone, notes, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(phone_e164) DO UPDATE SET
+        name            = COALESCE(excluded.name, patients.name),
+        drug_name       = COALESCE(excluded.drug_name, patients.drug_name),
+        language        = COALESCE(excluded.language, patients.language),
+        caregiver_name  = COALESCE(excluded.caregiver_name, patients.caregiver_name),
+        caregiver_phone = COALESCE(excluded.caregiver_phone, patients.caregiver_phone),
+        notes           = COALESCE(excluded.notes, patients.notes),
+        updated_at      = datetime('now')
+    `);
+
+    stmt.run(
+      patient.phone,
+      patient.name || null,
+      patient.drugName || null,
+      patient.language || null,
+      patient.caregiverName || null,
+      patient.caregiverPhone || null,
+      patient.notes || null
+    );
+
+    logger.log('db_patient_upserted', { phone: patient.phone });
+  }
+
+  /**
+   * Resolve a caller to a patient record.
+   * @param {string} phone - E.164
+   * @returns {Object|null} Never invents a record.
+   */
+  async findPatientByPhone(phone) {
+    const stmt = this.db.prepare('SELECT * FROM patients WHERE phone_e164 = ?');
+    return stmt.get(phone) || null;
+  }
+
+  /** @returns {Array} All patients. */
+  async listPatients() {
+    return this.db.prepare('SELECT * FROM patients ORDER BY id ASC').all();
+  }
+
+  // ── Sessions ────────────────────────────────────────────────────
+
+  /**
+   * Open a session, enforcing at most one active session per patient.
+   *
+   * A new call arriving means any earlier session is no longer live, so the
+   * previous active one is marked dropped rather than rejected — that is also
+   * what makes it eligible for resume.
+   *
+   * @param {Object} session - { sessionId, patientId, callId, direction }
+   * @returns {Object} The created session row
+   */
+  async createSession(session) {
+    const nowIso = new Date().toISOString();
+
+    if (session.patientId != null) {
+      this.db
+        .prepare(
+          `UPDATE sessions SET status = 'dropped', ended_at = ?, updated_at = ?
+           WHERE patient_id = ? AND status = 'active'`
+        )
+        .run(nowIso, nowIso, session.patientId);
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO sessions (
+           session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?)`
+      )
+      .run(
+        session.sessionId,
+        session.patientId ?? null,
+        session.callId || null,
+        session.direction || null,
+        nowIso,
+        nowIso
+      );
+
+    logger.log('db_session_created', {
+      sessionId: session.sessionId,
+      direction: session.direction,
+    });
+
+    return this.getSession(session.sessionId);
+  }
+
+  /**
+   * @param {string} sessionId
+   * @returns {Object|null}
+   */
+  async getSession(sessionId) {
+    return this.db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId) || null;
+  }
+
+  /**
+   * @param {Object} [filters] - { patientId, status }
+   * @returns {Array}
+   */
+  async listSessions(filters = {}) {
+    const conditions = [];
+    const params = [];
+    if (filters.patientId != null) {
+      conditions.push('patient_id = ?');
+      params.push(filters.patientId);
+    }
+    if (filters.status) {
+      conditions.push('status = ?');
+      params.push(filters.status);
+    }
+    const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
+    return this.db
+      .prepare(`SELECT * FROM sessions${where} ORDER BY created_at DESC`)
+      .all(...params);
+  }
+
+  /**
+   * Close a session into a terminal (or resumable) state.
+   * @param {string} sessionId
+   * @param {string} status - completed | dropped | abandoned
+   */
+  async endSession(sessionId, status) {
+    if (!SESSION_END_STATES.includes(status)) {
+      throw new Error(
+        `Invalid session status: "${status}". Expected one of ${SESSION_END_STATES.join(', ')}`
+      );
+    }
+    const nowIso = new Date().toISOString();
+    const result = this.db
+      .prepare('UPDATE sessions SET status = ?, ended_at = ?, updated_at = ? WHERE session_id = ?')
+      .run(status, nowIso, nowIso, sessionId);
+
+    if (result.changes === 0) {
+      throw new Error(`Unknown session: "${sessionId}"`);
+    }
+    logger.log('db_session_ended', { sessionId, status });
+  }
+
+  /**
+   * @param {string} sessionId
+   * @returns {Object} Fields captured so far, {} when none.
+   */
+  async getSessionFields(sessionId) {
+    const row = await this.getSession(sessionId);
+    if (!row) throw new Error(`Unknown session: "${sessionId}"`);
+    return row.fields_so_far ? JSON.parse(row.fields_so_far) : {};
+  }
+
+  /**
+   * Merge newly captured fields into the session.
+   *
+   * Merges rather than replaces, and throws on an unknown session: an UPDATE
+   * that matches zero rows is how this codebase previously lost a pilot's
+   * worth of outcomes, and losing intake fields mid-call is the same bug.
+   *
+   * @param {string} sessionId
+   * @param {Object} fields
+   * @returns {Object} The merged fields
+   */
+  async updateSessionFields(sessionId, fields) {
+    const current = await this.getSessionFields(sessionId);
+    const merged = { ...current, ...fields };
+
+    const result = this.db
+      .prepare('UPDATE sessions SET fields_so_far = ?, updated_at = ? WHERE session_id = ?')
+      .run(JSON.stringify(merged), new Date().toISOString(), sessionId);
+
+    if (result.changes === 0) {
+      throw new Error(`Unknown session: "${sessionId}"`);
+    }
+    return merged;
+  }
+
+  /**
+   * The most recent dropped session for a patient still inside the window.
+   *
+   * @param {number} patientId
+   * @param {number} windowMinutes
+   * @param {Date} [now] - Injected clock; defaults to wall time
+   * @returns {Object|null}
+   */
+  async findResumableSession(patientId, windowMinutes, now = new Date()) {
+    const cutoff = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM sessions
+           WHERE patient_id = ? AND status = 'dropped' AND ended_at >= ?
+           ORDER BY ended_at DESC LIMIT 1`
+        )
+        .get(patientId, cutoff) || null
+    );
+  }
+
+  /**
+   * Move dropped sessions past the window to abandoned.
+   * @param {number} windowMinutes
+   * @param {Date} [now] - Injected clock
+   * @returns {number} Rows expired
+   */
+  async expireStaleSessions(windowMinutes, now = new Date()) {
+    const cutoff = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
+    const result = this.db
+      .prepare(
+        `UPDATE sessions SET status = 'abandoned', updated_at = ?
+         WHERE status = 'dropped' AND ended_at < ?`
+      )
+      .run(new Date().toISOString(), cutoff);
+
+    if (result.changes > 0) {
+      logger.log('db_sessions_expired', { count: result.changes, windowMinutes });
+    }
+    return result.changes;
+  }
+
+  /**
+   * Recent calls for a caller, newest first — the "what you said last time"
+   * half of the inbound context.
+   *
+   * @param {string} phone
+   * @param {number} [limit=3] - Kept small; this runs inside the 7.5s budget
+   * @returns {Array}
+   */
+  async recentCallsForPhone(phone, limit = 3) {
+    return this.db
+      .prepare(
+        'SELECT * FROM calls WHERE phone = ? ORDER BY created_at DESC, id DESC LIMIT ?'
+      )
+      .all(phone, Math.min(limit, 20));
   }
 
   /**
@@ -121,9 +415,9 @@ class SqliteRepository extends OutcomeRepositoryPort {
     const stmt = this.db.prepare(`
       INSERT INTO calls (
         call_id, outcome_label, outcome_source, outcome_reason, transcript,
-        duration_seconds, cost, prompt_version, parent_id, attempt_number, ended_at
+        duration_seconds, cost, prompt_version, parent_id, attempt_number, phone, ended_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(call_id) DO UPDATE SET
         outcome_label   = excluded.outcome_label,
         outcome_source  = excluded.outcome_source,
@@ -134,6 +428,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
         prompt_version  = COALESCE(excluded.prompt_version, calls.prompt_version),
         parent_id       = COALESCE(excluded.parent_id, calls.parent_id),
         attempt_number  = COALESCE(excluded.attempt_number, calls.attempt_number),
+        phone           = COALESCE(excluded.phone, calls.phone),
         ended_at        = datetime('now')
     `);
 
@@ -147,7 +442,8 @@ class SqliteRepository extends OutcomeRepositoryPort {
       outcome.cost ?? null,
       outcome.promptVersion || null,
       outcome.parentId || null,
-      outcome.attemptNumber ?? null
+      outcome.attemptNumber ?? null,
+      outcome.phone || null
     );
 
     logger.log('db_outcome_saved', {
@@ -256,3 +552,4 @@ class SqliteRepository extends OutcomeRepositoryPort {
 }
 
 module.exports = SqliteRepository;
+module.exports.SESSION_END_STATES = SESSION_END_STATES;

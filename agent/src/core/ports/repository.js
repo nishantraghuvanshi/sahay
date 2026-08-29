@@ -8,6 +8,18 @@
  */
 class OutcomeRepositoryPort {
   /**
+   * Whether this repository actually stores anything across calls.
+   *
+   * Read by the persistence guard so core/ can enforce a use case's
+   * persistence requirement without importing any adapter.
+   *
+   * @returns {boolean}
+   */
+  get isPersistent() {
+    return false;
+  }
+
+  /**
    * Save a call outcome.
    * @param {Object} outcome - { callId, label, source, reason, transcript, duration, cost, ... }
    */
