@@ -1,0 +1,30 @@
+# secrets — excluded from commit 1 (NFR-7, TRD §15)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# node / next
+node_modules/
+.next/
+dist/
+
+# os
+.DS_Store
+*.log
+
+# recordings are large; scores and transcripts DO ship
+evidence/recordings/*
+!evidence/recordings/.gitkeep
+
+# generated checklist artifacts — source of truth is the .md
+docs/checklists/*.docx
+docs/checklists/*.html
+docs/checklists/*.zip
