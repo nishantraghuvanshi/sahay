@@ -57,6 +57,11 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return [];
   }
 
+  async setPatientSchedule(patientId, updates) {
+    this._noop('patient_schedule_set_skipped', { patientId, ...updates });
+    return null;
+  }
+
   async createSession(session) {
     this._noop('session_create_skipped', { sessionId: session && session.sessionId });
     return null;
@@ -138,6 +143,11 @@ class ConsoleRepository extends OutcomeRepositoryPort {
 
   async setDoseStatus(medicationId, slotTime, status) {
     this._noop('dose_status_set_skipped', { medicationId, slotTime, status });
+    return null;
+  }
+
+  async recordDoseAttempt(medicationId, slotTime, opts) {
+    this._noop('dose_attempt_record_skipped', { medicationId, slotTime, ...opts });
     return null;
   }
 
