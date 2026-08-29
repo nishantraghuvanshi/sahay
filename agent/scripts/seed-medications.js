@@ -32,8 +32,60 @@ const { localSlotToUtc } = require('../src/utils/time');
  */
 const SEED_PATIENTS = [
   {
+    phone: '+918104348262',
+    name: 'Anmol',
+    drugName: 'Metformin',
+    language: 'hi',
+    caregiverName: 'Shubh',
+    caregiverPhone: '+919876500000',
+    timezone: 'Asia/Kolkata',
+    notes: 'Verified Twilio caller ID — live outbound test.',
+    medications: [
+      {
+        name: 'Metformin',
+        dose: '500mg',
+        times: ['08:00', '20:00'],
+        foodRule: 'after',
+        startDate: '2026-01-01',
+        endDate: null,
+        active: true,
+      },
+    ],
+  },
+  {
+    phone: '+919748670058',
+    name: 'Anmol',
+    drugName: 'Metformin',
+    language: 'hi',
+    caregiverName: 'Shubh',
+    caregiverPhone: '+919876500000',
+    timezone: 'Asia/Kolkata',
+    notes: 'Live inbound test — own phone, consented.',
+    medications: [
+      {
+        name: 'Metformin',
+        dose: '500mg',
+        times: ['08:00', '20:00'],
+        foodRule: 'after',
+        startDate: '2026-01-01',
+        endDate: null,
+        active: true,
+      },
+    ],
+  },
+  {
     phone: '+919876543210',
-    name: 'Sharma-ji',
+    // The prompt appends 'जी'; do not bake the honorific into the name.
+    name: 'Sharma',
+    // Every variable the prompt interpolates. Left null, drug_name renders as
+    // an empty string and caregiver_name falls back to the generic
+    // "आपके परिवार" — which is why a seeded call sounded oddly impersonal.
+    drugName: 'Metformin',
+    language: 'hi',
+    caregiverName: 'Shubh',
+    caregiverPhone: '+919876500000',
+    timezone: 'Asia/Kolkata',
+    notes: 'Pilot test patient. Team phone only.',
     medications: [
       {
         name: 'Metformin',
@@ -128,7 +180,15 @@ async function main() {
   let staleRowsRemoved = 0;
 
   for (const patientSeed of SEED_PATIENTS) {
-    await repo.upsertPatient({ phone: patientSeed.phone, name: patientSeed.name });
+          await repo.upsertPatient({
+        phone: patientSeed.phone,
+        name: patientSeed.name,
+        drugName: patientSeed.drugName,
+        language: patientSeed.language,
+        caregiverName: patientSeed.caregiverName,
+        caregiverPhone: patientSeed.caregiverPhone,
+        notes: patientSeed.notes,
+      });
     const patient = await repo.findPatientByPhone(patientSeed.phone);
 
     for (const medSeed of patientSeed.medications) {
