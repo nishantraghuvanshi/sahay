@@ -143,7 +143,7 @@ describe('MedicationAdherenceStrategy config loading', () => {
     assert.ok(cfg.version);
     assert.ok(cfg.silenceTimeoutSeconds);
     assert.ok(cfg.maxDurationSeconds);
-    assert.strictEqual(cfg.maxDurationSeconds, 90);
+    assert.strictEqual(cfg.maxDurationSeconds, 180);
   });
 
   test('getPromptVersion returns version from config', () => {

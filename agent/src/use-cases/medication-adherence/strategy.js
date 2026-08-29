@@ -164,7 +164,7 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
     return {
       version: this.config.version,
       silenceTimeoutSeconds: 15,
-      maxDurationSeconds: 90,
+      maxDurationSeconds: 180,
       maxIdleSeconds: 30,
       backgroundSound: 'office',
       denoiseEnabled: true,
