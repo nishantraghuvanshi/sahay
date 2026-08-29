@@ -471,7 +471,44 @@ class VapiTransportAdapter extends TransportPort {
       assistant_id: assistantId,
       phone: phoneNumber,
     });
+
+    // Dispatching the call is the primary effect; opening a session is
+    // bookkeeping so a dropped dose call is resumable. Never let a
+    // persistence failure undo a call that already went out.
+    await this._openOutboundSession(call, phoneNumber);
+
     return call;
+  }
+
+  /**
+   * Open a session for an outbound call, so a drop is resumable like an
+   * inbound one. Never creates a patient — outbound dials a number we
+   * already chose, so an unmatched number just means no session.
+   *
+   * @param {Object} call - Vapi call object returned by createCall
+   * @param {string} phoneNumber
+   * @private
+   */
+  async _openOutboundSession(call, phoneNumber) {
+    try {
+      const patient = await this.repository.findPatientByPhone(phoneNumber);
+      if (!patient) {
+        logger.log('outbound_session_skipped_unknown_patient', {
+          call_id: call.id,
+          phone: phoneNumber,
+        });
+        return;
+      }
+
+      await this.repository.createSession({
+        sessionId: call.id,
+        patientId: patient.id,
+        callId: call.id,
+        direction: 'outbound',
+      });
+    } catch (err) {
+      logger.error('outbound_session_create_error', err);
+    }
   }
 }
 
