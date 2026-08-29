@@ -70,6 +70,23 @@ function handlePlaygroundConnection(ws, deps) {
 
         switch (message.type) {
           case 'start': {
+            // One conversation per socket, always. A second 'start' used to
+            // build a second PlaygroundConversation on the same connection —
+            // two greetings, two voices, two STT streams, all fighting over
+            // one browser. The client can now only send it once, but this is
+            // the boundary that has to hold: refuse loudly rather than
+            // silently double up.
+            if (conversation) {
+              logger.log('playground_start_ignored', {
+                reason: 'a conversation is already running on this socket',
+              });
+              send({
+                type: 'error',
+                message: 'A conversation is already running. Stop it before starting another.',
+              });
+              break;
+            }
+
             // Start a new conversation
             const { PlaygroundConversation } = require('./conversation');
             conversation = new PlaygroundConversation({
