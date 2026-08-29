@@ -135,15 +135,44 @@
 
 ## Onboarding — now **four** steps (`FR-1`–`FR-5`, `J1`) · frames `1a`–`1E.2` / `2a`–`2D.2`
 
-### Step 0 · Auth (`1a` / `2a`)
+### Step 0 · Auth (`1a` / `2a`) — **real, not mocked**
+
+The four cards live in `app/src/setup/AuthSteps.tsx`; `Login.tsx` is the mobile framing
+and the desktop landing page (`2a`) reuses the same component.
 
 - [x] Four progressively-unlocking steps: **phone → phone OTP → email → email OTP**
 - [x] **No social login** — Google and Apple were removed. Do not add them back
 - [x] Each step card shows its state (complete / active / locked); a locked step cannot
       be filled ahead of turn
-- [x] Resend timer on each OTP (`resend in 0:24`)
+- [x] Resend timer on each OTP — driven by the server's `resend_after_s`, not a UI
+      constant, so the button cannot re-enable before the server would accept
 - [x] Both `phone_verified_at` and `email_verified_at` persisted
-      ↳ held in the onboarding draft; the columns do not exist yet — raised with Lane B
+      ↳ columns now exist; `SCHEMA-GAPS-LANE-C.md` gap #1 is closed
+- [x] 🔑 **The code is checked by the server, never the client.** `isOtp()` is a
+      six-digit shape check that decides *when to fire the request* — it verifies
+      nothing. `secrets.randbelow` generates, `HMAC-SHA256(code, OTP_PEPPER)` stores,
+      `hmac.compare_digest` compares
+- [x] A code dies on use, on expiry, and after five wrong tries
+- [x] **Sending / wrong code / rate-limited** are all visible states. A wrong code shows
+      an error and sets `aria-invalid`; it used to silently do nothing
+- [x] `/auth/otp/start` answers identically for any destination — a different response
+      for a known number is an account-enumeration oracle
+- [x] Email verify requires the phone session **first**. Checking the code first let an
+      anonymous caller spend someone else's attempts — five requests killed their code
+- [x] Session is an opaque token in an httpOnly cookie. `document.cookie` is empty in the
+      browser — verified, not assumed
+
+### Step 0.5 · The guard (`FR-1`)
+
+- [x] `RequireAuth` wraps the `AppShell` block and `/setup/*` in `App.tsx`. Before this,
+      typing `/home` walked straight past login
+- [x] `/` redirects to `/login` without a session, not to `/home`
+- [x] 🔑 **`/h/{token}` stays outside the guard.** The token is the auth and the page
+      takes no login (`TRD §11`) — putting it behind the guard would break the one
+      screen a stranger has to be able to open
+- [x] A deep link survives the detour — `/record` while signed out returns to `/record`
+      after signing in, not to home
+- [x] `client.ts` sends `credentials: 'include'` and treats 401 as a signed-out signal
 
 ### Step 1 · Parent (`1b` / `2b`)
 
@@ -349,7 +378,7 @@ Plus the one thing Lane C needs back: **caregiver-scoped read endpoints**, becau
 browser cannot hold `CARE_API_TOKEN` (`NFR-7`). Response shapes are already pinned in
 `scripts/mock-api.json`.
 
-**Inert until an endpoint exists**: `Mark taken`, `Save and Continue`, and the server half
+**Inert until an endpoint exists** (the onboarding write now lands — `POST /app/onboarding`): `Mark taken`, `Save and Continue`, and the server half
 of the two-stage call gate. Each is a marked stub naming the endpoint it needs — none of
 them fakes a success.
 

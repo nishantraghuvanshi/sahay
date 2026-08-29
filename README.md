@@ -48,6 +48,7 @@ their lane. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 |---|---|---|
 | `agent/` | Prompts, tool definitions, voice settings | **Lane A — Voice** |
 | `api/` | 7 tools, priority rules, escalation, safety scorer, scheduler | **Lane B — Memory & API** |
+| `api/auth/`, `api/caregiver/` | Caregiver OTP auth + the onboarding write | **Lane C** (built against Lane B's schema) |
 | `scripts/mock_api.py`, `scripts/seed.py` | Mock contract server, seed loader | **Lane B** |
 | `app/` | Caregiver app | **Lane C — App & handoff** |
 | `handoff/` | Read-only `/h/{token}` view | **Lane C** |
@@ -60,21 +61,62 @@ their lane. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Build
 
+Postgres 16+ is required — the schema uses `TEXT[]`, `JSONB` and partial indexes.
+
 ```bash
 cp .env.example .env      # fill in — never commit this file
-pip install -r api/requirements.txt
-python scripts/seed.py
-uvicorn api.main:app --reload --port 8000
+
+# database
+createdb kinvox
+psql -d postgres -c "CREATE ROLE kinvox LOGIN PASSWORD 'kinvox'"
+psql "$DATABASE_URL" -f api/schema.sql      # idempotent, doubles as the migration
+
+python3 -m venv .venv && .venv/bin/pip install -r api/requirements.txt
+.venv/bin/uvicorn api.main:app --reload --port 8000
+```
+
+`OTP_PEPPER` is required and boot fails without it — a blank pepper would make every
+stored OTP forgeable. Generate one:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 The Care API must be reachable over public HTTPS for the voice agent to call its tools.
+
+### Caregiver auth
+
+The caregiver app signs in by OTP — phone, then email — against our own API. Codes are
+generated with `secrets.randbelow`, stored only as `HMAC-SHA256(code, OTP_PEPPER)`,
+compared with `hmac.compare_digest`, and die on use, on expiry, or after five wrong
+tries. The session is an opaque 256-bit token, held as `sha256` at rest and delivered in
+an httpOnly cookie so no page script can read it.
+
+This is separate from `CARE_API_TOKEN`, which is the agent↔API shared secret (`TRD §15`)
+and never reaches a browser.
+
+| Surface | Auth |
+|---|---|
+| The seven tools | `Authorization: Bearer {CARE_API_TOKEN}`, always HTTP 200 (`TRD §5.1`) |
+| `/auth/*`, `/app/*` | Session cookie. A dead session is a real **401** — a browser route guard has to tell "signed out" from "broken" |
+| `/h/{token}` | None. The token **is** the auth (`TRD §11`) |
+
+**OTP delivery.** Email goes over SMTP if configured, else Resend. Phone walks the
+`TRD §9` ladder — WhatsApp first, then SMS — because India's TRAI requires DLT
+registration for A2P SMS, which takes days, and WhatsApp is not SMS. See
+[`docs/WHATSAPP-OTP-SETUP.md`](docs/WHATSAPP-OTP-SETUP.md).
+
+`DEV_OTP_BYPASS_NUMBERS` / `_EMAILS` give a listed destination a fixed code and skip the
+carrier hop. Every other rule — hashing, expiry, attempt counting, session issue — runs
+exactly as in production. Team destinations only, with consent (`SR-7`); leave empty in
+any real deployment.
 
 ### Caregiver app
 
 ```bash
 cd app
 npm install
-npm run dev                 # http://localhost:5173 — runs against mock data, no backend needed
+npm run dev                 # http://localhost:5173 — screens run on mock data; login needs the API
 npm run build && npm run preview
 ```
 
@@ -102,6 +144,7 @@ Two things to know before deploying it:
 | [`docs/TRD.md`](docs/TRD.md) | How |
 | [`docs/IDEA_SCOPE.md`](docs/IDEA_SCOPE.md) | Who, when, what proof |
 | [`docs/WIREFRAMES.md`](docs/WIREFRAMES.md) | What the app looks like and why — screen-by-screen spec |
+| [`docs/WHATSAPP-OTP-SETUP.md`](docs/WHATSAPP-OTP-SETUP.md) | Getting real phone OTP delivery without waiting on DLT |
 | [`docs/checklists/END-TO-END.md`](docs/checklists/END-TO-END.md) | The whole system, walked through |
 | [`docs/checklists/MASTER-CHECKLIST.md`](docs/checklists/MASTER-CHECKLIST.md) | Every task, in clock order |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How we work together |

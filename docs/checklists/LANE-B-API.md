@@ -27,9 +27,21 @@
 
 ## Schema (`TRD §3`)
 
-- [ ] `caregivers` · `patients` · `medications`
-- [ ] `call_sessions` · `dose_events` · `observations` · `intake_records`
-- [ ] `escalations` · `handoffs` · `subscriptions`
+> **Already applied.** `api/schema.sql` holds the full §3 DDL and is idempotent — every
+> statement is `IF NOT EXISTS`, so it doubles as the migration:
+> `psql "$DATABASE_URL" -f api/schema.sql`. Lane C wrote it while building caregiver
+> auth and needed the tables to exist; the §3 half is copied column-for-column so the
+> addition is purely additive. The app factory (`api/main.py`) and the asyncpg pool
+> (`api/db.py`) landed with it — the package was not importable before.
+
+- [x] `caregivers` · `patients` · `medications`
+- [x] `call_sessions` · `dose_events` · `observations` · `intake_records`
+- [x] `escalations` · `handoffs` · `subscriptions`
+- [x] `auth_otp` · `auth_sessions` — **not in `TRD §3`.** The only auth the TRD names is
+      the shared `CARE_API_TOKEN`, which is server-to-server and cannot reach a browser
+      (`NFR-7`). These are what let a caregiver prove who they are
+- [x] `caregivers.phone_verified_at` / `email_verified_at` — closes
+      `SCHEMA-GAPS-LANE-C.md` gap #1
 - [ ] Indexes — each one exists for a stated reason:
   - [ ] `patients(phone_e164)` **unique** — inbound resolution runs before the agent's
         first word, budget 500ms
@@ -37,8 +49,14 @@
         lookup must not scan history
   - [ ] `dose_events(medication_id, slot_time)` **unique** — a retried call must not
         double-log a dose
-  - [ ] `observations(patient_id, created_at DESC)` — `get_care_context` returns 3
-- [ ] `patients.schedule_signed_off_at` — NULL means no calls allowed (`FR-4`)
+  - [x] `observations(patient_id, created_at DESC)` — `get_care_context` returns 3
+  - [x] `auth_otp(channel, destination, created_at DESC)` **partial** on unconsumed —
+        the hot lookup on every verify. Spent codes are never candidates again, and the
+        table is append-only, so indexing them would grow it without bound
+  - [x] `medications(patient_id)` **partial** unique on `is_priority` — "at most one per
+        patient" was a comment in the TRD; the database now holds it
+- [x] `patients.schedule_signed_off_at` — NULL means no calls allowed (`FR-4`).
+      Stamped by `POST /app/onboarding` and nowhere else
 - [ ] Parent-consent state — the intro call's outcome. NULL means no **dose** calls
       allowed, even with sign-off. Plus the three caregiver consents and **the version of
       the consent copy agreed to** (the wireframe copy is still `TBC`)

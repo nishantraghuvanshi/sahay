@@ -1,15 +1,19 @@
 # Schema gaps found while building the caregiver app
 
 Lane C, raised against `TRD §3`. Each item is something the **wireframes or the checklist ask
-the app to show** that the data model currently cannot store. None of these block Lane C — the
+the app to show** that the data model currently cannot store. Gap 1 is now closed. The rest do not block Lane C — the
 app is built without them — but each is a field the record will silently drop.
 
 Ordered by how much the demo cares.
 
-## 1. The four-step signup has nowhere to record verification
+## 1. ~~The four-step signup has nowhere to record verification~~ — **CLOSED**
 
-`caregivers` holds `phone_e164` and `email`, but nothing says either was verified. Screen `1a`
+`caregivers` holds `phone_e164` and `email`, but nothing said either was verified. Screen `1a`
 verifies both by OTP.
+
+Both columns are now in `api/schema.sql`, alongside two tables the TRD never had — `auth_otp`
+and `auth_sessions` — because signup went from mocked to real. NULL still means "never proved",
+which is not the same as absent: an email may be present and unverified.
 
 ```sql
 ALTER TABLE caregivers ADD COLUMN phone_verified_at TIMESTAMPTZ;
