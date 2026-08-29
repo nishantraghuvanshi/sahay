@@ -112,10 +112,12 @@ describe('ProviderRegistry enforces the integration contract', () => {
   });
 
   test('isBridged reports the configured integration', () => {
+    // active.tts (elevenlabs) is native as of the native-routing plan —
+    // Vapi calls it directly, so isBridged must report false for it.
     const reg = new ProviderRegistry();
     assert.strictEqual(reg.isBridged('stt'), true, 'active stt (sarvam) is bridged');
-    assert.strictEqual(reg.isBridged('llm'), true);
-    assert.strictEqual(reg.isBridged('tts'), true);
+    assert.strictEqual(reg.isBridged('llm'), true, 'active llm (openai) is bridged');
+    assert.strictEqual(reg.isBridged('tts'), false, 'active tts (elevenlabs) is native');
   });
 
   test('every bridge provider in config has a registered adapter', () => {

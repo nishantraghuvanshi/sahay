@@ -44,82 +44,109 @@ class VapiTransportAdapter extends TransportPort {
     const { wss, app } = config;
 
     // --- WebSocket route: /api/stt ---
-    // Vapi connects here and streams 2-channel PCM audio
-    wss.on('connection', async (ws, req) => {
-      logger.log('stt_connect', { url: req.url });
+    // Vapi connects here and streams 2-channel PCM audio. Only wired when
+    // STT is bridged — a native STT provider is transcribed by Vapi itself
+    // and never dials in here.
+    if (this.providerRegistry.isBridged('stt')) {
+      wss.on('connection', async (ws, req) => {
+        logger.log('stt_connect', { url: req.url });
 
-      let sttAdapter;
-      try {
-        sttAdapter = this.providerRegistry.getActiveSTT();
-        const sttConfig = this.providerRegistry.getSTTConfig();
-        await sttAdapter.init(sttConfig, process.env);
-      } catch (err) {
-        logger.error('stt_init_error', err);
-        ws.close(1011, 'STT init failed');
-        return;
-      }
-
-      ws.on('message', async (data, isBinary) => {
+        let sttAdapter;
         try {
-          if (isBinary) {
-            // Binary frame = audio chunk
-            await sttAdapter.transcribe(data, (transcript, isFinal, channel) => {
-              const response = {
-                type: 'transcriber-response',
-                transcription: transcript,
-                channel: channel || 'customer',
-                transcriptType: isFinal ? 'final' : 'partial',
-              };
-              if (ws.readyState === 1) ws.send(JSON.stringify(response));
-            });
-          } else {
-            // Text frame = JSON config message
-            const message = JSON.parse(data.toString());
-            if (message.type === 'start') {
-              logger.log('stt_started', { sampleRate: message.sampleRate });
-            }
-          }
+          sttAdapter = this.providerRegistry.getActiveSTT();
+          const sttConfig = this.providerRegistry.getSTTConfig();
+          await sttAdapter.init(sttConfig, process.env);
         } catch (err) {
-          logger.error('stt_message_error', err);
+          logger.error('stt_init_error', err);
+          ws.close(1011, 'STT init failed');
+          return;
         }
-      });
 
-      ws.on('close', async () => {
-        logger.log('stt_disconnect');
-        try { await sttAdapter.dispose(); } catch (e) { /* ignore */ }
-      });
+        ws.on('message', async (data, isBinary) => {
+          try {
+            if (isBinary) {
+              // Binary frame = audio chunk
+              await sttAdapter.transcribe(data, (transcript, isFinal, channel) => {
+                const response = {
+                  type: 'transcriber-response',
+                  transcription: transcript,
+                  channel: channel || 'customer',
+                  transcriptType: isFinal ? 'final' : 'partial',
+                };
+                if (ws.readyState === 1) ws.send(JSON.stringify(response));
+              });
+            } else {
+              // Text frame = JSON config message
+              const message = JSON.parse(data.toString());
+              if (message.type === 'start') {
+                logger.log('stt_started', { sampleRate: message.sampleRate });
+              }
+            }
+          } catch (err) {
+            logger.error('stt_message_error', err);
+          }
+        });
 
-      ws.on('error', (err) => logger.error('stt_ws_error', err));
-    });
+        ws.on('close', async () => {
+          logger.log('stt_disconnect');
+          try { await sttAdapter.dispose(); } catch (e) { /* ignore */ }
+        });
+
+        ws.on('error', (err) => logger.error('stt_ws_error', err));
+      });
+    } else {
+      logger.log('route_skipped_native_provider', {
+        type: 'stt',
+        provider: this.providerRegistry.getActiveProviderNames().stt,
+      });
+    }
 
     // --- HTTP route: /llm/chat/completions ---
-    // Vapi sends OpenAI-compatible chat completion requests
-    app.post('/llm/chat/completions', async (req, res) => {
-      const llmAdapter = this.providerRegistry.getActiveLLM();
-      const llmConfig = this.providerRegistry.getLLMConfig();
-      try {
-        const response = await llmAdapter.chatCompletion(req.body, llmConfig, process.env);
-        res.json(response);
-      } catch (err) {
-        logger.error('llm_error', err);
-        res.status(500).json({ error: err.message });
-      }
-    });
+    // Vapi sends OpenAI-compatible chat completion requests. Only wired
+    // when LLM is bridged — a native LLM provider is called by Vapi
+    // directly and never posts here.
+    if (this.providerRegistry.isBridged('llm')) {
+      app.post('/llm/chat/completions', async (req, res) => {
+        const llmAdapter = this.providerRegistry.getActiveLLM();
+        const llmConfig = this.providerRegistry.getLLMConfig();
+        try {
+          const response = await llmAdapter.chatCompletion(req.body, llmConfig, process.env);
+          res.json(response);
+        } catch (err) {
+          logger.error('llm_error', err);
+          res.status(500).json({ error: err.message });
+        }
+      });
+    } else {
+      logger.log('route_skipped_native_provider', {
+        type: 'llm',
+        provider: this.providerRegistry.getActiveProviderNames().llm,
+      });
+    }
 
     // --- HTTP route: /api/tts/:provider ---
-    // Vapi sends voice-request with text to synthesize
-    app.post('/api/tts/:provider', async (req, res) => {
-      const ttsAdapter = this.providerRegistry.getActiveTTS();
-      const ttsConfig = this.providerRegistry.getTTSConfig();
-      try {
-        const rawPcm = await ttsAdapter.synthesize(req.body, ttsConfig, process.env);
-        res.set('Content-Type', 'application/octet-stream');
-        res.send(rawPcm);
-      } catch (err) {
-        logger.error('tts_error', err);
-        res.status(500).json({ error: err.message });
-      }
-    });
+    // Vapi sends voice-request with text to synthesize. Only wired when
+    // TTS is bridged — a native TTS provider is synthesized by Vapi
+    // directly and never posts here.
+    if (this.providerRegistry.isBridged('tts')) {
+      app.post('/api/tts/:provider', async (req, res) => {
+        const ttsAdapter = this.providerRegistry.getActiveTTS();
+        const ttsConfig = this.providerRegistry.getTTSConfig();
+        try {
+          const rawPcm = await ttsAdapter.synthesize(req.body, ttsConfig, process.env);
+          res.set('Content-Type', 'application/octet-stream');
+          res.send(rawPcm);
+        } catch (err) {
+          logger.error('tts_error', err);
+          res.status(500).json({ error: err.message });
+        }
+      });
+    } else {
+      logger.log('route_skipped_native_provider', {
+        type: 'tts',
+        provider: this.providerRegistry.getActiveProviderNames().tts,
+      });
+    }
 
     // --- HTTP route: /webhook ---
     // Vapi sends server messages (end-of-call, tool-call, call-started, etc.)
@@ -328,73 +355,88 @@ class VapiTransportAdapter extends TransportPort {
     const activeTts = providers.active.tts;
     const strategyConfig = strategy.getConfig();
 
+    // Whether Vapi runs each provider itself (native) or calls back into
+    // this server (bridge) is what ProviderRegistry.isBridged tracks — not
+    // the provider's name. Branching on the name (as this method used to
+    // for "openai") silently produced the wrong shape the moment a bridge
+    // provider had a name this method didn't special-case.
+    const isSttBridged = this.providerRegistry.isBridged('stt');
+    const isLlmBridged = this.providerRegistry.isBridged('llm');
+    const isTtsBridged = this.providerRegistry.isBridged('tts');
+
+    const systemMessage = {
+      role: 'system',
+      content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
+    };
+
     // Build transcriber config
     let transcriber;
-    if (activeStt === 'deepgram') {
-      const dg = providers.stt.deepgram;
-      transcriber = {
-        provider: 'deepgram',
-        model: dg.model,
-        language: dg.language,
-        smartFormat: dg.smart_format,
-        endpointing: dg.endpointing,
-      };
-    } else {
+    if (isSttBridged) {
       transcriber = {
         provider: 'custom-transcriber',
         server: { url: `${webhookUrl.replace(/^http/, 'ws')}/api/stt` },
+      };
+    } else {
+      // Native shape: Vapi runs the provider itself, naming it by our
+      // config key (matches the vendor identifier for deepgram).
+      const stt = providers.stt[activeStt];
+      transcriber = {
+        provider: activeStt,
+        model: stt.model,
+        language: stt.language,
       };
     }
 
     // Build model (LLM) config
     let model;
-    if (activeLlm === 'openai') {
-      const oai = providers.llm.openai;
-      model = {
-        provider: 'openai',
-        model: oai.model,
-        temperature: oai.temperature,
-        maxTokens: oai.max_tokens,
-        messages: [
-          {
-            role: 'system',
-            content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
-          },
-        ],
-      };
-    } else {
+    if (isLlmBridged) {
       const llm = providers.llm[activeLlm];
       model = {
         provider: 'custom-llm',
         model: llm.model,
         url: `${webhookUrl}/llm/chat/completions`,
-        messages: [
-          {
-            role: 'system',
-            content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
-          },
-        ],
+        messages: [systemMessage],
         temperature: llm.temperature,
         maxTokens: llm.max_tokens,
+      };
+    } else {
+      // Native shape: Vapi calls the provider itself. No native LLM
+      // provider is configured today, but the branch follows isBridged
+      // (not a provider name) so a future one is not silently mis-shaped.
+      const llm = providers.llm[activeLlm];
+      model = {
+        provider: activeLlm,
+        model: llm.model,
+        temperature: llm.temperature,
+        maxTokens: llm.max_tokens,
+        messages: [systemMessage],
+        tools: [...strategy.getTools(), { type: 'endCall' }],
       };
     }
 
     // Build voice (TTS) config
     let voice;
-    if (activeTts === 'elevenlabs') {
-      const el = providers.tts.elevenlabs;
-      voice = {
-        provider: 'elevenlabs',
-        voiceId: el.voice_id,
-        model: el.model,
-        stability: el.stability,
-        similarityBoost: el.similarity_boost,
-      };
-    } else {
+    if (isTtsBridged) {
       voice = {
         provider: 'custom-voice',
         server: { url: `${webhookUrl}/api/tts/${activeTts}` },
       };
+    } else if (activeTts === 'elevenlabs') {
+      // UNVERIFIED: 'provider: "11labs"' is Vapi's documented identifier
+      // for ElevenLabs (per the plan this task was scoped from) — not
+      // something this codebase has confirmed against a live Vapi call.
+      // Flagged rather than silently trusted, per this project's history
+      // of assumed vendor payload shapes.
+      const el = providers.tts.elevenlabs;
+      voice = {
+        provider: '11labs',
+        voiceId: el.voice_id,
+        model: el.model,
+      };
+    } else {
+      throw new Error(
+        `No native voice shape mapping for tts provider "${activeTts}" — add one before selecting it.`
+      );
     }
 
     // Build first message with variables substituted

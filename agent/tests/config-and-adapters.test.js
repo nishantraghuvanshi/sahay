@@ -47,11 +47,13 @@ describe('loadProvidersConfig', () => {
     assert.ok(tts.api_key_env, 'tts.sarvam should have api_key_env');
   });
 
-  test('default active providers are sarvam', () => {
+  test('active providers match the native-routing target config', () => {
+    // stt stays sarvam (bridge); llm moved to openai (bridge, Phase 3a
+    // adapter); tts moved to elevenlabs (native — Vapi calls it directly).
     const config = loadProvidersConfig();
     assert.strictEqual(config.active.stt, 'sarvam');
-    assert.strictEqual(config.active.llm, 'sarvam');
-    assert.strictEqual(config.active.tts, 'sarvam');
+    assert.strictEqual(config.active.llm, 'openai');
+    assert.strictEqual(config.active.tts, 'elevenlabs');
   });
 
   test('groq LLM is configured as alternative', () => {
@@ -207,11 +209,12 @@ describe('ProviderRegistry', () => {
     assert.strictEqual(typeof llm.chatCompletion, 'function');
   });
 
-  test('getActiveTTS returns the active TTS adapter instance', () => {
+  test('getActiveTTS throws — active tts (elevenlabs) is native and has no bridge adapter', () => {
+    // Prior to the native-routing plan, active.tts was sarvam (bridge).
+    // It is now elevenlabs (native) — Vapi runs it directly, so there is
+    // no adapter to return, by design.
     const reg = new ProviderRegistry();
-    const tts = reg.getActiveTTS();
-    assert.ok(tts, 'should return a TTS adapter');
-    assert.strictEqual(typeof tts.synthesize, 'function');
+    assert.throws(() => reg.getActiveTTS(), /integration: native/);
   });
 
   test('getActiveProviderNames returns configured active providers', () => {
@@ -222,8 +225,8 @@ describe('ProviderRegistry', () => {
     assert.ok(names.llm, 'should have llm name');
     assert.ok(names.tts, 'should have tts name');
     assert.strictEqual(names.stt, 'sarvam');
-    assert.strictEqual(names.llm, 'sarvam');
-    assert.strictEqual(names.tts, 'sarvam');
+    assert.strictEqual(names.llm, 'openai');
+    assert.strictEqual(names.tts, 'elevenlabs');
   });
 
   test('getSTTConfig returns provider-specific config', () => {
@@ -241,10 +244,12 @@ describe('ProviderRegistry', () => {
   });
 
   test('getTTSConfig returns provider-specific config', () => {
+    // active.tts is now elevenlabs (native), which has no "speaker" field —
+    // that was sarvam's field name for its voice selection.
     const reg = new ProviderRegistry();
     const cfg = reg.getTTSConfig();
     assert.ok(cfg.model);
-    assert.ok(cfg.speaker);
+    assert.ok(cfg.voice_id);
   });
 });
 

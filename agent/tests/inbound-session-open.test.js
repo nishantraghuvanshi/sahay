@@ -59,7 +59,10 @@ describe('assistant-request with no call.id', () => {
       plugins: new PluginRegistry(),
       repository,
     });
-    const transport = new VapiTransportAdapter({});
+    // isBridged is exercised by native-routing.test.js — this test only
+    // cares about the /webhook assistant-request path, so stub it "all
+    // bridged" to preserve today's route registration.
+    const transport = new VapiTransportAdapter({ isBridged: () => true });
 
     const app = express();
     app.use(express.json());

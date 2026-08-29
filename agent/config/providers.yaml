@@ -26,9 +26,9 @@
 
 active:
   transport: vapi
-  stt: sarvam
-  llm: sarvam
-  tts: sarvam
+  stt: sarvam       # bridge  — Indic-specialised, audio via our server
+  llm: openai       # bridge  — uses the OpenAI adapter built in Phase 3a
+  tts: elevenlabs   # native  — Vapi calls ElevenLabs directly
 
 # ── Transport (call orchestrator) ─────────────────────────────────
 
@@ -107,8 +107,9 @@ tts:
 
   elevenlabs:
     integration: native        # no bridge adapter exists; Vapi runs it
-    model: "eleven_turbo_v2_5"
-    voice_id: "pNoyz6rXpT7jW"
+    model: "eleven_turbo_v2_5"  # Hindi-capable via Vapi; eleven_v3_conversational
+                                 # (used previously) may not be exposed through Vapi — unverified
+    voice_id: "QTKSa2Iyv0yoxvXY2V8a"  # validated on real elderly callers in a prior agent
     stability: 0.5
     similarity_boost: 0.75
     api_key_env: "ELEVENLABS_API_KEY"

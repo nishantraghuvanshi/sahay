@@ -86,7 +86,10 @@ describe('webhook tool-call handling for capture_field', () => {
       plugins: new PluginRegistry(),
       repository,
     });
-    const transport = new VapiTransportAdapter({});
+    // isBridged is exercised by native-routing.test.js — this test only
+    // cares about the /webhook tool-call path, so stub it "all bridged" to
+    // preserve today's route registration.
+    const transport = new VapiTransportAdapter({ isBridged: () => true });
 
     const app = express();
     app.use(express.json());
