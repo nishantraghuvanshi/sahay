@@ -23,7 +23,7 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 | 4 | **Outbound is thin.** It exists to seed memory. Inbound is the hero | Outbound alone is a commodity; the loop between directions is the product |
 | 5 | **No** acoustic distress detection · **no** diagnosis · **no** dispatch claim | Unverifiable across 3 cold runs, and each invites a challenge that cannot be won |
 | 6 | Priority is **rule-cited**, and the UI renders the rule string | Converts a subjective judgment into an auditable one. Evidence for Memory L5 |
-| 7 | Product name is **not Voxikin** | Handbook rule 04 |
+| 7 | Product name is **not Voxikin** — settled 30 Aug: **Kinvox** | Handbook rule 04. A distinct name keeps the build clear of the founder's company brand |
 | 8 | Tool contract frozen at **T+1h**, not renegotiated | The only interface all four lanes share |
 
 ---
@@ -46,6 +46,15 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 
 ---
 
+## Aug 30
+
+| Time | Decision | Why |
+|---|---|---|
+| — | **Product name settled: Kinvox.** Renamed across docs, checklists and both wireframe files (`sahay.app` → `kinvox.app`). Placeholder history: MediWatch → Sahay → *(briefly Voxikin)* → **Kinvox** | Closes locked decision 7 and `IDEA_SCOPE` §9 item 1. Kinvox is distinct from the founder's company brand, so `[V]` rule 04 (*"if your company builds in this space, you can't demo your existing product"*) is satisfied without a mentor ruling on brand reuse |
+| — | Borderline note corrected back to `IDEA_SCOPE` §9 wording — **pre-product, no codebase**, never pitched or demoed; prior work is market research and a no-code voice agent | The README and the T-0 checklist had drifted into claiming "a prior codebase exists". The founder confirms there is none, and `~/Desktop/projects/sahay-archive/` does not exist on disk. ⚠️ The 20:23 Aug 29 row below still describes moving "a working codebase" out — **reconcile that row before the submission note is final** |
+
+---
+
 ## Still open — resolve and record here
 
 | # | Open question | Owner | Blocking? |
@@ -57,5 +66,5 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 | 5 | **V5** — dynamic variables at call start? | A | No — costs one round trip if unavailable |
 | 6 | **The Impact number.** The rubric grades Impact by how far a metric moves (<5%=L2, 5–10%=L3, 10–30%=L4, >30%=L5). No delta is currently claimed | ALL | No, but it silently costs two levels |
 | 7 | **Appointment reminders** — cut in `PRD` §14, sold in the Care+ tier in §15. Mark "coming soon" or delete from the tier | D | No, but a judge is likely to open the pricing page |
-| 8 | **Product name.** "Sahay" is a placeholder throughout | ALL | Needed before the video and the viral post |
+| 8 | ~~**Product name**~~ — **settled 30 Aug: Kinvox** | ALL | Closed |
 | 9 | **Lane owners.** Four lanes are defined; the people are not | ALL | **Yes** — Lane A is the critical path |

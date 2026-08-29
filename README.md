@@ -1,4 +1,4 @@
-# Sahay
+# Kinvox
 
 **One AI voice line that calls an ageing parent on schedule to manage medicines, and
 picks up when they call in — where the inbound call already knows everything the
@@ -85,6 +85,6 @@ The Care API must be reachable over public HTTPS for the voice agent to call its
 ## Note on origin
 
 Borderline starting point, flagged per the handbook: the author is a founder in
-elder-care voice AI. A prior codebase exists for a related use case; it was not used,
-opened, or shown. This is a from-zero build begun after kickoff. No prior code, agent
-config, product, or data was used or shown.
+elder-care voice AI — pre-product, no codebase, never pitched or demoed. Prior work is
+market research and a no-code voice agent, untouched here. This is a from-zero build
+begun after kickoff. No prior code, agent config, product, or data was used or shown.

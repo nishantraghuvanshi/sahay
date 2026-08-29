@@ -9,34 +9,36 @@ Source files (design-canvas HTML, open in a browser):
 
 | File | Frames | Covers |
 |---|---|---|
-| [`wireframe/Medicine Care App Wireframes.dc.html`](../wireframe/Medicine%20Care%20App%20Wireframes.dc.html) | `1a`–`1s` (15) | Mobile, 320×660 phone frames |
-| [`wireframe/Medicine Care App Wireframes — Web.dc.html`](../wireframe/Medicine%20Care%20App%20Wireframes%20—%20Web.dc.html) | `2a`–`2o` (14) | Desktop, 1160×730 browser frames (~1440 viewport) |
+| [`wireframe/Medicine Care App Wireframes.dc.html`](../wireframe/Medicine%20Care%20App%20Wireframes.dc.html) | 19 (`1a`–`1s`) | Mobile, 320×660 phone frames |
+| [`wireframe/Medicine Care App Wireframes — Web.dc.html`](../wireframe/Medicine%20Care%20App%20Wireframes%20—%20Web.dc.html) | 16 (`2a`–`2o`) | Desktop, 1160×730 browser frames (~1440 viewport) |
 
 Frame IDs are anchors: `…dc.html#1f` jumps to the Home screen. **Cite frame IDs in
-tickets, PRs and code comments** — they are the shared vocabulary. Frame IDs are stable
-across revisions; deleted frames leave gaps in the sequence rather than renumbering
-(`1k`, `1l`, `1r`, `2i` are gone — see §11).
+tickets, PRs and code comments** — they are the shared vocabulary. IDs are stable across
+revisions; deleted frames leave gaps rather than renumbering (`1k`, `1l`, `1r`, `2i` are
+gone — see §12). Screens inserted into an existing flow get a sub-ID: anchor `#1e2`,
+displayed as **1E.2**.
 
 ---
 
 ## 0. Read this first — three caveats
 
-1. **The product name in the wireframes is "MediWatch". The repo is "Sahay".** Treat
-   every "MediWatch" as a placeholder wordmark. Nothing else changes.
+1. **The product is Kinvox**, on every frame and every URL (`kinvox.app`), settled
+   30 Aug. Earlier names — MediWatch, Sahay, briefly Voxikin — survive in older commits
+   and stale screenshots; none is current. Voxikin especially must not reappear: it is
+   the founder's company, and `[V]` rule 04 keeps it off screen.
 2. **Scope is deliberately narrow.** The mobile file states it outright: *"Medicines,
    calls and what she said — no ordering, no mood scoring."* Pharmacy quotes, carts,
    checkout, refills and stock counting are **out**. Sentiment percentages, mood charts
    and wellbeing scores are **out**. What replaced them is a verbatim record of what the
    parent said, severity-tagged, always traceable to a call.
-3. **Grey-box fidelity.** No brand colour, no illustration, no final copy. Every grey
-   block is a real element with a real purpose; the greyness is deliberate so review
-   argues about behaviour, not palette. **Blue handwritten text (`.ann`) is a note to
-   the builder — it is never UI.** Do not ship it.
+3. **Grey-box fidelity.** No brand colour, no illustration, and — for the newest screens
+   — **no final copy**: consent lines are literally tagged `copy TBC`, and `1a`'s
+   annotation says "Copy still to be written." Blue handwritten text (`.ann`) is a note
+   to the builder; **it is never UI**.
 
 The wireframes now line up closely with [`docs/TRD.md`](TRD.md): P1/P2/P3 priority with
-its literal rule string, verbatim observations with severity, the timed escalation
-chain, and the read-only handoff link all appear in the UI. §9 lists what still does
-not.
+its literal rule string, verbatim observations with severity, and the timed escalation
+chain all appear in the UI. §10 lists what still does not.
 
 ---
 
@@ -47,14 +49,17 @@ not.
 - **The parent installs nothing.** Every screen in both files is the *caregiver's*
   screen. The parent's entire interface is answering a phone call.
 - **The agent calls; the caregiver watches and intervenes.** Every primary action is
-  either "confirm what happened" (Mark taken) or "step in myself" (Call Mom now).
-- **Capture, never interpret.** The app shows what she said and which rule fired. It
-  never shows a diagnosis, a mood score, or a percentage that cannot be traced back to
-  a sentence.
-- **Nothing is called about until the caregiver signs off the schedule** (`1e`, `2d`).
-  A hard gate, not a warning — see §8.
-- Currency is not used anywhere (no commerce). Timezone IST, languages English / Hindi /
-  Marathi. Example parent "Mom · Sushila Devi · 71 · Pune", caregiver "Rohit",
+  either "confirm what happened" (Mark taken) or "step in myself" (Call Mom Now).
+- **The app never dials.** Call buttons open the phone dialler with the number
+  pre-filled — the caregiver presses the green button. Only the agent's own calls are
+  placed by the service, from its end.
+- **Capture, never interpret.** The app shows what she said and which rule fired. Never
+  a diagnosis, a mood score, or a percentage that cannot be traced back to a sentence.
+- **Calling is gated twice** (§8, rules 1–3): the caregiver signs off the schedule, and
+  then an intro call must happen and the parent must agree on it. Dose calls start only
+  after both.
+- No commerce anywhere. Timezone IST; agent languages Hindi (default), English, Marathi,
+  Punjabi, + more. Example parent "Mom · Sushila Devi · 71 · Pune", caregiver "Rohit",
   escalation contact "Priya (sister)", doctor "Dr. Mehta", neighbour "Mrs Rao".
 
 ---
@@ -67,12 +72,12 @@ not.
 |---|---|---|
 | Canvas | `#f0eee9` | Page background behind frames (canvas only, not in-app) |
 | Ink | `#1a1a1a` | Text, borders on emphasis, filled buttons, active nav, "taken" dots |
-| Surface | `#fff` | App background, inputs, chips |
+| Surface | `#fff` | App background, inputs, chips, bottom sheet |
 | Card | `#fafaf8` | Card fill (`.c`) |
 | Card border | `#d8d8d4` | Card and input outlines |
 | Divider | `#e4e4e0` | Structural rules (header/footer/pane edges) |
 | Divider light | `#eeeeea` / `#f0f0ec` | Row separators inside tables and lists |
-| Muted fill | `#dedede` | Text-placeholder bars (`.g`), inactive chart bars |
+| Muted fill | `#dedede` | Text-placeholder bars (`.g`) |
 | Text secondary | `#6d6d6d` | Body support text |
 | Text tertiary | `#8d8d8d` | Labels, metadata, timestamps |
 | Text placeholder | `#9a9a9a` | Empty input text, disabled rows |
@@ -80,16 +85,17 @@ not.
 | Quote highlight | `#ededea` | The transcript line that triggered a flag |
 | Annotation | `#2a78d6` + Patrick Hand | **Builder notes only — never ship** |
 
-There is exactly **one accent: black.** Severity, selection, "now", and "taken" all
-read as ink-on-white with weight and border thickness doing the work. When colour is
-introduced later it must not become the only carrier of meaning — the wireframes prove
-the layout survives without it.
+One accent: black. Severity, selection, "now" and "taken" all read as ink-on-white, with
+weight and border thickness doing the work.
+
+**Disabled** is `opacity: .4`–`.45` on the element (buttons, locked step cards, stopped
+table rows). It appears on every gated CTA in the flow, so build it as a real state, not
+a one-off style.
 
 ### 2.2 Scale
 
-Mobile frames are 320×660 with an 11px body; desktop frames are 1160×730 with an 11px
-body. Treat these as **proportions, not literal pixel values**. Recommended mapping
-when building (interpretation, not stated in the file):
+Mobile frames are 320×660 with an 11px body; desktop frames are 1160×730 (the newest are
+1160×640) with an 11px body. Treat these as **proportions, not literal pixel values**:
 
 - Mobile: frame → 390pt device, i.e. ×1.22. Body 11 → 14, screen title 12.5 → 15,
   hero number 20 → 24, micro-label 8.5 → 10–11.
@@ -98,36 +104,37 @@ when building (interpretation, not stated in the file):
   10–11px with `letter-spacing: .09em` is the intent.
 
 Radii: 6px inputs · 7px buttons/nav · 8px cards/tables · 10px desktop frame ·
-99px chips, avatars, toggles, dots. Gaps: 6px within a row group, 8–9px between rows,
-11–12px between cards, 16–18px page padding.
+16px bottom-sheet top corners · 99px chips, avatars, toggles, dots. Gaps: 6px within a
+row group, 8–9px between rows, 11–12px between cards, 16–18px page padding.
 
 ### 2.3 Component inventory
-
-Class names in the source map to components you should build once:
 
 | Class | Component | Notes |
 |---|---|---|
 | `.ph` / `.dt` | Device frame | Mockup chrome only; not a component |
 | `.sb` / `.brow` | Status bar / browser chrome | Mockup chrome only |
-| `.tp` / `.hd` | Screen header | Mobile: back · title · trailing action. Desktop: 48px, title + inline actions + search |
+| `.tp` / `.hd` | Screen header | Mobile: back · title · trailing label. Desktop: 48px, title + stepper/actions + search |
 | `.tb` | Tab bar | Mobile, **4 tabs**, `.on` = active |
 | `.sd` | Sidebar | Desktop, 186px, logo · parent switcher · nav · footer widget |
 | `.nv` | Nav item | Icon + label + optional `.cnt` count badge; `.on` = active |
 | `.c` | Card | Default surface for every grouped block |
-| `.c` + `border:1.5px solid ink` | **Primary card** | "The one thing on this screen" — next dose, critical alert |
-| `.c` + `border-left:3px solid ink` | **Attention card** | Secondary emphasis — needs review, cited rule, conflict, degraded state |
+| `.c` + `border:1.5px solid ink` | **Primary card** | "The one thing here" — next dose, critical alert, selected option, active step |
+| `.c` + `border-left:3px solid ink` | **Attention card** | Secondary emphasis — needs review, cited rule, consent block, conflict, degraded state |
+| **Step card** | `.c` + numbered `.tag` + trailing `.dot` | See §2.5 |
+| **Option card** | `.c` + leading `.dot` + title + sub-line | Radio-style choice (`1E.2` intro-call timing). Selected = primary card + `.dot.k` |
+| **Consent row** | `.dot.k` / `.dot.x` + sentence | Checkbox in dot form; ticked = `.dot.k`. Always inside an attention card, with a "N left" counter |
+| **Bottom sheet** | White panel, 16px top radius, grab handle, `box-shadow:0 -6px 18px` over a 35%-opacity page | Mobile only (`1E.2 sheet`) |
 | `.r` / `.sp` / `.vsp` | Row / spacer-right / spacer-down | Layout primitives |
-| `.btn` | Primary button | Filled ink. One per screen region. `opacity:.45` = disabled |
+| `.btn` | Primary button | Filled ink; one per screen region. `opacity:.4/.45` = gated |
 | `.ob` | Secondary button | Outlined ink |
-| `.chip` | Chip | Filter, toggle, inline action, tag input. `.on` = selected/filled |
-| `.tag` / `.tag.o` | Badge | Filled = severity/state (`critical`, `red`, `P1`, `missed`). Outlined = category (`watch`, `agent`, `no answer`) |
-| `.lbl` | Micro-label | 8.5px caps, tertiary. Section and column headers; also the `none` severity |
-| `.in` | Input | Also used for read-only display fields |
-| `.g` | Placeholder bar | Marketing copy, skeletons, progress meters |
+| `.chip` | Chip | Filter, toggle, inline action, tag input. `.on` = selected |
+| `.tag` / `.tag.o` | Badge | Filled = severity/state/step-reached (`critical`, `red`, `P1`, `missed`, `1`). Outlined = category or not-yet (`watch`, `agent`, `edited`, `stopped`, `4`) |
+| `.lbl` | Micro-label | 8.5px caps, tertiary. Section/column headers, `copy TBC` markers, the `none` severity |
+| `.in` | Input | Also read-only display fields and single OTP digit boxes |
+| `.g` | Placeholder bar | Marketing copy, skeletons |
 | `.dot` | Status dot | See §2.4 |
-| `.im` | Image/media placeholder | Hatched fill |
+| `.im` | Image/media placeholder | Hatched fill; dashed border = drop target |
 | `.av` | Avatar | 18/20/26/28/34/52px |
-| `.hr` | Divider | |
 | `.tbl` / `.th` / `.tr` / `.tr.sel` | Data table | Desktop only |
 | `.li` / `.li.sel` | List item | Desktop split-pane list |
 | `.pane` / `.pane-b` | List pane / detail pane | Desktop master–detail |
@@ -137,35 +144,48 @@ Class names in the source map to components you should build once:
 
 | Mark | Meaning |
 |---|---|
-| `.dot.k` filled ink | Taken / done / confirmed / delivered |
-| `.dot.x` outlined ink | Missed / negative / unchecked / needs action |
-| `.dot` grey | Upcoming / not yet / pending |
+| `.dot.k` filled ink | Taken / done / confirmed / delivered / **consent ticked** / step complete / option selected |
+| `.dot.x` outlined ink | Missed / negative / **unticked consent** / step needing action now |
+| `.dot` grey | Upcoming / not yet / pending / locked step / unselected option |
 
-The same three dots carry dose status in Home, Calendar, tables, delivery state in
-"Told to", and per-person progress in the multi-parent console. Do not invent a fourth.
+The same three marks carry dose status, delivery state, step progress, radio selection
+and checkbox state. Do not invent a fourth.
 
-> One leftover: `2e`'s "Last check-in" card still renders a five-dot row labelled
-> `calm`. That is the old sentiment meter; every other instance was removed with mood
-> scoring. Treat it as residue — either drop it or replace it with the call's
-> highest observation severity.
+> One leftover: `2e`'s "Last check-in" card still renders a five-dot row labelled `calm`.
+> That is the old sentiment meter, removed everywhere else with mood scoring. Drop it or
+> replace it with the call's highest observation severity.
 
-### 2.5 Copy rules visible in the wireframes
+### 2.5 Progressive step cards
+
+`1a` / `2a` introduce a pattern the whole onboarding uses. Each step is a card with a
+numbered `.tag`, a caps label, and a trailing dot:
+
+| Step state | Tag | Dot | Card |
+|---|---|---|---|
+| Complete | filled | `.dot.k` | plain card, values shown as real text (`color:#222`) |
+| Active | filled | `.dot.x` | **primary card** (1.5px ink border) |
+| Locked | outlined | `.dot` | `opacity:.45`, fields show placeholder dots only |
+
+Each step unlocks the next. Do not let a user jump ahead.
+
+### 2.6 Copy rules visible in the wireframes
 
 - **Verbatim quotes over summaries.** Alerts and the record lead with what the parent
-  actually said — `"Chest feels tight when I walk."` — never a paraphrase. Matches
-  TRD §5 `log_observation` (verbatim, never paraphrased).
+  actually said — `"Chest feels tight when I walk."` Matches TRD §5 `log_observation`.
 - **Cite the rule, not the diagnosis.** `1i` / `2g` show a `P1` badge above the literal
   string `rule: chest complaint with age over 40`, then *"Triggered on the words she
   used. No interpretation, no diagnosis."*
-- **No score without a sentence behind it.** `1s` / `2j`: *"Her words, timestamped, with
-  a severity chip — no mood score, no percentage. A number nobody can trace back to a
-  sentence is not evidence."*
-- **Consequences, not settings language.** `2b` shows a live call-script preview beside
-  the profile form, plus a "Won't ever" list (no medical advice, no penicillin mention,
-  no calls after 8 PM).
+- **No score without a sentence behind it.** `1s` / `2j`: *"no mood score, no percentage.
+  A number nobody can trace back to a sentence is not evidence."*
+- **Buttons say the destination**, not "Next": `Upload Prescription`, `Approve Schedule`,
+  `Continue to Consent`, `Continue on the app`, `Save and Continue`.
+- **Consequences, not settings language.** `2b`'s live call-script preview and its
+  "Won't ever" list (no medical advice, no penicillin mention, no calls after 8 PM).
 - **Every error offers a manual path** (`2o`) — "Type it in" always exists.
-- Second person, present tense, no exclamation marks. Timestamps are human
-  ("6 min ago", "Yesterday", "7:41").
+- Second person, present tense, no exclamation marks. Timestamps are human ("6 min ago",
+  "Yesterday", "7:41").
+- Consent copy is **not final** — every consent line carries `copy TBC`. Legal/clinical
+  review owns those strings, not the builder.
 
 ---
 
@@ -177,8 +197,8 @@ The same three dots carry dose status in Home, Calendar, tables, delivery state 
 Home · Calendar · Alerts · Calls
 ```
 
-Settings lives behind the ⚙ in the Home header. "What Mom said" (`1s`) is reached from
-Home / Alerts / a call, not from the tab bar.
+Settings sits behind the ⚙ in the Home header. "What Mom said" (`1s`) is reached from
+Home / Alerts / a call. The medicine editor (`1G.2`) is reached from Calendar.
 
 ### 3.2 Desktop — sidebar
 
@@ -188,38 +208,50 @@ Dashboard · Calendar · Alerts(3) · Calls(2) · Prescriptions · What she said
 Settings
 ```
 
-Sidebar top: logo, then a parent switcher card (avatar · "Mom · 71" · today's status ·
-▾). Sidebar bottom: a context widget that changes per section — agent next call (`2e`),
-calendar filters (`2f`), escalation chain (`2g`), next scheduled calls (`2h`), weekly
-digest (`2j`) — then the caregiver's own row.
+Sidebar top: logo, then a parent switcher card. Sidebar bottom: a context widget that
+changes per section — agent next call (`2e`), calendar filters (`2f`), escalation chain
+(`2g`), next scheduled calls (`2h`), weekly digest (`2j`) — then the caregiver's row.
 
-### 3.3 Routes (from the browser chrome in the web frames)
+### 3.3 Onboarding is four steps
+
+```
+1 · Parent  →  2 · Prescription  →  3 · Schedule  →  4 · Consent
+```
+
+Step 4 is new. The desktop stepper shows all four; its header reads **"nothing has
+called Mom yet"** until the intro call is scheduled.
+
+### 3.4 Routes (from the browser chrome in the web frames)
 
 | Route | Frame |
 |---|---|
 | `/` (marketing + login) | `2a` |
 | `/setup/parent` · `/setup/prescription` · `/setup/schedule` | `2b` · `2c` · `2d` |
+| **`kinvox.app/setup/consent`** | **`2D.2`** |
 | `/home` | `2e`, alts `2l` `2n` |
 | `/calendar` | `2f` |
+| **`kinvox.app/medicines/edit`** | **`2F.2`** |
 | `/alerts` · `/alerts/{id}` | `2g` |
 | `/calls` | `2h` |
 | `/wellbeing` (renders "What she said") | `2j` |
 | `/settings/{section}` | `2k` |
 | `/console` (multi-parent alt) | `2m` |
 
-`/wellbeing` is a stale path for a screen now called "What she said" — rename to
-`/said` or `/record` when building, and keep a redirect if any link already exists.
+Every frame now uses `kinvox.app`. `/wellbeing` is a stale path for a screen now called "What
+she said" — rename to `/said` or `/record`.
 
-### 3.4 Mobile → desktop mapping
+### 3.5 Mobile → desktop mapping
 
 | Mobile | Desktop | Transformation |
 |---|---|---|
-| `1a` login | `2a` | Auth column is identical; desktop wraps it in a marketing hero |
+| `1a` login | `2a` | Same four steps; desktop wraps them in a marketing hero |
 | `1b` profile | `2b` | One column → two columns + live script preview |
 | `1c` upload + `1d` OCR | `2c` | Two screens → one, side by side |
 | `1e` approve | `2d` | Stacked cards → editable spreadsheet with bulk edit |
+| **`1E.2` + `1E.2 sheet` consent** | **`2D.2`** | Mobile raises the time picker as a bottom sheet; desktop keeps it inline |
 | `1f` home | `2e` | Stack → day table + persistent attention rail |
 | `1g` calendar | `2f` | Day timeline → week grid, drag to reschedule |
+| **`1G.2` edit medicines** | **`2F.2`** | Card list → table with pending-change states |
 | `1h` list + `1i` detail | `2g` | Push navigation → master–detail split pane |
 | `1j` calls | `2h` | Log → log + searchable transcript + "what this call produced" |
 | `1m` settings | `2k` | Row stack → section rail + two-column page |
@@ -230,352 +262,417 @@ drag-reschedule, bulk edit, and multi-parent). It removes navigation steps.
 
 ---
 
-## 4. Mobile screens (`1a`–`1s`)
+## 4. Mobile screens
 
-Each entry: purpose · structure · fields/data · actions · notes.
+### `1a` Login / signup — phone → OTP → email → OTP
+Full-bleed, no header. Logo → headline "Keep an eye on your parent's meds" → one copy
+bar → **four step cards** (§2.5):
 
-### `1a` Login / signup
-Full-bleed page, no header. Logo → headline "Keep an eye on your parent's meds" → two
-placeholder copy bars → **Continue with Google** (primary) → **Continue with Apple** →
-"then" divider → email row with `verify mail` tag → phone block (E.164 field + 6-digit
-OTP row with `Send`) → language chips (English / हिन्दी / मराठी, English selected) →
-legal footer including *consent to place automated voice calls to your parent*.
+1. **Phone number** — complete. `+91 · 98765 43210`
+2. **Verify phone** — complete. Six single-digit `.in` boxes showing `4 1 9 2 0 7`,
+   footer "Verified" + `resend in 0:24`
+3. **Email address** — active (primary card). `rohit@gmail.com` + **`Send OTP to email`**
+4. **Verify email** — locked, `opacity:.45`, six empty boxes
 
-Phone is **required even on the social path** — escalation and the agent both need a
-reachable number. Google is the fast path; verification happens after.
+Footer: *"By continuing you agree to Terms & the consent to place automated voice calls
+to your parent."*
 
-### `1b` Add parent profile — step 1/3
-Header: ← · "Who are we caring for?" · `1/3`.
+**No social login.** Google and Apple were removed; the annotation reads *"Four steps,
+each unlocking the next. Copy still to be written."* Language selection is no longer
+here — it moved to the parent profile.
 
-Fields: avatar + Name + `photo` chip · Age · Relation (select) · **Parent's phone —
-the agent calls this** · Known conditions (multi-select chips + add) · Allergies &
-things to avoid (chips) · free-text "Anything to keep in mind" (the example shows
-exactly what it is for: *hard of hearing on the left ear · gets confused after 9 PM ·
-won't take tablets without food · call her "Amma"*).
+### `1b` Add parent profile — step 1/4
+Header: ← · "Who are we caring for?" · `1/3` *(stale — should read 1/4)*.
 
-Then two consent blocks:
-- **Allow agent check-in calls** (toggle, on) + call window (9 AM–8 PM) + language.
-- **"Mom knows about these calls"** (attention card, toggle, on) — *"Tell her before we
-  start. She can ask us to stop at any time, on any call."*
+Fields: avatar + Name + `photo` · Age · Relation · **Parent's phone — the agent calls
+this** · Known conditions (chips) · Allergies & things to avoid (chips) · **Language the
+agent should speak** — `हिन्दी Hindi` selected, `English`, `मराठी Marathi`, `ਪੰਜਾਬੀ`,
+`+ more` · free-text "Anything to keep in mind" (*hard of hearing on the left ear · gets
+confused after 9 PM · won't take tablets without food · call her "Amma"*).
 
-Then optional escalation contacts (family / doctor / neighbour chips, explicitly
-skippable). CTA: **Next — add prescription**.
+Then: **Allow agent check-in calls** (toggle, on) + call window (9 AM – 8 PM). Then
+optional escalation contacts (family / doctor / neighbour chips, explicitly skippable).
 
-Annotation states the design rule: *parent consent is a real gate; family escalation is
-not.* Maps to `patients.calls_paused` (TRD §3) and SR-5.
+Footer: a requirement line **"Name, age, relation, phone, language required · 2 left"**
+above a **disabled** `Upload Prescription`. Annotation: *disabled until every required
+field is filled → goes to `1c`. Escalation contacts don't count.*
 
-### `1c` Upload prescription — step 2/3
+> The parent-consent toggle that used to live here has moved to the dedicated consent
+> step `1E.2`.
+
+### `1c` Upload prescription — step 2/4
 Dashed drop target ("Tap to scan, or drop a file · JPG · PNG · PDF · up to 10 pages") ·
-three equal buttons Camera / Gallery / Files · "Added (2)" list with page thumbnail,
-filename, upload progress bar, ✕ · tip card · CTA **Analyse prescription**.
-
-Same uploader is reused whenever a new prescription arrives later.
+Camera / Gallery / Files · "Added (2)" list with thumbnail, filename, progress, ✕ · tip
+card · CTA **Analyse prescription**. The same uploader is reused whenever a new
+prescription arrives later.
 
 ### `1d` OCR analysis progress
-Blocking screen, header "Reading prescription… · step 3 / 4". Page preview with
-detected boxes overlaid. Four-step checklist with per-step timing:
-1. Enhancing & deskewing image — 0.4s ✓
-2. Extracting text (OCR) — 1.1s ✓
-3. Matching N medicines to drug database — in progress
-4. Building dose schedule — pending
+Blocking screen, "Reading prescription… · step 3 / 4". Page preview with detected boxes.
+Four-step checklist with timings: enhance & deskew (0.4s ✓) · OCR (1.1s ✓) · matching
+medicines to the drug database (running) · building dose schedule (pending). Plus "Found
+so far" chips (`Atorvas… ?` for an uncertain match) and a `2 unclear` badge.
 
-Plus "Found so far" chips (with `Atorvas… ?` showing an uncertain match) and a
-`2 unclear` badge. ~2s total; stays on screen because the next step depends on results.
+CTA **`Approve Schedule`**, enabled once matching finishes → `1e`.
 
-### `1e` Approve schedule — step 3/3 — **the gate**
+### `1e` Approve schedule — step 3/4
 Banner: `check · 2 rows unclear — fix these before you sign off`.
-Column legend row: *Dose · frequency · times · food rule · end date*.
+Legend row: *Dose · frequency · times · food rule · end date*.
 
-One block per medicine: name + form/food rule · dose per dose · ✎ · then a chip row of
+One block per medicine: name + form/food rule · dose per dose · ✎ · chip row of
 frequency · each time · end date. Unclear rows get the attention-card treatment (grey
-fill, left rule, `unclear` badge, guessed expansion as subtitle). No stock or refill
-fields anywhere.
+fill, left rule, `unclear` badge, guessed expansion as subtitle). No stock fields.
 
 Footer chips: `+ Add medicine` · `Set all end dates` · `View as calendar`.
 
-Sticky bottom: **an unchecked confirmation** — *"I confirm these 5 medicines, doses and
+Sticky bottom: **unchecked confirmation** — *"I confirm these 5 medicines, doses and
 timings are correct — Nothing is called about until you tick this."* — above a
-**disabled** `Approve & start calling` button (rendered at 45% opacity).
+**disabled** **`Continue to Consent`**. Annotation: *without the tick the button does
+nothing → `1E.2`.*
 
-> Without the tick the button does nothing and no call is ever placed. This is
-> `patients.schedule_signed_off_at` (TRD §3, FR-4). Enforce it server-side too.
+### `1E.2` (`#1e2`) Parent consent — the intro call, then consent
+Header: ← · "Before we call Mom" · `last step`.
+
+Lead: **"First we ring Mom once to introduce ourselves"** — *"No medicines on this call.
+We say who we are, that you set this up, and ask if she is happy to be called."*
+
+**When should that call happen?** — three option cards:
+1. **Call Mom now** (selected, primary card) — "We dial her in the next minute or two."
+2. **Schedule the call for later** — "Pick a time she is usually free." + `Today 6:30 PM ▾`
+   chip, which opens the bottom sheet `1E.2 sheet`
+3. **"I'll tell her myself first"** — "We wait until you say she is ready." Carries an
+   outlined `3rd option?` badge — **an open design question, not a settled option**
+
+**Your consent** (attention card) — three mandatory lines, each with a `copy TBC` marker:
+- ● I confirm Mom knows Kinvox will call her
+- ● I consent to these calls being recorded and transcribed
+- ○ I understand Kinvox never gives medical advice
+
+with "All three are mandatory · 1 left".
+
+Note card: *"We call Mom from our end — nothing dials from your phone."*
+Footer: *"All calling functionality begins only after this intro call and a final
+approval from your mom."* + **disabled** `Continue on the app`.
+
+Annotation: *the intro call is the gate — dose calls do not start until Mom says yes on
+it.*
+
+### `1E.2 sheet` (`#1e3`) Scheduling the intro call
+The same screen at 35% opacity behind a **bottom sheet**: grab handle · "When is Mom
+usually free?" · ✕ · **Day** chips (`Today` selected / Tomorrow / Pick a date) · **Time**
+chips (10:00 AM / 12:30 PM / 4:00 PM / `6:30 PM` selected / Custom) · a card stating
+*"Her call window: 9 AM – 8 PM · Times outside the window are hidden"* · CTA
+`Set 6:30 PM today`.
+
+Sheet only — the choice writes back into option 2 on `1E.2`.
 
 ### `1f` Home — next dose leads
 Header: avatar · "Mom" · "On track today · 3 of 5 taken" · ⚙.
 
-1. **Primary card**: `Next dose · in 22 min` + `2:00 PM` badge → "Metformin 500 mg" →
-   "1 tablet · after lunch" → `Mark taken` (primary) + `Call Mom` → `Schedule a call for
-   this dose later` → divider → *"Agent will call at 2:05 PM if unconfirmed"* + `edit`.
+1. **Primary card**: `Next dose · in 22 min` + `2:00 PM` → "Metformin 500 mg" → "1 tablet
+   · after lunch" → `Mark taken` + `Call Mom` → `Schedule a call for this dose later` →
+   divider → *"Agent will call at 2:05 PM if unconfirmed"* + `edit`.
 2. Attention card: `1 alert` · "Missed 6:30 AM Thyronorm" · ›
-3. Last check-in call card: time, `transcript` chip, verbatim quote.
-4. Today card: "3 of 5 doses confirmed · 2 still to come" + `Open calendar`.
+3. **Last check-in call** (now an attention card): `9:12 AM` · duration `1:04` ·
+   `transcript` · the quote, weighted: *"Took them morning once. Knee hurts a bit."*
+4. **"Today so far · since 6 AM"** + `Open calendar` — a chronological event list, one
+   row each: dot · time · what happened · trailing chip/label —
+   `7:41 Insulin 8 u confirmed · on call` / `8:04 Metformin · Amlodipine confirmed · on
+   call` / `6:30 Thyronorm missed — strip not found` + `fix` / `9:12 Check-in call
+   answered · 1:04` / `2:00 Metformin due · 2 doses still to come`.
+   Footer line: **"3 of 5 doses · 1 call · 1 alert — so far today"**.
 
-One dose leads; the rest of the day lives in Calendar — no second list to keep in sync.
+Annotation: *the whole-day summary rebuilds on every visit — everything since 6 AM in one
+block, so you never scroll the calendar to find out what happened.*
+
+> The rows are not in strict time order in the frame (7:41 and 8:04 precede 6:30). Sort
+> chronologically when building.
 
 ### `1g` Calendar — day timeline
-Header: "August 2026" + `Day ▾`. Week strip (M–S, dot per day showing that day's
-outcome, today inverted). Body: time-gutter timeline, one card per dose, multiple
-medicines at the same time stack inside one slot. States: `missed` badge + outlined
-dot; taken shows the actual confirmation time (7:41); the current slot gets a `now`
-chip and a heavier border. Footer legend (taken / missed / upcoming) + `+ dose`.
+Header: "August 2026" + `Day ▾`. Week strip (M–S, one dot per day, today inverted). Body:
+time-gutter timeline, one card per dose; same-time medicines stack in one slot. States:
+`missed` badge + outlined dot; taken shows the confirmation time (7:41); the current slot
+gets a `now` chip and heavier border.
+
+Footer: **`Edit these medicines`** and **`Upload new prescription`** (two equal outlined
+buttons) above the legend. Annotation: *both routes land on the same editor (`1G.2`) —
+one opens on the medicine list, the other on the uploader.*
+
+### `1G.2` (`#1g2`) Edit medicines / upload a new prescription
+Header: ← · "Change medicines" · `5 meds`. Segmented control: **Edit medicine** |
+**Upload prescription**.
+
+Body: one card per medicine (selected one is a primary card, with frequency and time
+chips + `+ time`), then `+ Add medicine` / `Stop a medicine` · divider · **"Attach the
+new prescription" · `optional`** dashed drop target.
+
+Then a mandatory attestation (attention card, unticked), verbatim:
+
+> **"Hey, I am fully aware of the changes that I am making in this calendar, and these
+> changes have been explicitly advised by our doctor."**
+
+CTA **`Save and Continue`**, disabled until ticked. Annotation: *the upload is optional;
+the consent is not.*
 
 ### `1h` Alerts feed
-Header: "Alerts" + `Mark all read`. Two filter rows: **time range** (Day / Month / Year
-/ All time) and **category with counts** (All 5 / Critical 1 / Meds 3 / Calls 1).
+Header: "Alerts" + `Mark all read`. Two filter rows: **time range** (Day / Month / Year /
+All time) and **category with counts** (All 5 / Critical 1 / Meds 3 / Calls 1).
 
-Alert cards, most severe first, each with badge + relative time + headline + one line of
-context + inline actions:
+Alert cards, most severe first — badge + relative time + headline + one line of context +
+inline actions:
 
 | Type | Badge | Actions |
 |---|---|---|
 | Critical | filled `critical` + primary card | `Call Mom now` · `Open detail` |
 | Missed dose | outlined | `Mark taken` · `Reschedule` |
 | No answer | outlined | `Retry now` · `Escalate to Priya` |
-| Missed dose (unconfirmed, older) | outlined | `Mark taken` · `Schedule a call` |
+| Missed dose (older, unconfirmed) | outlined | `Mark taken` · `Schedule a call` |
 
 Annotation: *date filter above severity — "did anything happen this month?" is the
 question people actually arrive with.*
 
 ### `1i` Alert detail — verbatim transcript + cited rule
-Title + meta line (`Today · 1:35 PM · agent call #214 · 2 min 11 s`) + `critical` badge.
+Title + meta (`Today · 1:35 PM · agent call #214 · 2 min 11 s`) + `critical`.
 
-Sections, in order:
-1. **Why this was flagged** (attention card) — `P1` badge, the literal rule string
+1. **Why this was flagged** (attention card) — `P1` badge, the literal string
    **`rule: chest complaint with age over 40`**, then *"Triggered on the words she used.
    No interpretation, no diagnosis."*
-2. **Transcript excerpt** with speaker badges (`agent` outlined / `mom` filled),
+2. **Transcript excerpt** — speaker badges (`agent` outlined / `mom` filled),
    `Play audio ▶`, "full transcript ›".
-3. **Told to** — delivery state per contact: `● You · WhatsApp — 1:37 PM ✓` /
-   `○ Priya · in 9 min`.
-4. **Context from the record** — "BP meds taken on time · 3 dizziness mentions this
-   week".
+3. **Told to** — `● You · WhatsApp — 1:37 PM ✓` / `○ Priya · in 9 min`.
+4. **Context from the record** — "BP meds taken on time · 3 dizziness mentions this week".
 
-Actions: `Call Mom now` (primary) → `Copy handoff link` + `Escalate to Priya` →
-`Mark resolved`.
+Actions, each carrying the identity it will dial:
+- **`Call Mom Now`** `+91 90••• •••••` (primary)
+- **`Call Doctor Now`** `Dr. Mehta`
+- **`Escalate to Priya`** `sister`
+- `Mark resolved`
 
-Annotation: *the rule string is the point — it turns a judgement call into something
-auditable.* This screen is the UI for `intake_records.priority` + `priority_rule`,
-`escalations`, and `handoffs` (TRD §3).
+Annotation: *these three open the phone dialler with the number already in — you press the
+green button, nothing dials on its own.*
+
+> `Copy handoff link` has been removed from this screen. The handoff concept now survives
+> only on web (`2h`'s "handoff link created" chip, `2m`'s per-person links).
 
 ### `1j` Calls & messages
-Segmented control: **Agent calls** | **Messages**. Each call row: `agent`/`you` badge ·
-timestamp · duration or `no answer` · one-line outcome · `Transcript` / `Audio ▶` chips
-· `alert` badge if it produced one. Unanswered rows are dimmed and show "Retried twice ·
-voicemail left". Below: messages preview (Mom voice note with unread count, Priya text).
-Header action: `+ check-in now`.
+Segmented: **Agent calls** | **Messages**. Each row: `agent`/`you` badge · timestamp ·
+duration or `no answer` · one-line outcome · `Transcript` / `Audio ▶` · `alert` badge if
+it produced one. Unanswered rows dimmed, "Retried twice · voicemail left". Below: messages
+preview. Header: `+ check-in now`.
 
-Annotation: *every call keeps its transcript. What she said is the record — no mood
-score sitting on top of it.* No sentiment meters on rows.
+Annotation: *every call keeps its transcript. What she said is the record — no mood score
+sitting on top of it.*
 
 ### `1m` Settings
 Parent card ›. **Voice agent**: check-in calls toggle · times per day (3) · call window ·
-voice & language ("Hindi · warm") · retry policy ("2× / 10 min") · record & transcribe.
-**Alert rules**: chips — Missed dose, No answer, Unwell, Double dose, Emergency word (all
-on), Sleep change (off) — plus "Notify me by: Push + SMS".
-**Escalation**: ordered contacts with trigger conditions ("Priya — after 15 min",
-"Dr. Mehta — critical only") + add.
-**Account**: Prescriptions & documents ›.
+voice & language ("Hindi · warm") · retry ("2× / 10 min") · record & transcribe.
+**Alert rules**: Missed dose · No answer · Unwell · Double dose · Emergency word (on),
+Sleep change (off) + "Notify me by: Push + SMS".
+**Escalation**: ordered contacts with conditions ("Priya — after 15 min", "Dr. Mehta —
+critical only") + add. **Account**: Prescriptions & documents ›.
 
 ### `1s` What Mom said — verbatim, newest first
-Header: ← · "What Mom said" · `Month ▾`. Filter chips with counts: `All 14` ·
-`Red 1` · `Watch 4`.
+Header: ← · "What Mom said" · `Month ▾`. Filters: `All 14` · `Red 1` · `Watch 4`.
 
-One card per thing she said, newest first:
-- Severity: filled `red` (attention card) · outlined `watch` · plain `none` micro-label.
-- The quote itself, verbatim, in quotation marks, weighted by severity.
-- Provenance line: `Call #214 · escalated to you` + `Transcript` chip.
+One card per utterance, newest first: severity (`red` filled + attention card / `watch`
+outlined / `none` plain label) · the quote verbatim · provenance (`Call #214 · escalated
+to you`) + `Transcript`.
 
 Actions: `Call Mom now` → `Share this week with Priya`.
 
-Annotation: *her words, timestamped, with a severity chip — no mood score, no
-percentage. A number nobody can trace back to a sentence is not evidence.* This is the
-UI for `observations` (verbatim text + `severity` none/watch/red, TRD §3).
+Annotation: *her words, timestamped, with a severity chip — no mood score, no percentage.*
+This is the UI for `observations` (verbatim text + severity none/watch/red).
 
 ### Alternates — decide before building
 | Frame | Direction | Trade-off as written |
 |---|---|---|
-| `1n` | Home = attention-first: critical card → missed/no-answer card → next dose → today → "Last thing she said" | Calmer on good days ("nothing needs you" empty state), louder on bad ones. Compare with `1f` |
-| `1o` | Hub home, no tab bar; six tiles — Alerts, Calendar, Calls, What she said, Care record, Prescriptions — plus "Trigger a check-in call now" | Fewer, bigger targets; costs a tap to reach Calendar/Alerts. Four tabs win on frequency, hub on clarity |
-| `1p` | Alerts as one conversational timeline (doses + calls + alerts in one stream) | Better story, worse triage than `1h` |
-| `1q` | Camera-first intake, results in a bottom sheet (merges `1c`+`1d`) | Fastest, harder to fix a bad scan |
+| `1n` | Home = attention-first: critical → missed/no-answer → next dose → today → "Last thing she said" | Calmer on good days, louder on bad ones. Compare with `1f` |
+| `1o` | Hub home, no tab bar; six tiles — Alerts, Calendar, Calls, What she said, Care record, Prescriptions — + "Trigger a check-in call now" | Fewer, bigger targets; costs a tap to reach Calendar/Alerts |
+| `1p` | Alerts as one conversational timeline | Better story, worse triage than `1h` |
+| `1q` | Camera-first intake, results in a sheet (merges `1c`+`1d`) | Fastest, harder to fix a bad scan |
 
 ---
 
-## 5. Desktop screens (`2a`–`2o`)
+## 5. Desktop screens
 
-Shell for every signed-in screen: browser chrome → sidebar (§3.2) → main (48px header
-with title, contextual chips, search, and 1–2 actions) → content area, 16×18px padding,
-columns with 12–16px gaps.
+Shell for every signed-in screen: browser chrome → sidebar (§3.2) → main (48px header) →
+content area, 16×18px padding, columns with 12–16px gaps.
 
-### `2a` Landing + login
-Marketing nav (How it works · Pricing · For families · Log in · Get started) → split
-body: left = hero headline, copy bars, `Start free` + `Watch 90-sec demo ▶`, three
-value cards (Scan the prescription / Agent calls your parent / **You only hear what
-matters — missed dose, no answer, anything she says that needs you**), product
-screenshot; right = 376px auth column on tinted ground.
+### `2a` Landing + login — phone → OTP → email → OTP
+Marketing nav (How it works · Pricing · For families · Log in · Get started) → split body:
+left = hero headline, copy bars, `Start free` + `Watch 90-sec demo ▶`, three value cards
+(Scan the prescription / Agent calls your parent / **You only hear what matters — missed
+dose, no answer, anything she says that needs you**), product screenshot; right = 376px
+auth column carrying **the same four step cards as `1a`**, then the automated-calls
+consent note.
 
-The auth column is mobile `1a` verbatim: **Continue with Google** → Continue with Apple
-→ "then" → verified email row → phone + OTP (`required`) → language chips → the
-automated-calls consent note. Annotation: *Google first, phone after — same order as
-mobile, so the two flows stay identical.*
+Annotation: *phone → OTP → email → OTP, same four steps as mobile `1a`. **No social login
+for now.***
 
 ### `2b` Onboarding 1 — parent profile
-Stepper chips in the header (1 · Parent / 2 · Prescription / 3 · Schedule) + "saved just
-now" + Exit. Left (flex 1.5): identity row (avatar · Name · Age · Relation) · phone +
-city/timezone · conditions and allergies side by side · keep-in-mind textarea · agent
-card (toggle + call window + language + voice) · consent attention card (*"She can ask
-us to stop on any call, and we stop."*) · escalation card marked `optional` with one
-added contact showing its delay and a `+ add family member` chip. Footer: "You can
-change all of this later in Settings" · `Back` · `Next — add prescription`.
+Stepper (1 · Parent / 2 · Prescription / 3 · Schedule / 4 · Consent) + "saved just now" +
+Exit. Left: identity row · phone + city/timezone · conditions and allergies side by side ·
+**Language the agent should speak** chips · keep-in-mind textarea · agent card (toggle +
+call window + voice) · escalation card marked `optional` with one contact and
+`+ add family member`.
 
-Right (300px), **web-only and worth building**: **Preview · first call script** — the
-actual line the agent would say in the chosen language and tone, plus "Uses" chips
-showing which profile fields shaped it (`"Amma"`, `after food`, `Hindi`, `speak
-slowly`), and a **"Won't ever"** list (give medical advice · mention penicillin drugs ·
-call after 8 PM). It turns profile fields into visible consequences.
+Footer: **"Name, age, relation, phone and language required · 2 left"** · `Back` ·
+**disabled `Upload Prescription`**.
+
+Right (300px), web-only: **Preview · first call script** — the line the agent would say in
+the chosen language and tone, "Uses" chips showing which fields shaped it (`"Amma"`,
+`after food`, `Hindi`, `speak slowly`), and a **"Won't ever"** list (give medical advice ·
+mention penicillin drugs · call after 8 PM).
 
 ### `2c` Onboarding 2 — upload with OCR beside it
-Left: large dashed drop zone (also "paste from clipboard") + `Browse files` · three
-alternate inputs (Scan with phone (QR) / Import from email / Google Drive) · uploaded
-files with size, progress and `read ✓` state · tip.
-Right: live OCR panel — "Reading · step 3 of 4" · page preview where **detected dose
-lines are boxed and clicking a box jumps to that row** · the four-step checklist ·
-"Found so far" chips + `2 unclear` · an allergy cross-check card (*"Penicillin allergy
-on file — nothing in this prescription conflicts."*).
+Left: large dashed drop zone (also "paste from clipboard") + `Browse files` · alternate
+inputs (Scan with phone (QR) / Import from email / Google Drive) · uploaded files with
+size, progress, `read ✓` · tip.
+Right: live OCR panel — "Reading · step 3 of 4" · page preview where **detected dose lines
+are boxed and clicking a box jumps to that row** · the four-step checklist · "Found so
+far" chips + `2 unclear` · allergy cross-check (*"Penicillin allergy on file — nothing in
+this prescription conflicts."*) · CTA **`Approve Schedule`**.
 
 ### `2d` Onboarding 3 — approve schedule as a spreadsheet
-Banner: "2 rows unclear — fix these before you sign off" with `Jump to first` /
+Banner: "2 rows unclear — fix these before you sign off" + `Jump to first` /
 `View as calendar`.
 
-Table columns: **Medicine** (name + form) · **Dose** · **Frequency** · **Times** (chips,
-`+` to add) · **Food rule** · **End date** · **Alerts** (dot toggle) · ✎. Unclear rows
-are selected-styled with an inline-editable cell. Bulk row: `+ Add medicine` ·
-`Set all end dates` · `Bulk edit times` · "shift-click to select a range".
+Table: **Medicine · Dose · Frequency · Times (chips, +) · Food rule · End date · Alerts
+(dot) · ✎**. Unclear rows selected-styled with an inline-editable cell. Bulk row:
+`+ Add medicine` · `Set all end dates` · `Bulk edit times` · "shift-click to select a
+range".
 
-Below: **Resulting day** card (every slot as a chip + "6 dose events · 3 agent check-in
-calls placed around them") and a **conflict** card (*Thyronorm 06:30 needs an empty
-stomach — 30 min before breakfast tea* → `Shift to 06:00` / `Keep`).
+Below: **Resulting day** (every slot as a chip + "6 dose events · 3 agent check-in calls
+placed around them") and a **conflict** card (*Thyronorm 06:30 needs an empty stomach* →
+`Shift to 06:00` / `Keep`).
 
-Footer row, all inline: the annotation, then the **sign-off checkbox** (attention card,
-unchecked: *"I confirm these 5 medicines, doses and timings are correct"*), then
-`Save draft`, then a **disabled** `Approve & start calling`. Same gate as `1e`.
+Footer row: annotation · **sign-off checkbox** (attention card, unchecked) · `Save draft` ·
+**disabled** `Approve & start calling`. Annotation: *until it is ticked the button does
+nothing → `2D.2`.*
+
+### `2D.2` (`#2d2`) Parent consent — the intro call, then consent
+Route `kinvox.app/setup/consent`. Stepper shows **4 · Consent** active; header note
+**"nothing has called Mom yet"**.
+
+Left (flex 1.35): **"First we ring Mom once to introduce ourselves"** — *"No medicines on
+this call. We say who we are, that you set this up, and ask whether she is happy to be
+called. Dose calls start only if she says yes."*
+
+Then the same three option cards as mobile, but with the picker **inline** inside option
+2: `Day` chips (Today / Tomorrow / Pick a date) and `Time` chips (10:00 AM / 12:30 PM /
+4:00 PM / **6:30 PM** / Custom), with *"Only times inside her 9 AM – 8 PM window are
+offered."* Option 3 carries the `3rd option?` badge. Bottom note: *"We call Mom from our
+end — nothing dials from your computer or phone."*
+
+Right (330px): **Your consent** (attention card, "1 left") with the three mandatory
+`copy TBC` lines · **What happens next** — `● We call Mom · today 6:30 PM` → `○ She agrees
+on that call` → `○ Dose calls begin next morning 6:30` · the closing line *"All calling
+functionality begins only after this intro call and a final approval from your mom."* ·
+**disabled** `Continue on the app`.
 
 ### `2e` Dashboard
-Header: "Today · Wed 20 Aug" · `On track` · search ("Search meds, calls, alerts…") ·
-`Call Mom` · `+ Add medicine` · notifications.
+Header: "Today · Wed 20 Aug" · `On track` · search · `Call Mom` · `+ Add medicine` ·
+notifications.
 
-Left column (flex 1.35):
-1. Primary next-dose card, wider action set than mobile: `Mark taken` · `Snooze 30 min`
-   · `Call Mom` · `Skip with reason` + "agent calls at 2:05 if unconfirmed · edit".
-2. "Today's doses" table — Time · Medicine · Rule · Status · Action. Status carries
-   provenance: `7:41 · by Mom`, `on call`, `missed`, `upcoming`. Current slot is
-   selected with a `now` chip.
-3. Adherence, last 14 days — bar per day + `Export CSV`.
+Left column: primary next-dose card (`Mark taken` · `Snooze 30 min` · `Call Mom` · `Skip
+with reason` + "agent calls at 2:05 if unconfirmed") → "Today's doses" table (Time ·
+Medicine · Rule · Status · Action; status carries provenance: `7:41 · by Mom`, `on call`,
+`missed`, `upcoming`) → adherence, last 14 days + `Export CSV`.
 
 Right rail (326px) — "Needs you":
-- Critical alert card (verbatim quote + `Call Mom now` / `Open`).
-- Attention card combining `missed` and `no answer` with `fix` / `retry` chips.
-- Last check-in card: time, `Transcript`, the quote. (Still carries the legacy dot row
-  — see §2.4.)
-- **What she said this week** (attention card): `1 red` badge, the red quote, "Today
-  1:36 PM · 4 more entries", `View all`.
-- **Care record**: "5 medicines · 1 priority" + `Open` · allergies line · doctor with a
-  `Call` chip.
+- Critical alert card (verbatim quote + `Call Mom now` / `Open`)
+- Attention card combining `missed` and `no answer` with `fix` / `retry`
+- **Last check-in** — now an attention card with duration, `Transcript`, and the quote
+  weighted (still carries the legacy dot row — see §2.4)
+- **"Today so far · since 6 AM"** — the same chronological event list as mobile `1f`,
+  headed "3 doses · 1 call · 1 alert"
+- **What she said this week** — `1 red`, the red quote, "4 more entries", `View all`
+- **Care record** — "5 medicines · 1 priority" + `Open` · allergies · doctor + `Call`
 
 ### `2f` Calendar — week grid
 Header: month · ‹ Today › · Day/Week/Month/Agenda · "17–23 Aug · 86% taken" · `+ Add
-dose`. Day columns across, time rows down; each cell is a card holding that slot's
-medicines with status dots. Future days are dimmed (opacity .55), missed cells get the
-left rule + `missed` badge, the current cell gets a heavy border + `now`.
+dose`. Day columns across, time rows down; each cell a card with that slot's medicines and
+status dots. Future days dimmed, missed cells get the left rule + badge, current cell a
+heavy border + `now`.
 
-Footer: legend + `Print / share PDF`. **Drag a card to another cell to reschedule that
-one dose; shift-drag moves the whole series.** Sidebar carries the filter chips (All
-meds / per-medicine / Calls).
+Footer: **`Edit these medicines`** · **`Upload new prescription`** · legend ·
+`Print / share PDF`. **Drag a card to another cell to reschedule that dose; shift-drag
+moves the whole series.** Annotation: *either button opens the editor (`2F.2`).*
+
+### `2F.2` (`#2f2`) Edit medicines / upload a new prescription
+Route `kinvox.app/medicines/edit`. Header: ← · "Change medicines" · segmented **Edit
+medicine** | **Upload prescription**.
+
+Left: a table of current medicines with **pending-change states** — an edited row is
+selected-styled with an `edited` badge and inline-editable cells; a stopped row is
+`opacity:.5` with a `stopped` badge and `—` values. Bulk row: `+ Add medicine` ·
+`Stop a medicine` · "3 changes pending".
+
+Below it, **"What changes for Mom"** — a plain-language diff as chips:
+`21:00 → 21:30 Metformin` · `Atorvastatin dropped` · `5 → 4 medicines`.
+
+Right (320px): **"Attach the new prescription" · `optional`** drop target, the uploaded
+file with `read ✓ · 3 medicines matched`, then the same mandatory doctor-advice
+attestation as `1G.2`, then **disabled** `Save and Continue`.
 
 ### `2g` Alerts — master–detail
-Left pane (330px): filter chips with counts (All 6 / Critical 1 / Meds 3 / Calls 1) then
-list items; resolved items dimmed at the bottom; selected item styled.
+Left pane (330px): filter chips with counts then list items; resolved items dimmed;
+selected item styled.
 
-Right pane: title + meta + `critical` badge + `Copy link` + ‹ › paging → action row
-(`Call Mom now` · `Escalate to Priya` · `Copy handoff link` · `Mark resolved`) with
-**keyboard hints "j / k to move · r to resolve"** → two columns:
-- Wide: **Why this was flagged** (attention card, `P1` badge + `rule: chest complaint
-  with age over 40` + "Triggered on the words she used. No interpretation, no
-  diagnosis") · full transcript with per-line timestamps and the triggering line
-  highlighted · audio scrubber (0:44 / 2:11).
-- Narrow (250px): **Told to** (You · WhatsApp 1:37p ✓ / Priya · in 9 min) · **Context**
-  checklist · **Activity** timeline (agent flagged 1:37p · push+SMS to you 1:37p ·
-  Priya notified in 9 min) · "Note for the family" input.
-
-Told to + Activity are the escalation clock made visible — build them against
-`escalations` (TRD §3), including `delivery_status`.
+Right pane: title + meta + `critical` + `Copy link` + ‹ › paging → action row —
+**`Call Mom Now` +91 90••• ••••• · `Call Doctor Now` Dr. Mehta · `Escalate to Priya` ·
+`Mark resolved`** — with keyboard hints "j / k to move · r to resolve" → two columns:
+- Wide: **Why this was flagged** (`P1` + the rule string + "No interpretation, no
+  diagnosis") · full transcript with per-line timestamps, triggering line highlighted ·
+  audio scrubber.
+- Narrow (250px): **Told to** · **Context** checklist · **Activity** timeline (agent
+  flagged 1:37p · push+SMS to you 1:37p · Priya notified in 9 min) · "Note for the family".
 
 ### `2h` Calls & messages
 Left pane (300px): **transcript search** + filters (Agent / Mine / Messages / Flagged);
-rows carry badge, time, duration, one-line outcome, and an `alert` badge where the call
-produced one. No sentiment meters.
+rows carry badge, time, duration, outcome, `alert` badge where one was produced.
 
-Right pane: call header (`Check-in call #214 · Today 1:35 PM · 2 min 11 s · Hindi ·
-agent "warm"`) + `Call Mom` + `Share with Priya` → **What this call produced** —
-outcome chips (`2 doses confirmed` · `1 observation · red` · `1 escalation · P1` ·
-`handoff link created`), the rule string and when it was written, and `Open in record`
-→ transcript with timecodes, Hindi/English toggle, and the triggering line highlighted
-→ right column: **What the call achieved** (per-dose outcomes with dots), **Topics
-detected** chips, Messages preview.
-
-"What this call produced" is the single best UI summary of the tool contract: one call
-writes dose events, observations, an escalation, and a handoff link.
+Right pane: call header (`Check-in call #214 · Hindi · agent "warm"`) + `Call Mom` +
+`Share with Priya` → **What this call produced** — outcome chips (`2 doses confirmed` ·
+`1 observation · red` · `1 escalation · P1` · `handoff link created`), the rule string and
+when it was written, `Open in record` → transcript with timecodes and a Hindi/English
+toggle → right column: **What the call achieved**, **Topics detected**, Messages preview.
 
 ### `2j` What she said — verbatim, severity-tagged, newest first
-Header: "What she said" · date range · `Red + watch only` · `needs attention` ·
-`Share with Priya` · `Export PDF for doctor`.
+Header: date range · `Red + watch only` · `needs attention` · `Share with Priya` ·
+`Export PDF for doctor`.
 
-Left (flex 1.5):
-1. Primary card: `summary` badge, "from 18 calls this week", **"14 things she said · 1
-   red · 4 watch"**, then *"Every line below is what she actually said, timestamped,
-   with the call it came from. Nothing is summarised or scored."*
-2. Table — **When · Severity · What she said · Call · action**. Severity column is
-   `red` / `watch` / `none`; the quote is the wide column; the call number links to the
-   call; `Transcript` chip per row.
-3. **Words that repeat** — counted from her exact words (`sleep 4×`, `knee 2×`,
-   `quiet / alone 3×`, `grandson 5×`, `chest 1×`) with *"tap one to see every line it
-   appears in"*.
-4. **This week** — Doses confirmed 31 of 36 · Calls answered 16 / 18 · Escalations
-   raised 1 · P1.
+Left: summary primary card ("14 things she said · 1 red · 4 watch" + *"Nothing is
+summarised or scored."*) → table **When · Severity · What she said · Call · action** →
+**Words that repeat** (`sleep 4×`, `knee 2×`, `quiet / alone 3×`, `grandson 5×`,
+`chest 1×`) with *"tap one to see every line it appears in"* → **This week** (Doses
+confirmed 31 of 36 · Calls answered 16 / 18 · Escalations 1 · P1).
 
-Right (320px): **Needs a look** — the flagged quotes with their repetition count and
-`Transcript`, `Play all` → **Suggested** actions (add a 6 PM chat call · ask Priya to
-visit · mention sleep to Dr. Mehta) → `Call Mom now` + `Add daily chat call` +
-`Tell Priya`.
+Right (320px): **Needs a look** quotes with repetition counts + `Play all` → **Suggested**
+actions → `Call Mom now` · `Add daily chat call` · `Tell Priya`.
 
 ### `2k` Settings
-Section rail (196px): **Parent** (Profile & conditions · Medicines & schedule ·
-Prescriptions) · **Agent** (Calls & voice · Alert rules · Escalation) · **Account**
-(Family & access · Notifications · Billing · Privacy & data).
+Section rail: **Parent** (Profile & conditions · Medicines & schedule · Prescriptions) ·
+**Agent** (Calls & voice · Alert rules · Escalation) · **Account** (Family & access ·
+Notifications · Billing · Privacy & data).
 
-"Calls & voice" page, two columns:
-- Calls: enable toggle · calls per day (2/3/4/Custom) · call window (two time inputs) ·
-  **offset from a dose (+5 min)** · retry policy (2× / 10 min) · leave voicemail.
-  Voice: language + fallback language · tone (Warm/Neutral/Brisk) · speed slider ·
-  **"Calls her: Amma"** + `Preview ▶` · record & transcribe with the note *"Mom is told
-  on the first call"*. **Do not call** windows (During temple 6–7 AM · Sunday afternoon).
-- Alert rules: which events notify (Missed dose · No answer · Unwell · Double dose ·
-  Emergency word on; Sleep change, Says she is unwell off) · missed-dose threshold
-  (30 min) · channels (Push / SMS / Email / WhatsApp) · **quiet hours for me** ·
-  **critical ignores quiet hours**.
-  **Escalation chain**, ordered and numbered: 1 Rohit (immediately) · 2 Priya (after 15
-  min · view-only access) · 3 Dr. Mehta (critical only · SMS) · 4 Neighbour Mrs Rao (no
-  answer 3× · call only). **Data**: keep recordings 90 days · export everything ·
-  delete account & data.
+"Calls & voice", two columns:
+- Calls: enable · calls per day (2/3/4/Custom) · call window · **offset from a dose
+  (+5 min)** · retry (2× / 10 min) · leave voicemail. Voice: language + fallback · tone ·
+  speed · **"Calls her: Amma"** + `Preview ▶` · record & transcribe (*"Mom is told on the
+  first call"*). **Do not call** windows (temple 6–7 AM · Sunday afternoon).
+- Alert rules: which events notify · missed-dose threshold (30 min) · channels ·
+  **quiet hours for me** · **critical ignores quiet hours**. **Escalation chain**,
+  numbered 1–4 with conditions and access level. **Data**: keep recordings 90 days ·
+  export everything · delete account & data.
 
-Header actions: `Test call to me` · `Save`.
+Header: `Test call to me` · `Save`.
 
 ### Alternates
 | Frame | Direction | Trade-off as written |
 |---|---|---|
-| `2l` | "Quiet wall" dashboard — icon-only 64px rail, one sentence centred, two status chips, three actions (`Mark 2 PM taken` · `Listen to 9:12 AM call` · `Read what she said today`), 14-day bar | Dense `2e` wins for daily managers; quiet wins for people who dread opening the app. On a bad day the centre becomes the critical alert |
-| `2m` | Multi-parent console — sidebar lists people; one row per person (doses today as dots · next dose · last call · **last said** · needs you · action) + combined alert feed + cross-parent stats + **one handoff per person: "3 read-only links · no login"** | Where a second parent or a paid family-manager tier stops being painful. **Row = person, not medicine** |
-| `2n` | Top nav instead of sidebar (Dashboard · Calendar · Alerts · Calls · What she said), three equal columns; cards for next dose, today, critical alert, recent calls, care record, what she said, prescriptions, agent | Frees ~190px, reads like a consumer site; costs the persistent parent switcher and the peripheral alert count. Sidebar scales to `2m`, top nav does not |
+| `2l` | "Quiet wall" dashboard — icon-only 64px rail, one sentence centred, two status chips, three actions, 14-day bar | Dense `2e` wins for daily managers; quiet wins for people who dread opening the app |
+| `2m` | Multi-parent console — row per person (doses as dots · next dose · last call · **last said** · needs you · action) + combined alert feed + cross-parent stats + **"3 read-only links · no login"** | Where a second parent or a family-manager tier stops being painful. **Row = person, not medicine** |
+| `2n` | Top nav instead of sidebar, three equal columns | Frees ~190px; costs the parent switcher and the peripheral alert count. Sidebar scales to `2m`, top nav does not |
 | `2o` | **States** — build these | See §6 |
 
 ---
@@ -584,14 +681,16 @@ Header actions: `Test call to me` · `Save`.
 
 | State | Spec |
 |---|---|
-| **Empty** | Dashed card, icon, "No medicines yet", one line of what happens next, primary CTA `Add prescription`, secondary `Enter manually instead` |
+| **Empty** | Dashed card, icon, "No medicines yet", one line of what happens next, `Add prescription`, secondary `Enter manually instead` |
 | **Loading** | **Skeleton, never a spinner.** Grey bars in the final layout's shape — "layout is stable before data lands, no jump" |
-| **Degraded — agent can't reach parent** | `agent offline` badge + since-time, "4 calls have not connected", plain cause list (phone off / out of network / blocked), then the two consequences: **doses tracked as "unknown", not missed**, and "Priya notified at 6:35 PM". Actions: `Call Mom yourself` · `Try another number` · `Ask neighbour` |
-| **Error — OCR failed** | `couldn't read` badge, "We got 2 of 5 lines", blurred preview, the specific cause ("blurry near the dosage column"), three recoveries `Retake photo` / `Crop & retry` / `Type it in`, and the reassurance *"Nothing is saved until you approve the schedule."* |
+| **Degraded — agent can't reach parent** | `agent offline` + since-time, "4 calls have not connected", plain cause list, then the consequences: **doses tracked as "unknown", not missed**, and "Priya notified at 6:35 PM". Actions: `Call Mom yourself` · `Try another number` · `Ask neighbour` |
+| **Error — OCR failed** | `couldn't read`, "We got 2 of 5 lines", blurred preview, specific cause, three recoveries (`Retake photo` / `Crop & retry` / `Type it in`), and *"Nothing is saved until you approve the schedule."* |
 
-Two rules generalise: **an unreachable parent produces `unknown`, never `missed`** (do
-not let a network failure become an adherence penalty), and **every error offers a
-manual path.**
+Two rules generalise: **an unreachable parent produces `unknown`, never `missed`**, and
+**every error offers a manual path.**
+
+Not yet drawn, and now needed: the state after the intro call — **awaiting Mom's consent**
+(scheduled but not yet placed), and **Mom declined**.
 
 ---
 
@@ -601,122 +700,168 @@ Mapped to [`docs/TRD.md`](TRD.md) §3 where a table already exists.
 
 | UI need | Existing | Gap to add |
 |---|---|---|
-| Parent identity, conditions, allergies, language, honorific, address, sign-off, pause | `patients` | photo, relation, timezone, "keep in mind" free text, do-not-call windows |
-| Medicines, dose, slots, food rule, priority flag | `medications` | end date, per-medicine alerts on/off, unclear/needs-review flag, OCR source ref. (`stock_count` is now unused by the UI) |
-| Dose status incl. provenance and confirmation time | `dose_events` (`confirmed`/`deferred`/`missed`/`no_answer`) | `unknown` status (from `2o` degraded), `skipped_with_reason`, actor (parent on call / caregiver in app), snooze |
-| Call log, duration, transcript, language, direction | `call_sessions` | audio URL, voicemail flag, retry count, per-call outcome summary ("what this call produced"), topics detected |
-| Verbatim quotes with severity `none`/`watch`/`red` | `observations` | word-frequency rollup for "Words that repeat"; link from observation → alert |
-| Priority `P1`/`P2`/`P3` + literal rule string | `intake_records.priority`, `priority_rule` | surfaced directly in `1i` / `2g` / `2h` — never render an empty rule |
-| Escalation with cited rule, channel, delivery status | `escalations` | scheduled-but-not-yet-sent state ("Priya · in 9 min"), per-contact trigger config and ordering |
-| Handoff link, copy action, viewed state | `handoffs` | surfaced as `Copy handoff link` in `1i` / `2g`, "handoff link created" in `2h`, and per-person links in `2m` |
-| Alerts feed | — | **`alerts` table**: type (critical / missed_dose / no_answer / double_dose / sleep_change), severity, source (call / scheduler), headline, read + resolved state, actions taken |
-| Prescriptions, pages, OCR result, confidence | — | `prescriptions` + `prescription_pages` + extracted rows with confidence, so `unclear` is data, not a guess |
+| Caregiver identity, phone + email both verified | `caregivers` | `phone_verified_at`, `email_verified_at`, OTP issue/resend state — the login is a four-step state machine, not one form |
+| Parent identity, conditions, allergies, language, honorific, sign-off, pause | `patients` | photo, relation, timezone, "keep in mind" free text, do-not-call windows, required-field completeness |
+| Medicines, dose, slots, food rule, priority flag | `medications` | end date, per-medicine alerts on/off, unclear flag, OCR source ref, **`stopped` state**. (`stock_count` now unused) |
+| Dose status incl. provenance and confirmation time | `dose_events` | `unknown` status, `skipped_with_reason`, actor (parent on call / caregiver in app), snooze |
+| **Caregiver consents** — three booleans + when + which copy version | — | `consents` table. Copy is `copy TBC`, so **version the strings** and store which version was agreed |
+| **Intro call** — the pre-flight call and its outcome | — | A call of type `intro`, its scheduled time, and a `parent_consented` outcome that gates the scheduler. See §8 rules 2–3 |
+| **Schedule change log with attestation** | — | Each edit batch: the diff ("21:00 → 21:30 Metformin", "Atorvastatin dropped"), who made it, and the doctor-advice attestation ticked |
+| Call log, duration, transcript, language, direction | `call_sessions` | audio URL, voicemail flag, retry count, per-call outcome rollup, topics detected |
+| Verbatim quotes with severity `none`/`watch`/`red` | `observations` | word-frequency rollup; link observation → alert |
+| Priority `P1`/`P2`/`P3` + literal rule string | `intake_records` | render it directly — never an empty rule |
+| Escalation with cited rule, channel, delivery status | `escalations` | scheduled-but-not-yet-sent ("Priya · in 9 min"), per-contact trigger config and ordering |
+| Handoff link | `handoffs` | now surfaced only on web (`2h`, `2m`) — mobile dropped the action |
+| Alerts feed | — | **`alerts` table**: type, severity, source, headline, read + resolved state, actions taken |
+| Prescriptions, pages, OCR result, confidence | — | `prescriptions` + pages + extracted rows with confidence, so `unclear` is data, not a guess |
 | Agent config (per-day count, window, offset, retries, tone, speed, name, recording, do-not-call) | — | `agent_settings` per patient |
 | Caregiver notification prefs incl. quiet hours + critical override | — | `notification_settings` per caregiver |
 | Family access (Priya "view-only") | — | `family_members` with role |
 
-Derived values the UI displays, so define them once server-side: **adherence %** over a
-window, **"on track today"**, **next-call time** (dose slot + configured offset),
-**severity counts** for the filter chips, **word frequencies** over a date range.
+Derived values to define once server-side: **"today so far"** (the merged event stream of
+doses, calls and alerts since 6 AM — used on both `1f` and `2e`), **adherence %**, **"on
+track today"**, **next-call time** (dose slot + offset), **severity counts**, **word
+frequencies**, **required-fields-remaining** counters.
+
+Client-side, `Call X Now` produces a **`tel:` intent**, never a server-placed call.
 
 ---
 
 ## 8. Behaviour rules extracted from the annotations
 
-1. **No calls before sign-off.** `1e` / `2d`. Enforce in the scheduler, not just the UI.
-2. **Parent consent is a gate; family escalation is optional.** `1b` / `2b`.
-3. **The parent can stop the calls on any call, and we stop.** `2b` — needs a runtime
-   pause path.
-4. **One dose leads on Home; the day lives in Calendar.** No duplicate list to sync.
-5. **Agent calls at dose time + configured offset (default +5 min) only if
-   unconfirmed.** A caregiver `Mark taken` cancels that call.
-6. **Retry policy is explicit** (default 2× / 10 min); unanswered calls leave voicemail
-   and become a `no answer` alert.
-7. **Escalation is timed and ordered** (you → 15 min → sister → doctor for critical →
-   neighbour after 3 no-answers) and the countdown is visible in the alert.
-8. **Critical alerts ignore the caregiver's quiet hours.** `2k`.
-9. **Do-not-call windows are honoured** even when a dose falls inside them. `2k`.
-10. **Unreachable ≠ missed.** `2o` — the status is `unknown`.
-11. **Flag with the rule, quote the parent, never diagnose.** `1i` / `2g` — the literal
-    rule string is rendered, never a category label.
-12. **No score without a traceable sentence.** `1s` / `2j` — severity chips only.
-13. **A handoff link is one action away from any critical alert**, and is read-only, no
-    login. `1i` / `2g` / `2m`.
-14. **Recordings default to 90-day retention, with export and delete-everything.** `2k`.
-15. **Nothing is saved until the schedule is approved.** `2o` error state.
+1. **No calls before schedule sign-off.** `1e` / `2d`. Enforce in the scheduler, not just
+   the UI.
+2. **The first call is an intro call, and it carries no medicines.** `1E.2` / `2D.2`.
+3. **Dose calls begin only after the parent agrees on that intro call** — *"All calling
+   functionality begins only after this intro call and a final approval from your mom."*
+   Sign-off alone is not enough; the gate is two-stage.
+4. **All three caregiver consents are mandatory** (parent knows · recording &
+   transcription · never gives medical advice). The CTA stays disabled until all three.
+5. **Editing medicines requires a doctor-advice attestation** — *"these changes have been
+   explicitly advised by our doctor"* — and the attached prescription is optional while
+   the attestation is not. `1G.2` / `2F.2`.
+6. **Nothing dials from the caregiver's device on its own.** Call buttons open the dialler
+   pre-filled; the agent's calls are placed from the service's end.
+7. **Every gated CTA is visibly disabled with its reason stated next to it** ("2 left",
+   "All three are mandatory", "without the tick the button does nothing").
+8. **The intro call is only offered inside the parent's call window** (9 AM – 8 PM);
+   times outside it are hidden, not greyed.
+9. **Agent calls at dose time + configured offset (default +5 min) only if unconfirmed.**
+   A caregiver `Mark taken` cancels that call.
+10. **Retry policy is explicit** (2× / 10 min); unanswered calls leave voicemail and
+    become a `no answer` alert.
+11. **Escalation is timed and ordered**, and the countdown is visible in the alert.
+12. **Critical alerts ignore the caregiver's quiet hours**; **do-not-call windows are
+    honoured** even when a dose falls inside them. `2k`.
+13. **Unreachable ≠ missed** — the status is `unknown`. `2o`.
+14. **Flag with the rule, quote the parent, never diagnose.** The literal rule string is
+    rendered, never a category label.
+15. **No score without a traceable sentence.** Severity chips only.
+16. **Recordings default to 90-day retention, with export and delete-everything.**
+17. **Nothing is saved until the schedule is approved.** `2o` error state.
 
 ---
 
-## 9. Known gaps and open questions
+## 9. Open questions the wireframes raise
 
-**In the wireframes, absent from the TRD** — decide whether in scope or roadmap:
+- **The third intro-call option — "I'll tell her myself first" — is tagged `3rd option?`.**
+  Unresolved. If kept, it needs its own state (waiting on the caregiver, no call
+  scheduled, nothing running) and a way back in.
+- **Every consent string is `copy TBC`**, as is `1a`'s login copy. Legal/clinical review
+  owns them; wire the flow against string IDs, not literals.
+- **What happens if Mom says no on the intro call**, or does not answer it? No screen.
+- `1b`'s header still reads `1/3` though onboarding is now four steps.
+- `1f`'s "Today so far" rows are not in chronological order in the frame.
+- `2j` still lives at `/wellbeing`; `2e`'s last-check-in card still shows the old five-dot
+  `calm` meter.
+- Sub-ID labels are inconsistent with their anchors (`#1e2` displays "1E.2", `#1e3`
+  displays "1E.2 sheet"). Pick one scheme before these get cited widely.
+
+---
+
+## 10. Known gaps vs the TRD
+
+**In the wireframes, absent from the TRD:**
 - Prescription OCR pipeline and the confidence/`unclear` model
+- The consent step: caregiver consents, the intro call, and its gate on the scheduler
+- Schedule-change attestation and change log
 - Alerts as a first-class feed with read/resolved state
 - Messages (parent voice notes, family chat)
 - Multi-parent console (`2m`), family view-only access, billing/pricing
-- Word-frequency counting over verbatim observations (`2j`)
+- Word-frequency counting over verbatim observations
 
-**In the TRD, absent from the wireframes** — these need screens before they ship:
-- **Inbound calls.** The Calls tab shows only outbound agent calls and caregiver calls.
-  The hero path — parent rings in, agent already knows everything — has no screen.
-- **Intake records and the 12-field completeness meter.** Priority and the rule string
-  are now shown; completeness is not.
-- **The `/h/{token}` handoff view itself.** The app can create and copy the link; the
-  page the recipient opens is unspecified here.
+**In the TRD, absent from the wireframes:**
+- **Inbound calls.** The hero path — parent rings in, agent already knows everything — has
+  no screen.
+- **Intake records and the 12-field completeness meter.** Priority and rule string are
+  shown; completeness is not.
+- **The `/h/{token}` handoff view itself**, and mobile no longer even links to it.
 - **Resume-after-drop** — a resumed session has no representation in the call log.
 - **Safety scorer results** (`safety_pass`, findings) — no UI anywhere.
 - **Pricing / UPI checkout** (FR-28, FR-29) — linked from `2a` marketing nav only.
 
-**Unresolved within the wireframes:**
-- Home direction: `1f` (next dose) vs `1n` (attention-first) vs `1o` (hub). `2l` argues
-  the quiet version should be the *good-day* layout of `2e` rather than a separate one.
-- Alerts: triage list `1h` vs one timeline `1p`.
-- Intake: two-step `1c`+`1d` vs camera-first `1q`.
-- Nav on desktop: sidebar `2e` vs top bar `2n` (sidebar recommended — it scales to `2m`).
-- Leftovers from the removed scope, to clean up when building: `2m`'s header still reads
-  "3 low stock"; `2j` still lives at `/wellbeing`; `2e`'s last-check-in card still shows
-  the old five-dot `calm` meter.
+**Unresolved directions:** Home `1f` vs `1n` vs `1o` (`2l` argues the quiet version should
+be the *good-day* layout of `2e`); Alerts `1h` vs `1p`; intake `1c`+`1d` vs `1q`; desktop
+nav `2e` vs `2n` (sidebar recommended — it scales to `2m`).
 
 ---
 
-## 10. Build order suggestion
+## 11. Build order suggestion
 
-1. **Design system first** — tokens, the components in §2.3, dots, the four states in
-   §6. Everything else is composition.
-2. **Onboarding `1a`→`1e` / `2a`→`2d`.** It ends at the sign-off gate, the precondition
-   for any call. Ship the gate server-side with it.
-3. **Home + Calendar** (`1f`,`1g` / `2e`,`2f`) — reads from dose events; no new domain.
-4. **Alerts + detail** (`1h`,`1i` / `2g`) — needs the `alerts` table, the priority rule
-   string, the escalation clock, and the handoff link action.
-5. **Calls** (`1j` / `2h`) — transcripts, audio, and the "what this call produced"
-   rollup.
-6. **What she said** (`1s` / `2j`) — reads `observations` directly; cheap once calls
-   exist, and it is the product's differentiator.
-7. **Settings** (`1m` / `2k`) — unlocks every configurable default the earlier screens
-   hardcode.
+1. **Design system first** — tokens, the components in §2.3, the step-card and disabled
+   states, dots, the four states in §6.
+2. **Auth `1a` / `2a`** — a four-step state machine with two OTP round-trips and resend
+   timers. Bigger than it looks; build it before the profile form.
+3. **Onboarding `1b`→`1e` / `2b`→`2d`** with real required-field gating.
+4. **Consent + intro call `1E.2`/`1E.2 sheet` / `2D.2`** — and the scheduler gate behind
+   it. Nothing may dial before this is correct.
+5. **Home + Calendar** (`1f`,`1g` / `2e`,`2f`) — including the shared "today so far"
+   stream.
+6. **Medicine editor `1G.2` / `2F.2`** — change diff + attestation.
+7. **Alerts + detail** (`1h`,`1i` / `2g`) — `alerts` table, priority rule string,
+   escalation clock, `tel:` intents.
+8. **Calls** (`1j` / `2h`) — transcripts, audio, the "what this call produced" rollup.
+9. **What she said** (`1s` / `2j`) — reads `observations` directly; the differentiator.
+10. **Settings** (`1m` / `2k`) — unlocks every default the earlier screens hardcode.
 
-When a screen needs something the wireframes do not show, extend using the rules in §2
-and §8 and add the new frame ID to this doc.
+When a screen needs something the wireframes do not show, extend using the rules in §2 and
+§8 and add the new frame ID here.
 
 ---
 
-## 11. Revision history
+## 12. Revision history
 
-**Rev 2 — current files.** Scope narrowed and safety posture pushed into the UI:
+**Rev 3 — current files.** Consent became a real product surface, the gate moved, and the
+product name settled as **Kinvox** across every frame and URL on 30 Aug
+(MediWatch → Sahay → Kinvox):
 
-- **Removed:** the entire pharmacy domain — `1k` Order, `1l` Checkout, `1r` auto-refill
-  cart, `2i` quote comparison + checkout rail — plus every stock count, refill alert,
-  "days left" meter and price. Mobile went from **5 tabs to 4** (Order dropped); the
-  desktop sidebar dropped **Order meds** and **Wellbeing**.
-- **Removed:** all sentiment scoring — the mood chart, "Worried · 72%", per-call
-  sentiment series, mood-vs-adherence correlation, and the 5-dot meters on call rows.
-- **Replaced:** `1s` and `2j` are no longer "Mood & wellbeing" but **"What (Mom) she
-  said"** — verbatim quotes, `red`/`watch`/`none` severity, call provenance, and
-  repeated-word counts drawn from her exact words.
-- **Added:** the P1/P2/P3 badge with its **literal rule string** in `1i` / `2g` / `2h`;
-  the **Told to** delivery card; **Copy handoff link** as a first-class action
-  (`1i`, `2g`, `2m`); **What this call produced** in `2h`; a **Care record** card on the
-  dashboard.
-- **Changed:** `2a` now leads with Google (matching mobile `1a`) instead of phone OTP;
-  `2d` moved the sign-off checkbox inline into the footer action row; `1e` / `2d`
-  dropped the stock column and now say "fix these before you sign off".
+- **Auth rebuilt.** Google/Apple sign-in removed. `1a` / `2a` are now four numbered,
+  progressively-unlocking steps: phone → phone OTP → email → email OTP. Language
+  selection left login and became "Language the agent should speak" on the profile
+  (Hindi default, + Punjabi and "+ more").
+- **New step 4 · Consent** — `1E.2` (mobile), `1E.2 sheet` (its time picker), `2D.2`
+  (desktop). An **intro call** is placed before anything else, carries no medicines, and
+  **dose calls begin only if the parent agrees on it**. Three mandatory caregiver
+  consents, all copy `TBC`. A third scheduling option, "I'll tell her myself first", is
+  explicitly marked as an open question.
+- **The parent-consent toggle left the profile** (`1b` / `2b`) for that step.
+- **New medicine editor** — `1G.2` / `2F.2`, reached from the Calendar footer's
+  `Edit these medicines` / `Upload new prescription`. Shows pending `edited` / `stopped`
+  row states, a plain-language "What changes for Mom" diff, an optional new prescription,
+  and a **mandatory doctor-advice attestation** before `Save and Continue`.
+- **Home reworked** — last check-in promoted to an attention card with its quote, and a
+  new **"Today so far · since 6 AM"** event stream (doses, calls, alerts in one block)
+  replacing the old summary card, on both `1f` and `2e`.
+- **Alert actions became dialler intents** — `Call Mom Now` / `Call Doctor Now` /
+  `Escalate to Priya` each show the number or person they will dial; *nothing dials on its
+  own*. `Copy handoff link` was dropped from `1i` and `2g`.
+- **CTAs renamed to their destination** — `Upload Prescription`, `Approve Schedule`,
+  `Continue to Consent`, `Continue on the app`, `Save and Continue` — and every gated one
+  is visibly disabled with its blocking reason beside it.
+- New frames use **`kinvox.app`**.
+
+**Rev 2.** Scope narrowed, safety posture pushed into the UI: the whole pharmacy domain
+(`1k`, `1l`, `1r`, `2i`, plus stock/refill/prices) and all sentiment scoring were removed;
+mobile went 5 tabs → 4; `1s`/`2j` became "What she said" (verbatim + `red`/`watch`/`none`);
+the `P1` badge with its literal rule string, the "Told to" card, `Copy handoff link` and
+"What this call produced" were added.
