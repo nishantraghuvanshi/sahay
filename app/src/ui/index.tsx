@@ -178,6 +178,7 @@ const DOSE_LABEL: Record<DoseStatus, string> = {
   missed: 'missed',
   no_answer: 'no answer',
   unknown: 'not known',
+  pending: 'waiting',
 }
 
 const SEVERITY_LABEL: Record<Severity, string> = {

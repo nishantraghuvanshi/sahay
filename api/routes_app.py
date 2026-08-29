@@ -474,6 +474,9 @@ def post_onboarding(body: Onboarding):
                 "is_priority": int(med.is_priority),
                 "stock_count": None,
                 "duration_days": med.duration_days,
+                # The course starts when the caregiver signed it off; there is no
+                # earlier date on the prescription we could trust.
+                "start_date": now,
                 "end_date": None,
                 "source": "prescription" if med.raw_line else "manual",
                 "source_doc_id": doc_id,
@@ -601,6 +604,7 @@ def post_medications(body: MedicationChange):
                     "with_food": med.with_food,
                     "is_priority": int(med.is_priority),
                     "stock_count": None,
+                    "start_date": now,
                     "source": "manual",
                     "extraction_flags": [],
                     "excluded": 0,
@@ -630,6 +634,9 @@ class DoseMark(BaseModel):
     slot_time: str
     status: str = "confirmed"
     note: str | None = None
+    # 'agent' | 'caregiver' | 'patient'. A dose the caregiver ticked in the app and
+    # one the patient confirmed on a call are different facts.
+    actor: str = "caregiver"
 
 
 @router.post("/app/doses")
@@ -644,7 +651,7 @@ def post_dose(body: DoseMark):
     double tap — or a retried request — land on the same row instead of logging the
     dose twice (TRD §3.1).
     """
-    if body.status not in {"confirmed", "deferred", "missed", "no_answer", "unknown"}:
+    if body.status not in {"pending", "confirmed", "deferred", "missed", "no_answer", "unknown"}:
         return _fail("bad_status")
 
     con = db.connect()
@@ -659,8 +666,9 @@ def post_dose(body: DoseMark):
         if med is None:
             return _fail("not_found")
 
+        # Whole row, not just the id: the retry counters below are read off it.
         existing = con.execute(
-            "SELECT id FROM dose_events WHERE medication_id = ? AND slot_time = ?",
+            "SELECT * FROM dose_events WHERE medication_id = ? AND slot_time = ?",
             (body.medication_id, body.slot_time),
         ).fetchone()
 
@@ -672,6 +680,11 @@ def post_dose(body: DoseMark):
             "call_session_id": None,
             "status": body.status,
             "note": body.note,
+            "actor": body.actor,
+            # Preserved across an update: the scheduler owns these, and a caregiver
+            # confirming a dose must not erase the record of how many times we rang.
+            "attempt_count": existing["attempt_count"] if existing else 0,
+            "next_attempt_at": existing["next_attempt_at"] if existing else None,
             "created_at": db.now_iso(),
         })
         con.commit()
@@ -733,6 +746,9 @@ def post_dose_move(body: DoseMove):
             "call_session_id": None,
             "status": "deferred",
             "note": "Moved by the caregiver in the app.",
+            "actor": "caregiver",
+            "attempt_count": existing["attempt_count"] if existing else 0,
+            "next_attempt_at": existing["next_attempt_at"] if existing else None,
             "created_at": db.now_iso(),
         })
         con.commit()

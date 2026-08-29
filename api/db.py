@@ -109,6 +109,42 @@ def decode(table: str, row: sqlite3.Row) -> dict:
     return out
 
 
+# Columns added after a database may already exist. `CREATE TABLE IF NOT EXISTS`
+# silently skips an existing table, so a new column would never appear and every
+# query naming it would fail on a developer's older file. Each entry must be
+# nullable or carry a DEFAULT — SQLite cannot add a bare NOT NULL column to a table
+# that already has rows.
+_ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "medications": {
+        "stopped_at": "TEXT",
+        "start_date": "TEXT",
+    },
+    "dose_events": {
+        "rescheduled_to": "TEXT",
+        "attempt_count": "INTEGER NOT NULL DEFAULT 0",
+        "next_attempt_at": "TEXT",
+        "actor": "TEXT",
+    },
+    "escalations": {
+        "dose_event_id": "TEXT",
+    },
+}
+
+
+def _migrate(con: sqlite3.Connection) -> list[str]:
+    """Add columns an older database is missing. Returns what it added."""
+    added = []
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            continue  # table not created yet; the schema script will make it whole
+        for name, decl in columns.items():
+            if name not in existing:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                added.append(f"{table}.{name}")
+    return added
+
+
 def init(reset: bool = False) -> None:
     """Create the schema, and seed it the first time.
 
@@ -121,6 +157,10 @@ def init(reset: bool = False) -> None:
     con = connect()
     try:
         con.executescript(SCHEMA.read_text())
+        added = _migrate(con)
+        if added:
+            import logging
+            logging.getLogger("kinvox.api").info("migrated: added %s", ", ".join(added))
         already = con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0]
         if not already:
             _seed(con)

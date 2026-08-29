@@ -15,6 +15,7 @@ import {
 } from '../ui'
 import { useCareRecord, useDoseHistory } from '../api/hooks'
 import { adherenceForDay } from '../lib/schedule'
+import { answered } from '../api/types'
 import type { DoseEvent, DoseStatus, Medication } from '../api/types'
 
 /**
@@ -50,6 +51,7 @@ const MEANING: Record<DoseStatus, string> = {
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
   unknown: 'We could not reach them at all. This is not a missed dose — nothing is known about it.',
+  pending: 'We have started trying for this dose. Nothing has been established yet.',
 }
 
 /** Local calendar day, never UTC — a 21:00 IST dose must not land on the previous day. */
@@ -105,7 +107,13 @@ export default function DoseHistory() {
   if (doses.isLoading || record.isLoading) return <LoadingBlock rows={6} />
   if (doses.error) return <ErrorBlock error={doses.error} onRetry={() => doses.refetch()} />
 
-  const events = doses.data ?? []
+  /**
+   * History is what happened. A `pending` row is the scheduler holding a place for
+   * retry counters against a dose nobody has answered yet — listing it here would
+   * pad the record with non-events and make the counts describe attempts rather
+   * than outcomes. It is visible on the calendar, where "upcoming" is the point.
+   */
+  const events = (doses.data ?? []).filter((e) => answered(e.status))
   const medications = record.data?.medications ?? []
   const medicationFor = (id: string): Medication | undefined => medications.find((m) => m.id === id)
 

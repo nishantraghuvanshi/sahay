@@ -421,6 +421,93 @@ def test_an_invented_dose_status_is_refused(client):
     }).json()["error"] == "bad_status"
 
 
+# -------------------------------------------- reconciled scheduler columns
+
+def test_a_confirmed_schedule_records_when_the_course_starts(client):
+    """From the scheduler's model. Without start_date a taper cannot be expressed,
+    and the dialler has no way to know a course has not begun."""
+    client.post("/app/onboarding", json=draft())
+    assert client.get("/app/record").json()["medications"][0]["start_date"]
+
+
+def test_the_scheduler_state_is_accepted_but_is_not_an_outcome(client):
+    """`pending` exists so retry counters have a row to live on. It must be storable
+    and must not read as an answer."""
+    med = client.get("/app/record").json()["medications"][0]
+    slot = "2026-09-02T08:30:00+05:30"
+    assert client.post("/app/doses", json={
+        "medication_id": med["id"], "slot_time": slot, "status": "pending"}).json()["ok"] is True
+
+    row = [d for d in client.get("/app/doses").json()
+           if d["slot_time"] == slot and d["medication_id"] == med["id"]][0]
+    assert row["status"] == "pending"
+    assert row["attempt_count"] == 0
+
+
+def test_confirming_a_dose_keeps_the_retry_count_the_scheduler_wrote(client):
+    """A caregiver ticking a dose must not erase the record of how many times we
+    rang — that is the scheduler's bookkeeping, and it is evidence."""
+    med = client.get("/app/record").json()["medications"][0]
+    slot = "2026-09-02T08:30:00+05:30"
+
+    con = db.connect()
+    try:
+        con.execute(
+            "INSERT INTO dose_events (id, patient_id, medication_id, slot_time, status, "
+            "attempt_count, next_attempt_at, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            ("de-1", med["patient_id"], med["id"], slot, "pending", 2,
+             "2026-09-02T09:00:00+05:30", "2026-09-02T08:31:00+05:30"),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    client.post("/app/doses", json={
+        "medication_id": med["id"], "slot_time": slot, "status": "confirmed"})
+
+    row = [d for d in client.get("/app/doses").json()
+           if d["slot_time"] == slot and d["medication_id"] == med["id"]][0]
+    assert row["status"] == "confirmed"
+    assert row["attempt_count"] == 2
+    assert row["next_attempt_at"] == "2026-09-02T09:00:00+05:30"
+
+
+def test_the_app_records_who_established_the_outcome(client):
+    med = client.get("/app/record").json()["medications"][0]
+    slot = "2026-09-02T21:00:00+05:30"
+    client.post("/app/doses", json={
+        "medication_id": med["id"], "slot_time": slot, "status": "confirmed"})
+
+    row = [d for d in client.get("/app/doses").json()
+           if d["slot_time"] == slot and d["medication_id"] == med["id"]][0]
+    assert row["actor"] == "caregiver"
+
+
+def test_an_older_database_gains_the_new_columns(tmp_path):
+    """`CREATE TABLE IF NOT EXISTS` skips an existing table, so without a migration a
+    developer's older file would be missing every column added since."""
+    import sqlite3
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.executescript(
+        "CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);"
+        "CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);"
+        "INSERT INTO medications VALUES ('m1', 'Metformin');"
+    )
+    con.commit()
+    con.close()
+
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    added = db._migrate(con)
+    con.commit()
+    assert "medications.start_date" in added
+    assert "dose_events.attempt_count" in added
+    # and nothing was lost doing it
+    assert con.execute("SELECT name FROM medications").fetchone()["name"] == "Metformin"
+    con.close()
+
+
 # ------------------------------------------------------- moving one occurrence
 
 def test_moving_one_dose_leaves_the_recurring_schedule_alone(client):

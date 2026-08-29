@@ -24,6 +24,7 @@ import {
 } from '../api/hooks'
 import { slotsForDay } from '../lib/schedule'
 import type { UpcomingDose } from '../lib/schedule'
+import { answered } from '../api/types'
 import type { DoseStatus, Escalation } from '../api/types'
 
 /**
@@ -132,6 +133,7 @@ const MEANING: Record<DoseStatus, string> = {
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
   unknown: 'We could not reach them at all. This is not a missed dose — nothing is known about it.',
+  pending: 'We have started trying for this dose. Nothing has been established yet.',
 }
 
 /* ------------------------------------------------------------------ dates */
@@ -210,7 +212,9 @@ function tally(doses: UpcomingDose[]): DayTally {
         d.event?.status === 'unknown',
     )
       .length,
-    recorded: doses.filter((d) => d.event !== null).length,
+    // A `pending` row is the scheduler's bookkeeping, not a record of anything.
+    // Counting it would make "2 of 3 confirmed" out of doses nobody has answered.
+    recorded: doses.filter((d) => answered(d.event?.status)).length,
     total: doses.length,
   }
 }
@@ -984,7 +988,7 @@ const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
 function SlotStatus({ dose, now }: { dose: UpcomingDose; now: Date }) {
-  if (dose.event) {
+  if (dose.event && answered(dose.event.status)) {
     /**
      * Frame `1g`: a taken dose shows when it was confirmed, not just that it was.
      * The time is `created_at` — the moment it was logged — which is deliberately
@@ -999,11 +1003,24 @@ function SlotStatus({ dose, now }: { dose: UpcomingDose; now: Date }) {
       </span>
     )
   }
+  /**
+   * Nothing established: either no row at all, or a `pending` row the scheduler
+   * created to hold its retry counters. Those are the same fact to a caregiver.
+   *
+   * The attempt count is the one thing worth surfacing — "we are trying right now"
+   * is materially different from "this has not come round yet", and it is the only
+   * honest thing to say while a call is in flight.
+   */
+  const attempts = dose.event?.attempt_count ?? 0
   const due = dose.at.getTime() <= now.getTime()
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-strong">
-      <Dot kind="empty" />
-      {due ? 'no record yet' : 'upcoming'}
+      <Dot kind={attempts > 0 ? 'hollow' : 'empty'} />
+      {attempts > 0
+        ? `trying · ${attempts} ${attempts === 1 ? 'attempt' : 'attempts'}`
+        : due
+          ? 'no record yet'
+          : 'upcoming'}
     </span>
   )
 }

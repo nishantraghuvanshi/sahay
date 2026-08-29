@@ -77,6 +77,11 @@ CREATE TABLE IF NOT EXISTS medications (
   duration_days INTEGER,
   end_date      TEXT,
 
+  -- When the course begins. From the scheduler's model (agent/): without it a
+  -- taper — the same medicine at a different dose from a later date — cannot be
+  -- expressed, and the dialler has no way to know a course has not started yet.
+  start_date    TEXT,
+
   -- [GAP-7] Provenance. Safety rule S3 requires the verbatim line the model read
   -- to survive to a reviewer; without these the evidence for every row is
   -- discarded the moment the schedule is confirmed.
@@ -138,9 +143,24 @@ CREATE TABLE IF NOT EXISTS dose_events (
   -- status='deferred', which already means "put off to a later time, still expected".
   rescheduled_to  TEXT,
   call_session_id TEXT REFERENCES call_sessions(id),
+  -- 'pending' is the scheduler's own state: the row exists so retry bookkeeping has
+  -- somewhere to live, and nothing has been established yet. It is NOT an outcome —
+  -- the app reads it exactly as it reads no row at all.
   -- 'unknown' is the degraded case (the agent could not reach the patient) and is
   -- deliberately distinct from 'missed', which asserts the dose was not taken.
-  status          TEXT NOT NULL,          -- 'confirmed'|'deferred'|'missed'|'no_answer'|'unknown'
+  status          TEXT NOT NULL,          -- 'pending'|'confirmed'|'deferred'|'missed'|'no_answer'|'unknown'
+
+  -- Retry bookkeeping, from the scheduler's model (agent/). The initial dial at
+  -- slot_time plus retries counts up from attempt_count; next_attempt_at is when the
+  -- row becomes eligible again, so a dose already dialled once is not picked up
+  -- before its retry is due. Without these two columns the dialler cannot work.
+  attempt_count   INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
+
+  -- Who established the outcome: 'agent', 'caregiver', or 'patient'. A dose the
+  -- caregiver ticked in the app and one the patient confirmed on a call are
+  -- different facts, and the record should not flatten them.
+  actor           TEXT,
   note            TEXT,
   created_at      TEXT NOT NULL
 );
