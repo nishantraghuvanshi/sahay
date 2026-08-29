@@ -12,7 +12,6 @@ import {
   Tag,
 } from '../ui'
 import { useCareRecord } from '../api/hooks'
-import { daysOfStock } from '../lib/schedule'
 import type { Medication, WithFood } from '../api/types'
 
 /**
@@ -21,7 +20,7 @@ import type { Medication, WithFood } from '../api/types'
  * The one screen a judge is invited to cross-check against the database, so the rule here is
  * stricter than "show useful things": **every value on this page is a column in TRD §3**
  * (`patients`, `medications`, `caregivers`). Nothing is derived except two things that are
- * arithmetic on a column and are labelled as such — the medicine count and days-of-stock.
+ * arithmetic on a column and are labelled as such — the medicine and priority counts.
  *
  * There is deliberately no end date, no next refill and no adherence percentage: `medications`
  * has no column behind any of them, and a single invented field would make the whole screen
@@ -51,7 +50,7 @@ const LANGUAGE_LABEL: Record<string, string> = {
 
 /** Shared by the medicines header strip and every medicine row so the columns line up (2d pattern). */
 const GRID =
-  'sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] sm:items-start sm:gap-3'
+  'sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,1fr)_auto] sm:items-start sm:gap-3'
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso)
@@ -194,7 +193,6 @@ export default function CareRecord() {
               <Label>Dose</Label>
               <Label>Times</Label>
               <Label>Food rule</Label>
-              <Label>Stock</Label>
               <Label>Priority</Label>
             </div>
 
@@ -206,8 +204,7 @@ export default function CareRecord() {
             ))}
 
             <div className="text-[11px] text-muted-strong">
-              Priority is the one dose the agent chases hardest. Stock is the count entered on the
-              record — we do not order or reorder anything.
+              Priority is the one dose the agent chases hardest.
             </div>
           </>
         )}
@@ -319,8 +316,6 @@ export default function CareRecord() {
 /* --------------------------------------------------------------- one medicine */
 
 function MedicineRow({ med }: { med: Medication }) {
-  const days = daysOfStock(med)
-
   return (
     <div className={clsx('flex flex-col gap-2', GRID)}>
       {/* name */}
@@ -355,21 +350,6 @@ function MedicineRow({ med }: { med: Medication }) {
         <span className="text-[12px]">
           {med.with_food ? FOOD_LABEL[med.with_food] : 'Not recorded'}
         </span>
-      </div>
-
-      {/* stock — the count as stored, plus the division that makes it readable */}
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <Label className="sm:hidden">Stock</Label>
-        {med.stock_count != null ? (
-          <span className="text-[12px]">
-            {med.stock_count} left
-            {days != null && (
-              <span className="text-muted-strong"> · about {days} days</span>
-            )}
-          </span>
-        ) : (
-          <span className="text-[12px] text-muted-strong">Not recorded</span>
-        )}
       </div>
 
       {/* priority — a word, never a colour */}
