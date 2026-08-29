@@ -725,7 +725,15 @@
    */
   async function loadPatients() {
     try {
-      const res = await fetch('/api/playground/patients');
+      // Same key the WebSocket connect sends (see connect()); this endpoint
+      // is auth-guarded, so the picker needs it too when API_KEY is set.
+      const key =
+        (typeof PLAYGROUND_API_KEY !== 'undefined' && PLAYGROUND_API_KEY) ||
+        document.querySelector('meta[name="api-key"]')?.content;
+      const url = key
+        ? `/api/playground/patients?api_key=${encodeURIComponent(key)}`
+        : '/api/playground/patients';
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`status ${res.status}`);
       const { patients } = await res.json();
 

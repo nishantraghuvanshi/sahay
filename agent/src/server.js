@@ -110,6 +110,18 @@ transport.start(server, engine, {
 
 // Wires the patient-picker route and stashes the repository/strategy the
 // playground's lifecycle calls need.
+// Protect the playground's HTTP routes BEFORE they are registered.
+//
+// Express walks one ordered middleware stack, so `app.use('/api', apiKeyAuth)`
+// further down does NOT cover routes registered above it. The playground's
+// patient-picker endpoint returns real patient rows — phone numbers, names,
+// caregiver contacts — and was answering before auth ran.
+//
+// Scoped to /api/playground deliberately: moving the general /api guard above
+// this point would also cover /api/tts/:provider, which Vapi itself calls when
+// TTS is bridged, and would break the phone path.
+app.use('/api/playground', apiKeyAuth);
+
 playgroundTransport.start(server, engine, { app, repository, strategy });
 
 // --- Playground WebSocket endpoint ---
