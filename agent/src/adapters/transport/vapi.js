@@ -240,6 +240,7 @@ class VapiTransportAdapter extends TransportPort {
                 endedReason: callData.endedReason,
                 duration: callData.durationSeconds,
                 cost: callData.cost,
+                recordingUrl: this._extractRecordingUrl(message),
               },
             });
 
@@ -296,6 +297,23 @@ class VapiTransportAdapter extends TransportPort {
       value,
       allowedFields: INTAKE_FIELDS.map((f) => f.key),
     });
+  }
+
+  /**
+   * Pull the call recording URL out of an end-of-call-report message.
+   *
+   * UNVERIFIED: Vapi's report may carry a mono `recordingUrl` and/or a
+   * `stereoRecordingUrl` inside `artifact` — this codebase has not
+   * confirmed either field name against a live account. The plain
+   * (mono) URL is preferred when both are present; null when neither is.
+   *
+   * @param {Object} message - Vapi end-of-call-report message
+   * @returns {string|null}
+   * @private
+   */
+  _extractRecordingUrl(message) {
+    const artifact = message.artifact || message.call?.artifact || {};
+    return artifact.recordingUrl || artifact.stereoRecordingUrl || null;
   }
 
   /**
@@ -472,6 +490,21 @@ class VapiTransportAdapter extends TransportPort {
       },
       tools: [...strategy.getTools(), { type: 'endCall' }],
       server: { url: `${webhookUrl}/webhook` },
+      // Recording is deliberately enabled — previously nothing set this, so
+      // whether a call was recorded depended on an unverified account
+      // default. Explicit, not left to Vapi's default.
+      //
+      // Deliberately NOT adding a recording-disclosure line to the prompt:
+      // the owner has decided against that for now. Do not "fix" this by
+      // adding one — that's a product decision, not an oversight.
+      //
+      // UNVERIFIED: 'artifactPlan.recordingEnabled' is this project's best
+      // reading of Vapi's documented shape, not something confirmed against
+      // a live account (same caveat as the '11labs' voice provider string
+      // above).
+      artifactPlan: {
+        recordingEnabled: true,
+      },
       analysisPlan: {
         summary: 'Summarize the call in 1-2 sentences.',
         structuredData: {

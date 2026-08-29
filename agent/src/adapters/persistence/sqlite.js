@@ -92,7 +92,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
         attempt_number INTEGER,
         alert_sent_at TEXT,
         alert_channel TEXT,
-        ground_truth TEXT
+        ground_truth TEXT,
+        -- Vapi call recording URL, captured from end-of-call-report. Null
+        -- when the report carried none (e.g. recording failed upstream).
+        recording_url TEXT
       );
 
       CREATE TABLE IF NOT EXISTS messages (
@@ -252,6 +255,36 @@ class SqliteRepository extends OutcomeRepositoryPort {
       CREATE INDEX IF NOT EXISTS idx_dose_events_status_slot
         ON dose_events(status, slot_time);
     `);
+
+    // CREATE TABLE IF NOT EXISTS never alters a table that already exists,
+    // so a database created before recording_url was added needs an
+    // explicit ALTER TABLE here. _ensureColumn is idempotent — a fresh
+    // database already has the column from the CREATE TABLE above, so this
+    // is a no-op there.
+    this._ensureColumn('calls', 'recording_url', 'TEXT');
+  }
+
+  /**
+   * Add a column to an existing table if it isn't already there. Safe to
+   * call on every boot: checks PRAGMA table_info before altering, so it
+   * never re-adds a column (which would throw) or touches a fresh database
+   * that was created with the column already in its CREATE TABLE.
+   *
+   * table/column are always internal literals passed by _migrate(), never
+   * external input, so the interpolation below is not an injection risk.
+   *
+   * @param {string} table
+   * @param {string} column
+   * @param {string} type - SQLite column type, e.g. 'TEXT'
+   * @private
+   */
+  _ensureColumn(table, column, type) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+    const exists = columns.some((c) => c.name === column);
+    if (!exists) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+      logger.log('db_column_added', { table, column });
+    }
   }
 
   // ── Patients ────────────────────────────────────────────────────
@@ -791,7 +824,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
 
   /**
    * Save a call outcome (called when conversation ends).
-   * @param {Object} outcome - { callId, label, source, reason, transcript, duration, cost }
+   * @param {Object} outcome - { callId, label, source, reason, transcript, duration, cost, recordingUrl }
    */
   async save(outcome) {
     // UPSERT, not UPDATE. Nothing in the engine calls createCall(), so an
@@ -801,9 +834,9 @@ class SqliteRepository extends OutcomeRepositoryPort {
     const stmt = this.db.prepare(`
       INSERT INTO calls (
         call_id, outcome_label, outcome_source, outcome_reason, transcript,
-        duration_seconds, cost, prompt_version, parent_id, attempt_number, phone, ended_at
+        duration_seconds, cost, prompt_version, parent_id, attempt_number, phone, recording_url, ended_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(call_id) DO UPDATE SET
         outcome_label   = excluded.outcome_label,
         outcome_source  = excluded.outcome_source,
@@ -815,6 +848,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
         parent_id       = COALESCE(excluded.parent_id, calls.parent_id),
         attempt_number  = COALESCE(excluded.attempt_number, calls.attempt_number),
         phone           = COALESCE(excluded.phone, calls.phone),
+        recording_url   = COALESCE(excluded.recording_url, calls.recording_url),
         ended_at        = datetime('now')
     `);
 
@@ -829,7 +863,8 @@ class SqliteRepository extends OutcomeRepositoryPort {
       outcome.promptVersion || null,
       outcome.parentId || null,
       outcome.attemptNumber ?? null,
-      outcome.phone || null
+      outcome.phone || null,
+      outcome.recordingUrl || null
     );
 
     logger.log('db_outcome_saved', {

@@ -82,6 +82,7 @@ class ConversationEngine {
           transcript: callData.transcript,
           duration: callData.duration,
           cost: callData.cost,
+          recordingUrl: callData.recordingUrl || null,
           // Which prompt produced this outcome. Without it, a mid-pilot prompt
           // change makes every prior call unattributable.
           promptVersion: typeof this.strategy.getPromptVersion === 'function'
