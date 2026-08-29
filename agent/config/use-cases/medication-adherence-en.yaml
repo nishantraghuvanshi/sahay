@@ -7,7 +7,7 @@
 # into every mode LAST, so they are the most recent instruction in context.
 # Composition order is: mode block -> shared_rules -> guardrails.
 
-version: 5
+version: 6
 
 guardrails: |
   GUARDRAILS (NON-NEGOTIABLE):
