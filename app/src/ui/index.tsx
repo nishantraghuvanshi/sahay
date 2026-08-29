@@ -54,6 +54,7 @@ export function Chip({
   const Tag = onClick ? 'button' : 'span'
   return (
     <Tag
+      {...(onClick ? { type: 'button' as const, 'aria-pressed': Boolean(on) } : {})}
       onClick={onClick}
       className={clsx(
         'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap',

@@ -2,6 +2,11 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './shell/AppShell'
 import Placeholder from './screens/Placeholder'
 import KitchenSink from './screens/KitchenSink'
+import Login from './screens/setup/Login'
+import Parent from './screens/setup/Parent'
+import Prescription from './screens/setup/Prescription'
+import Analysing from './screens/setup/Analysing'
+import Schedule from './screens/setup/Schedule'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -13,12 +18,12 @@ export default function App() {
   return (
     <Routes>
       {/* auth + onboarding — no shell chrome */}
-      <Route path="/login" element={<Placeholder title="Log in" frame="1a / 2a" />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/setup">
-        <Route path="parent" element={<Placeholder title="Who are we caring for?" frame="1b / 2b" />} />
-        <Route path="prescription" element={<Placeholder title="Add prescription" frame="1c / 2c" />} />
-        <Route path="analysing" element={<Placeholder title="Reading prescription" frame="1d / 2c" />} />
-        <Route path="schedule" element={<Placeholder title="Review schedule" frame="1e / 2d" />} />
+        <Route path="parent" element={<Parent />} />
+        <Route path="prescription" element={<Prescription />} />
+        <Route path="analysing" element={<Analysing />} />
+        <Route path="schedule" element={<Schedule />} />
         <Route path="consent" element={<Placeholder title="Before we call Mom" frame="1E.2 / 2D.2" />} />
       </Route>
 
