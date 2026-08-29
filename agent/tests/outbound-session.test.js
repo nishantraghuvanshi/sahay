@@ -114,3 +114,54 @@ describe('outbound call session opening', () => {
     );
   });
 });
+
+/**
+ * T3-gap — every test above drives _openOutboundSession directly, so
+ * createCall's own wiring (does it actually call _openOutboundSession at
+ * all?) had no test-level guarantee. That exact blind spot is what let I1
+ * ship: scripts/make-call.js called vapi-client.js's createCall instead of
+ * the adapter's, and nothing here would have caught it either way, because
+ * nothing here calls createCall.
+ *
+ * fetch is stubbed so no real Vapi request is made; only the session-opening
+ * side effect is under test.
+ */
+describe('createCall opens a session (T3-gap)', () => {
+  let repo;
+  let adapter;
+  let originalFetch;
+  let originalApiKey;
+
+  beforeEach(() => {
+    repo = freshRepo();
+    adapter = adapterFor(repo);
+    originalFetch = global.fetch;
+    originalApiKey = process.env.VAPI_PRIVATE_KEY;
+    process.env.VAPI_PRIVATE_KEY = 'test-key';
+  });
+
+  after(() => {
+    global.fetch = originalFetch;
+    process.env.VAPI_PRIVATE_KEY = originalApiKey;
+  });
+
+  test('a known patient gets a session row after createCall dispatches', async () => {
+    await repo.upsertPatient(PATIENT);
+    const patient = await repo.findPatientByPhone(PATIENT.phone);
+
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'call-createcall-1', status: 'queued' }),
+    });
+
+    const call = await adapter.createCall('assistant-1', PATIENT.phone, {});
+    assert.strictEqual(call.id, 'call-createcall-1');
+
+    const session = await repo.getSession('call-createcall-1');
+    assert.ok(session, 'createCall must open a session, not just dispatch the call');
+    assert.strictEqual(session.direction, 'outbound');
+    assert.strictEqual(session.patient_id, patient.id);
+    assert.strictEqual(session.status, 'active');
+  });
+});

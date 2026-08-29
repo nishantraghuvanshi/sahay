@@ -47,10 +47,18 @@ describe('capture_field tool definition', () => {
   test('is present in TOOLS with both required parameters', () => {
     assert.ok(tool, 'capture_field should be in TOOLS');
     assert.strictEqual(tool.type, 'function');
-    assert.strictEqual(tool.async, false);
     assert.deepStrictEqual(tool.function.parameters.required, ['field', 'value']);
     assert.ok(tool.function.parameters.properties.field);
     assert.ok(tool.function.parameters.properties.value);
+  });
+
+  test('is async, unlike report_outcome — it fires every turn, not once at call end', () => {
+    // A blocking capture_field pays a round trip on every turn for a tool
+    // that hands the model nothing back; report_outcome fires once and gets
+    // away with blocking.
+    assert.strictEqual(tool.async, true);
+    const reportOutcome = TOOLS.find((t) => t.function.name === 'report_outcome');
+    assert.strictEqual(reportOutcome.async, false, 'report_outcome must stay blocking');
   });
 
   test('field enum exactly equals the INTAKE_FIELDS keys', () => {

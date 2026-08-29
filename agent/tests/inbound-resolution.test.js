@@ -189,6 +189,37 @@ describe('known caller with a dropped session in the window', () => {
   });
 });
 
+describe('a dropped session with nothing captured (C1)', () => {
+  let repo;
+  let patientId;
+
+  beforeEach(async () => {
+    repo = freshRepo();
+    await repo.upsertPatient(KNOWN);
+    patientId = (await repo.findPatientByPhone(KNOWN.phone)).id;
+    await repo.createSession({
+      sessionId: 's1',
+      patientId,
+      callId: 'c1',
+      direction: 'inbound',
+    });
+    // No updateSessionFields call: fields_so_far stays '{}', the exact shape
+    // of a call that rang unanswered and was never actually spoken to.
+    await repo.endSession('s1', 'dropped');
+  });
+
+  test('resolves to inbound, not resume, so the opener never claims a conversation that never happened', async () => {
+    const r = await resolveInboundCall({ repository: repo, phone: KNOWN.phone });
+    assert.strictEqual(r.mode, 'inbound');
+  });
+
+  test('one populated field is enough to resolve to resume', async () => {
+    await repo.updateSessionFields('s1', { chief_complaint: 'सीने में दर्द' });
+    const r = await resolveInboundCall({ repository: repo, phone: KNOWN.phone });
+    assert.strictEqual(r.mode, 'resume');
+  });
+});
+
 describe('resume with every field captured', () => {
   let repo;
 

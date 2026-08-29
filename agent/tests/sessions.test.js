@@ -132,6 +132,21 @@ describe('session lifecycle', () => {
     await repo.createSession({ sessionId: 's1', patientId, callId: 'c1', direction: 'inbound' });
     await assert.rejects(() => repo.endSession('s1', 'finished'), /status/i);
   });
+
+  test('calling createSession twice with the same sessionId leaves exactly one session, still active', async () => {
+    // Vapi retries assistant-request after its 7.5s budget lapses, so the
+    // same call.id can reach createSession twice for one still-live call.
+    // Before the fix, the second call's own demote step matched its own
+    // just-created row (same patient, status active) and dropped it, then
+    // the INSERT threw on the UNIQUE session_id — leaving the live call's
+    // session reading 'dropped' and the caller getting an error response.
+    await repo.createSession({ sessionId: 's1', patientId, callId: 'c1', direction: 'inbound' });
+    await repo.createSession({ sessionId: 's1', patientId, callId: 'c1', direction: 'inbound' });
+
+    const all = await repo.listSessions({ patientId });
+    assert.strictEqual(all.length, 1, 'must not create a second row for the same sessionId');
+    assert.strictEqual(all[0].status, 'active', 'the live call must not read as dropped');
+  });
 });
 
 describe('fields captured so far', () => {
@@ -236,6 +251,26 @@ describe('resume window', () => {
 
     // Even asking inside a fresh window must not revive it.
     assert.strictEqual(await repo.findResumableSession(patientId, WINDOW, minutesFromNow(20)), null);
+  });
+
+  test('a stale active session demoted by a new call does not resurface as a fresh resume', async () => {
+    // Simulate a session stuck 'active' for days — a lost webhook or a
+    // restart mid-call. createSession only ever writes "now", so there is
+    // no repository method for backdating; go straight at the row.
+    await repo.createSession({ sessionId: 's-stale', patientId, callId: 'c-stale', direction: 'inbound' });
+    const longAgo = new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString();
+    repo.db
+      .prepare('UPDATE sessions SET created_at = ?, updated_at = ? WHERE session_id = ?')
+      .run(longAgo, longAgo, 's-stale');
+
+    // A new call for the same patient arrives; createSession demotes the
+    // stuck active row to dropped.
+    await repo.createSession({ sessionId: 's-new', patientId, callId: 'c-new', direction: 'inbound' });
+
+    // Before the fix, the demote step stamped ended_at = now, so a
+    // days-old session looked freshly dropped and was resumable.
+    const found = await repo.findResumableSession(patientId, WINDOW, new Date());
+    assert.strictEqual(found, null, 'a days-old stuck session must not look freshly dropped');
   });
 
   test('the most recent dropped session wins', async () => {

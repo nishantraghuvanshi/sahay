@@ -68,7 +68,14 @@ async function resolveInboundCall({
     ? await repository.getSessionFields(session.session_id)
     : {};
 
-  const mode = session ? 'resume' : 'inbound';
+  // A dropped session with nothing captured has no conversation to resume —
+  // "we were just speaking" would be a lie, and the resume opener has
+  // nothing to fill its "here's what you told me" clause with either. This
+  // checks fieldsSoFar generically (any non-empty value) rather than
+  // importing INTAKE_FIELDS: capture_field already validates field names
+  // against that list before anything is written, so a populated value here
+  // is trustworthy, and core/ stays free of the use case's field schema.
+  const mode = session && hasCapturedFields(fieldsSoFar) ? 'resume' : 'inbound';
 
   logger.log('inbound_resolved', {
     phone,
@@ -79,6 +86,13 @@ async function resolveInboundCall({
   });
 
   return { mode, patient, session, fieldsSoFar, lastCalls, isNewPatient };
+}
+
+/** @returns {boolean} True if any field holds a non-empty value. @private */
+function hasCapturedFields(fields) {
+  return Object.values(fields || {}).some(
+    (v) => v !== undefined && v !== null && String(v).trim() !== ''
+  );
 }
 
 module.exports = { resolveInboundCall, DEFAULT_RESUME_WINDOW_MINUTES };

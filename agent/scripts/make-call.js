@@ -24,7 +24,21 @@
 
 require('dotenv').config();
 
-const vapiClient = require('./lib/vapi-client');
+const SqliteRepository = require('../src/adapters/persistence/sqlite');
+const ConsoleRepository = require('../src/adapters/persistence/console');
+const VapiTransportAdapter = require('../src/adapters/transport/vapi');
+
+/**
+ * Same repository selection as server.js: SQLite when DB_PATH/DATABASE_URL
+ * is set, otherwise a no-op console repository. Without this, the call went
+ * out through vapi-client.js directly, bypassing the transport adapter's
+ * createCall — so no session was ever opened, and a dropped dose reminder
+ * placed via this script could never be resumed.
+ */
+function buildRepository() {
+  const dbPath = process.env.DB_PATH || process.env.DATABASE_URL;
+  return dbPath ? new SqliteRepository({ dbPath }) : new ConsoleRepository();
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -71,7 +85,18 @@ async function main() {
   console.log(`  Assistant ID: ${assistantId}`);
   console.log('');
 
-  const call = await vapiClient.createCall(assistantId, phone, variables);
+  const repository = buildRepository();
+  const transport = new VapiTransportAdapter(null);
+  transport.repository = repository;
+
+  let call;
+  try {
+    // Routed through the transport adapter (not vapi-client.js) so this
+    // dispatch opens a session exactly like the /api/call route does.
+    call = await transport.createCall(assistantId, phone, variables);
+  } finally {
+    if (typeof repository.close === 'function') await repository.close();
+  }
 
   console.log('Call initiated!');
   console.log(`  Call ID: ${call.id}`);

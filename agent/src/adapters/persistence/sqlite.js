@@ -200,35 +200,53 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * previous active one is marked dropped rather than rejected — that is also
    * what makes it eligible for resume.
    *
+   * The demote and the insert run in one transaction, and the insert is
+   * idempotent on session_id (ON CONFLICT DO NOTHING): a duplicate
+   * assistant-request for the same call.id — Vapi retries after its 7.5s
+   * budget lapses — calls this twice with the same sessionId. Without the
+   * transaction, a throw from the second INSERT (session_id is UNIQUE) would
+   * leave the first demote committed alone, and without the session_id
+   * exclusion below, the second call's own demote step would find its own
+   * just-inserted row (same patient, status active) and drop it out from
+   * under the still-live call.
+   *
    * @param {Object} session - { sessionId, patientId, callId, direction }
    * @returns {Object} The created session row
    */
   async createSession(session) {
     const nowIso = new Date().toISOString();
 
-    if (session.patientId != null) {
+    this.db.exec('BEGIN');
+    try {
+      if (session.patientId != null) {
+        this.db
+          .prepare(
+            `UPDATE sessions SET status = 'dropped', ended_at = updated_at, updated_at = ?
+             WHERE patient_id = ? AND status = 'active' AND session_id != ?`
+          )
+          .run(nowIso, session.patientId, session.sessionId);
+      }
+
       this.db
         .prepare(
-          `UPDATE sessions SET status = 'dropped', ended_at = ?, updated_at = ?
-           WHERE patient_id = ? AND status = 'active'`
+          `INSERT INTO sessions (
+             session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?)
+           ON CONFLICT(session_id) DO NOTHING`
         )
-        .run(nowIso, nowIso, session.patientId);
+        .run(
+          session.sessionId,
+          session.patientId ?? null,
+          session.callId || null,
+          session.direction || null,
+          nowIso,
+          nowIso
+        );
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
     }
-
-    this.db
-      .prepare(
-        `INSERT INTO sessions (
-           session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?)`
-      )
-      .run(
-        session.sessionId,
-        session.patientId ?? null,
-        session.callId || null,
-        session.direction || null,
-        nowIso,
-        nowIso
-      );
 
     logger.log('db_session_created', {
       sessionId: session.sessionId,
@@ -306,22 +324,28 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * that matches zero rows is how this codebase previously lost a pilot's
    * worth of outcomes, and losing intake fields mid-call is the same bug.
    *
+   * The merge itself happens inside the UPDATE via json_patch, not as a
+   * separate read-then-write in JS: two captures from one parallel model
+   * turn each issue their own UPDATE against the row sqlite has at the time
+   * it runs, so both survive. A read in JS followed by a write one `await`
+   * later can interleave with the other capture's write and lose it.
+   *
    * @param {string} sessionId
    * @param {Object} fields
    * @returns {Object} The merged fields
    */
   async updateSessionFields(sessionId, fields) {
-    const current = await this.getSessionFields(sessionId);
-    const merged = { ...current, ...fields };
-
     const result = this.db
-      .prepare('UPDATE sessions SET fields_so_far = ?, updated_at = ? WHERE session_id = ?')
-      .run(JSON.stringify(merged), new Date().toISOString(), sessionId);
+      .prepare(
+        `UPDATE sessions SET fields_so_far = json_patch(fields_so_far, ?), updated_at = ?
+         WHERE session_id = ?`
+      )
+      .run(JSON.stringify(fields), new Date().toISOString(), sessionId);
 
     if (result.changes === 0) {
       throw new Error(`Unknown session: "${sessionId}"`);
     }
-    return merged;
+    return this.getSessionFields(sessionId);
   }
 
   /**

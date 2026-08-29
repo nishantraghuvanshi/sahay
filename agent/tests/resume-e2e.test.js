@@ -37,6 +37,7 @@ let serverProcess = null;
 let baseUrl = null;
 let dbDir = null;
 let bootFailed = false;
+let bootStderr = '';
 
 /** Poll /health until it answers, or give up. */
 async function waitForHealth(url, proc, timeoutMs = 15000) {
@@ -63,7 +64,7 @@ before(async () => {
   await seedRepo.upsertPatient({
     phone: PATIENT.phone,
     name: PATIENT.name,
-    drug_name: PATIENT.drugName,
+    drugName: PATIENT.drugName,
     language: PATIENT.language,
   });
   await seedRepo.close();
@@ -77,9 +78,15 @@ before(async () => {
     {
       cwd: path.join(__dirname, '..'),
       env: { ...process.env, PORT: String(port), DB_PATH: dbPath },
-      stdio: 'ignore',
+      // Captured (not 'ignore') so a boot crash has a reason attached to the
+      // failure instead of vanishing — see the assert.fail below, which is
+      // this test's entire reason to exist.
+      stdio: ['ignore', 'ignore', 'pipe'],
     }
   );
+  serverProcess.stderr.on('data', (chunk) => {
+    bootStderr += chunk.toString();
+  });
 
   const healthy = await waitForHealth(baseUrl, serverProcess);
   if (!healthy) {
@@ -100,10 +107,13 @@ after(async () => {
 });
 
 describe('resume e2e — driven entirely over HTTP', () => {
-  test('a dropped inbound call resumes with what it already captured', async (t) => {
+  test('a dropped inbound call resumes with what it already captured', async () => {
+    // A skip here would go green while the one test that proves the real
+    // HTTP path works never ran at all — exactly the failure mode (a crash
+    // hidden behind a fully green suite) this test exists to catch. Fail
+    // loudly instead, with the server's own stderr attached.
     if (bootFailed) {
-      t.skip('server did not come up (port bind failed?) — skipping e2e test');
-      return;
+      assert.fail(`server failed to boot for the resume e2e test:\n${bootStderr}`);
     }
 
     const firstCallId = 'e2e-call-1';

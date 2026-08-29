@@ -288,13 +288,19 @@ class VapiTransportAdapter extends TransportPort {
     const language = resolution.patient?.language || 'hi';
     const variables = buildInboundVariables(resolution, language);
 
-    if (resolution.patient) {
+    // A minted sessionId (e.g. `inbound-${Date.now()}`) would create a
+    // session end-of-call-report can never match, since that webhook keys
+    // off the real call.id — an unresumable, orphaned row. Skipping is
+    // strictly better: no session at all, rather than one nothing can close.
+    if (resolution.patient && message.call?.id) {
       await this.repository.createSession({
-        sessionId: message.call?.id || `inbound-${Date.now()}`,
+        sessionId: message.call.id,
         patientId: resolution.patient.id,
-        callId: message.call?.id || null,
+        callId: message.call.id,
         direction: 'inbound',
       });
+    } else if (resolution.patient) {
+      logger.log('inbound_session_skipped_no_call_id', { phone });
     }
 
     return this.buildAssistantConfig(

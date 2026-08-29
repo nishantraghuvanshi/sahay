@@ -45,7 +45,12 @@ const TOOLS = [
   },
   {
     type: 'function',
-    async: false,
+    // capture_field fires every turn, not once at call end like
+    // report_outcome — a blocking round trip here pays a pause on every turn
+    // for a tool that hands the model nothing back. The response shape a
+    // real Vapi call expects is unverified (see I6), so this only flips the
+    // async flag rather than guessing at a `results` array.
+    async: true,
     function: {
       name: 'capture_field',
       description: [
