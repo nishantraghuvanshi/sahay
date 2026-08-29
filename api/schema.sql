@@ -1,0 +1,2 @@
+-- spec: TRD §3
+-- TODO: Tables + indexes. Each index exists for a stated reason.
