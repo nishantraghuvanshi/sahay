@@ -61,7 +61,9 @@ def get_record():
             "SELECT * FROM caregivers WHERE id = ?", (patient["caregiver_id"],)
         ).fetchone()
         meds = con.execute(
-            "SELECT * FROM medications WHERE patient_id = ? ORDER BY rowid", (patient["id"],)
+            "SELECT * FROM medications WHERE patient_id = ? AND stopped_at IS NULL "
+            "ORDER BY rowid",
+            (patient["id"],),
         ).fetchall()
         return {
             "patient": _row("patients", patient),
@@ -505,5 +507,174 @@ def post_onboarding(body: Onboarding):
 
         con.commit()
         return {"ok": True, "patient_id": patient_id, "caregiver_id": caregiver_id}
+    finally:
+        con.close()
+
+
+class MedicationEdit(BaseModel):
+    """One row as the medicine editor holds it (app/src/screens/MedicinesEdit.tsx)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    dose: str
+    slots: list[str] = Field(default_factory=list)
+    with_food: str | None = "any"
+    is_priority: bool = False
+    stopped: bool = False
+    isNew: bool = False
+
+
+class MedicationChange(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    medications: list[MedicationEdit] = Field(default_factory=list)
+    diff: list[str] = Field(default_factory=list)
+    consent_text: str = ""
+    consent_ack: bool = False
+
+
+@router.post("/app/medications")
+def post_medications(body: MedicationChange):
+    """Persist an edited schedule, with the attestation that justified it.
+
+    The doctor-advice attestation is the reason this endpoint exists at all, so it
+    is checked here and not only in the UI. It is stored as the **text** the
+    caregiver actually read, alongside who changed what — an attestation you cannot
+    reproduce is not evidence, and a boolean against nothing is not an audit trail
+    (SCHEMA-GAPS §3).
+
+    Edits update in place rather than replacing the set, because the provenance
+    columns — `raw_line`, `confidence`, `source_doc_id` — belong to the reading the
+    row came from and the editor never sees them. Replacing wholesale would quietly
+    destroy the evidence for every medicine the caregiver did not touch.
+
+    Stopping is a soft `stopped_at`, not a delete: `dose_events` reference these rows
+    and a stopped medicine's history is still the record of what was taken.
+    """
+    if not body.consent_ack or not body.consent_text.strip():
+        return _fail("attestation_required")
+    if sum(1 for m in body.medications if m.is_priority and not m.stopped) > 1:
+        return _fail("multiple_priority_medicines")
+
+    live = [m for m in body.medications if not m.stopped]
+    if any(not m.name.strip() or not m.dose.strip() or not m.slots for m in live):
+        return _fail("incomplete_medicine")
+
+    now = db.now_iso()
+    con = db.connect()
+    try:
+        patient = current_patient(con)
+        if patient is None:
+            return _fail("not_found")
+        pid = patient["id"]
+
+        known = {
+            r["id"] for r in con.execute("SELECT id FROM medications WHERE patient_id = ?", (pid,))
+        }
+
+        for med in body.medications:
+            if med.stopped:
+                if med.id in known:
+                    con.execute(
+                        "UPDATE medications SET stopped_at = ? WHERE id = ? AND patient_id = ?",
+                        (now, med.id, pid),
+                    )
+                continue
+
+            if med.id in known:
+                con.execute(
+                    "UPDATE medications SET name = ?, dose = ?, slots = ?, with_food = ?, "
+                    "is_priority = ?, stopped_at = NULL WHERE id = ? AND patient_id = ?",
+                    (med.name, med.dose, json.dumps(med.slots), med.with_food,
+                     int(med.is_priority), med.id, pid),
+                )
+            else:
+                # Typed on this screen, so it was not read off a prescription.
+                db.insert(con, "medications", {
+                    "id": med.id if med.isNew else str(uuid.uuid4()),
+                    "patient_id": pid,
+                    "name": med.name,
+                    "dose": med.dose,
+                    "slots": med.slots,
+                    "with_food": med.with_food,
+                    "is_priority": int(med.is_priority),
+                    "stock_count": None,
+                    "source": "manual",
+                    "extraction_flags": [],
+                    "excluded": 0,
+                    "confirmed_by": patient["caregiver_id"],
+                    "confirmed_at": now,
+                })
+
+        db.insert(con, "medication_changes", {
+            "id": str(uuid.uuid4()),
+            "patient_id": pid,
+            "changed_at": now,
+            "changed_by": patient["caregiver_id"],
+            "diff": body.diff,
+            "consent_text": body.consent_text,
+            "consent_ack": int(body.consent_ack),
+        })
+        con.commit()
+        return {"ok": True, "changed": len(body.diff)}
+    finally:
+        con.close()
+
+
+class DoseMark(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    medication_id: str
+    slot_time: str
+    status: str = "confirmed"
+    note: str | None = None
+
+
+@router.post("/app/doses")
+def post_dose(body: DoseMark):
+    """Record a dose the caregiver confirmed themselves.
+
+    Writing the event is what cancels the agent's call for that slot: the scheduler
+    only dials slots with no `dose_events` row, so this is the cancellation rather
+    than a separate flag to keep in step with it.
+
+    `INSERT OR REPLACE` against the unique `(medication_id, slot_time)` index makes a
+    double tap — or a retried request — land on the same row instead of logging the
+    dose twice (TRD §3.1).
+    """
+    if body.status not in {"confirmed", "deferred", "missed", "no_answer", "unknown"}:
+        return _fail("bad_status")
+
+    con = db.connect()
+    try:
+        patient = current_patient(con)
+        if patient is None:
+            return _fail("not_found")
+        med = con.execute(
+            "SELECT id FROM medications WHERE id = ? AND patient_id = ?",
+            (body.medication_id, patient["id"]),
+        ).fetchone()
+        if med is None:
+            return _fail("not_found")
+
+        existing = con.execute(
+            "SELECT id FROM dose_events WHERE medication_id = ? AND slot_time = ?",
+            (body.medication_id, body.slot_time),
+        ).fetchone()
+
+        db.insert(con, "dose_events", {
+            "id": existing["id"] if existing else str(uuid.uuid4()),
+            "patient_id": patient["id"],
+            "medication_id": body.medication_id,
+            "slot_time": body.slot_time,
+            "call_session_id": None,
+            "status": body.status,
+            "note": body.note,
+            "created_at": db.now_iso(),
+        })
+        con.commit()
+        return {"ok": True}
     finally:
         con.close()

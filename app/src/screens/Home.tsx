@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
   Button,
@@ -24,6 +26,7 @@ import {
   useObservations,
 } from '../api/hooks'
 import { nextDose, relativeTime } from '../lib/schedule'
+import { postDose } from '../api/hooks'
 import type { DaySummaryItem } from '../api/types'
 
 /**
@@ -37,6 +40,9 @@ import type { DaySummaryItem } from '../api/types'
  * what makes the record visibly change on camera while a call is in progress.
  */
 export default function Home() {
+  const queryClient = useQueryClient()
+  const [marking, setMarking] = useState(false)
+  const [markError, setMarkError] = useState<string | null>(null)
   const record = useCareRecord()
   const doses = useDoseHistory()
   const summary = useDaySummary()
@@ -52,6 +58,33 @@ export default function Home() {
   const meds = record.data!.medications
   const events = doses.data ?? []
   const next = nextDose(meds, events)
+
+  /**
+   * Confirm a dose the caregiver gave themselves.
+   *
+   * Writing the event is also the cancellation: the scheduler dials slots that have
+   * no `dose_events` row, so there is no separate "call cancelled" flag that could
+   * drift out of step with the record. The slot time is the exact instant the card
+   * is showing, which is what makes the write idempotent against the unique
+   * (medication_id, slot_time) index.
+   */
+  async function markTaken(dose: NonNullable<typeof next>) {
+    setMarking(true)
+    setMarkError(null)
+    try {
+      await postDose({
+        medication_id: dose.medication.id,
+        slot_time: dose.at.toISOString(),
+        status: 'confirmed',
+        note: 'Confirmed by the caregiver in the app.',
+      })
+      await queryClient.invalidateQueries()
+    } catch (err) {
+      setMarkError(err instanceof Error ? err.message : 'Could not record that dose.')
+    } finally {
+      setMarking(false)
+    }
+  }
 
   const openAlert = escalations.data?.[0]
   const lastCall = [...(calls.data ?? [])]
@@ -94,12 +127,19 @@ export default function Home() {
                   : 'Any time'}
             </div>
             <Row className="flex-wrap gap-2">
-              <Button className="flex-1">Mark taken</Button>
+              <Button className="flex-1" disabled={marking} onClick={() => void markTaken(next)}>
+                {marking ? 'Saving…' : 'Mark taken'}
+              </Button>
               <Button variant="outline" className="flex-1">
                 Call {name}
               </Button>
             </Row>
             <Button variant="outline">Schedule a call for this dose later</Button>
+            {markError && (
+              <span className="text-[11px] leading-relaxed text-muted-strong">
+                {markError} The dose is unrecorded and the call is still scheduled.
+              </span>
+            )}
             <Divider />
             <Row>
               <span className="flex-1 text-[11px] text-muted-strong">

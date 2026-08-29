@@ -225,12 +225,15 @@
       am making … explicitly advised by our doctor"* — `Save and Continue` disabled until
       ticked. Persist the attestation with the change batch and who made it
 - [ ] Schedule changes propagate to the scheduler (tell Lane B when a slot moves)
-      ↳ ⛔ no mutation endpoint yet — Save is a marked stub naming `POST /app/medications`
+      ↳ built — `POST /app/medications` persists the edit and writes the `medication_changes`
+      audit row with the attestation text verbatim. The medications table *is* the schedule,
+      so persisting is propagating; there is no second copy to keep in step
 
 ## Home (`1f` / `2e`)
 
 - [ ] Next-dose primary card with `Mark taken` — and marking taken **cancels** the agent
-      ↳ ⛔ card is built; the button is inert until there is a mutation endpoint
+      ↳ built — `POST /app/doses` writes the confirmation, which *is* the cancellation: the
+      scheduler dials slots with no `dose_events` row, so there is no separate flag to drift
       call for that slot
 - [x] The agent-will-call line states the offset ("Agent will call at 2:05 PM if
       unconfirmed")

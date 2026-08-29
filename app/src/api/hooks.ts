@@ -39,6 +39,36 @@ export async function postOnboarding(draft: unknown): Promise<{ patient_id: stri
   return api.post<{ patient_id: string }>('/app/onboarding', draft)
 }
 
+/**
+ * Persist an edited schedule together with the attestation that justified it.
+ * `diff` is the human-readable change list the editor already computes for the
+ * "What changes for Mom" card, stored verbatim as the audit trail.
+ */
+export async function postMedications(body: {
+  medications: unknown[]
+  diff: string[]
+  consent_text: string
+  consent_ack: boolean
+}): Promise<{ changed: number }> {
+  if (!live) throw new ApiError('No Care API configured — nothing was saved.', 'unreachable')
+  return api.post<{ changed: number }>('/app/medications', body)
+}
+
+/**
+ * Record a dose the caregiver confirmed themselves. Writing the event is what stops
+ * the agent calling about that slot — the scheduler only dials slots with no
+ * dose_events row — so there is no separate flag that could fall out of step.
+ */
+export async function postDose(body: {
+  medication_id: string
+  slot_time: string
+  status?: string
+  note?: string | null
+}): Promise<void> {
+  if (!live) throw new ApiError('No Care API configured — nothing was saved.', 'unreachable')
+  await api.post('/app/doses', body)
+}
+
 /** Screens that must visibly change while a call is in progress poll; the rest do not. */
 const LIVE = { refetchInterval: LIVE_POLL_MS }
 

@@ -69,6 +69,9 @@ export interface Medication {
   /** At most one per patient. */
   is_priority: boolean
   stock_count: number | null
+  /** Set when the caregiver stopped it. Stopped medicines are not returned by the
+   *  record endpoint, but their dose history survives. */
+  stopped_at?: string | null
 }
 
 export interface CallSession {

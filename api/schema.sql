@@ -96,7 +96,12 @@ CREATE TABLE IF NOT EXISTS medications (
   -- REQUIRED rather than nullable-with-a-default. A nullable confirmed_by is a
   -- gate that defaults to open.
   confirmed_by  TEXT NOT NULL REFERENCES caregivers(id),
-  confirmed_at  TEXT NOT NULL
+  confirmed_at  TEXT NOT NULL,
+
+  -- When the caregiver stopped this medicine. Soft rather than a DELETE: dose_events
+  -- reference this row, and a stopped medicine's history is still the record of what
+  -- was taken. Rows with stopped_at set are excluded from the schedule everywhere.
+  stopped_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_meds_patient ON medications(patient_id);
 

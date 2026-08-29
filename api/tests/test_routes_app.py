@@ -270,6 +270,157 @@ def test_escalation_contacts_are_kept_even_though_they_have_no_number(client):
     assert rows[0]["after_minutes"] == 30
 
 
+ATTESTATION = (
+    "Hey, I am fully aware of the changes that I am making in this calendar, and these "
+    "changes have been explicitly advised by our doctor."
+)
+
+
+def edit_body(meds, **over):
+    base = {
+        "medications": meds,
+        "diff": ["something changed"],
+        "consent_text": ATTESTATION,
+        "consent_ack": True,
+    }
+    base.update(over)
+    return base
+
+
+def rows_from(client, **over):
+    out = []
+    for m in client.get("/app/record").json()["medications"]:
+        out.append({
+            "id": m["id"], "name": m["name"], "dose": m["dose"], "slots": m["slots"],
+            "with_food": m["with_food"], "is_priority": m["is_priority"],
+            "stopped": False, "isNew": False, **over,
+        })
+    return out
+
+
+# ------------------------------------------------------------- editing meds
+
+def test_an_edit_without_the_attestation_is_refused(client):
+    """The doctor-advice attestation is the reason this endpoint exists. Checking it
+    only in the UI means anything that can POST can skip it."""
+    rows = rows_from(client)
+    assert client.post("/app/medications", json=edit_body(rows, consent_ack=False)).json() == {
+        "ok": False, "error": "attestation_required"
+    }
+    assert client.post("/app/medications", json=edit_body(rows, consent_text=" ")).json()[
+        "error"] == "attestation_required"
+
+
+def test_an_edit_persists(client):
+    rows = rows_from(client)
+    rows[0]["dose"] = "750mg"
+    assert client.post("/app/medications", json=edit_body(rows)).json()["ok"] is True
+    assert client.get("/app/record").json()["medications"][0]["dose"] == "750mg"
+
+
+def test_editing_preserves_extraction_provenance(client):
+    """The editor never sees raw_line or confidence, so a wholesale replace would
+    quietly destroy the evidence for every medicine the caregiver did not touch."""
+    client.post("/app/onboarding", json=draft())
+    before = client.get("/app/record").json()["medications"][0]
+    assert before["raw_line"]
+
+    rows = rows_from(client)
+    rows[0]["dose"] = "20mg"
+    client.post("/app/medications", json=edit_body(rows))
+
+    after = client.get("/app/record").json()["medications"][0]
+    assert after["dose"] == "20mg"
+    assert after["raw_line"] == before["raw_line"]
+    assert after["confidence"] == before["confidence"]
+    assert after["source"] == "prescription"
+
+
+def test_stopping_a_medicine_keeps_its_dose_history(client):
+    """A soft stop, not a delete: dose_events reference these rows, and what was
+    already taken is still the record of what was taken."""
+    doses_before = len(client.get("/app/doses").json())
+    rows = rows_from(client)
+    stopped_id = rows[0]["id"]
+    rows[0]["stopped"] = True
+    client.post("/app/medications", json=edit_body(rows))
+
+    names = {m["id"] for m in client.get("/app/record").json()["medications"]}
+    assert stopped_id not in names
+    assert len(client.get("/app/doses").json()) == doses_before
+
+
+def test_an_edit_writes_the_audit_row_with_the_text_that_was_agreed(client):
+    """SCHEMA-GAPS §3 — an attestation you cannot reproduce is not evidence."""
+    rows = rows_from(client)
+    rows[0]["dose"] = "750mg"
+    client.post("/app/medications", json=edit_body(rows, diff=["Metformin dose 500mg -> 750mg"]))
+
+    con = db.connect()
+    try:
+        row = con.execute("SELECT * FROM medication_changes").fetchone()
+    finally:
+        con.close()
+    assert row["consent_text"] == ATTESTATION
+    assert row["consent_ack"] == 1
+    assert row["changed_by"]
+    assert json.loads(row["diff"]) == ["Metformin dose 500mg -> 750mg"]
+
+
+def test_an_edit_cannot_create_a_second_priority_medicine(client):
+    rows = rows_from(client, is_priority=True)
+    assert client.post("/app/medications", json=edit_body(rows)).json()["error"] == (
+        "multiple_priority_medicines")
+
+
+def test_an_edit_cannot_leave_a_medicine_unschedulable(client):
+    rows = rows_from(client)
+    rows[0]["slots"] = []
+    assert client.post("/app/medications", json=edit_body(rows)).json()["error"] == (
+        "incomplete_medicine")
+
+
+# ------------------------------------------------------------- marking doses
+
+def test_marking_a_dose_taken_records_it(client):
+    med = client.get("/app/record").json()["medications"][0]
+    slot = "2026-08-30T08:30:00+05:30"
+    assert client.post("/app/doses", json={
+        "medication_id": med["id"], "slot_time": slot, "status": "confirmed"}).json()["ok"] is True
+
+    # Two medicines share the 08:30 slot in the seed, so scope to this one.
+    logged = [
+        d for d in client.get("/app/doses").json()
+        if d["slot_time"] == slot and d["medication_id"] == med["id"]
+    ]
+    assert [d["status"] for d in logged] == ["confirmed"]
+
+
+def test_marking_the_same_slot_twice_does_not_log_it_twice(client):
+    """TRD §3.1 — a double tap or a retried request must land on the same row."""
+    med = client.get("/app/record").json()["medications"][0]
+    slot = "2026-08-30T08:30:00+05:30"
+    body = {"medication_id": med["id"], "slot_time": slot, "status": "confirmed"}
+    client.post("/app/doses", json=body)
+    before = len(client.get("/app/doses").json())
+    client.post("/app/doses", json=body)
+    assert len(client.get("/app/doses").json()) == before
+
+
+def test_a_dose_cannot_be_logged_against_someone_elses_medicine(client):
+    assert client.post("/app/doses", json={
+        "medication_id": "not-a-medicine", "slot_time": "2026-08-30T08:30:00+05:30",
+    }).json()["error"] == "not_found"
+
+
+def test_an_invented_dose_status_is_refused(client):
+    med = client.get("/app/record").json()["medications"][0]
+    assert client.post("/app/doses", json={
+        "medication_id": med["id"], "slot_time": "2026-08-30T08:30:00+05:30",
+        "status": "taken",
+    }).json()["error"] == "bad_status"
+
+
 def test_restarting_does_not_overwrite_a_signed_off_schedule(client):
     """Seeding runs only on an empty database."""
     client.post("/app/onboarding", json=draft())

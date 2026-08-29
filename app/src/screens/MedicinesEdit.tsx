@@ -16,7 +16,8 @@ import {
   Row,
   Tag,
 } from '../ui'
-import { useCareRecord } from '../api/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { postMedications, useCareRecord } from '../api/hooks'
 import type { Medication, WithFood } from '../api/types'
 
 /**
@@ -226,6 +227,9 @@ export default function MedicinesEdit() {
   const navigate = useNavigate()
   const record = useCareRecord()
 
+  const queryClient = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [tab, setTab] = useState<'edit' | 'upload'>('edit')
 
   /** The record as it was read. The diff — and therefore the consent — is against this. */
@@ -378,21 +382,38 @@ export default function MedicinesEdit() {
   const gateOpen = changes.length > 0 && incomplete === 0 && !uploading
   const canSave = gateOpen && consent
 
-  function saveAndContinue() {
-    /**
-     * TODO(Lane B): there is no mutation endpoint yet, so this is a deliberate no-op.
-     *
-     * Needed: `POST /app/medications`, carrying
-     *   · the diff computed above (`diffMedicines`) as the `diff` JSONB,
-     *   · `consent_text: CONSENT_TEXT` — the string verbatim, not a boolean,
-     *   · `consent_ack: true`, `changed_by` = the signed-in caregiver,
-     *   · the uploaded prescription file ids, when any were attached.
-     *
-     * That is the `medication_changes` audit row specified in docs/SCHEMA-GAPS-LANE-C.md §3.
-     * Until it exists the screen must not pretend it saved: it navigates, and the record it
-     * came from is unchanged on the next read.
-     */
-    navigate('/calendar')
+  /**
+   * Persist the edit, with the attestation that justified it.
+   *
+   * `CONSENT_TEXT` goes over the wire verbatim rather than as a boolean: the server
+   * stores the sentence the caregiver actually read, because an attestation you
+   * cannot reproduce is not evidence (SCHEMA-GAPS §3). The diff goes with it, so the
+   * audit row records what changed and not merely that something did.
+   *
+   * A failure keeps the caregiver here. Navigating to a calendar that still shows
+   * the old schedule would read as a successful save.
+   */
+  async function saveAndContinue() {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await postMedications({
+        medications: rows,
+        // The sentences the caregiver was shown, not the internal keys — the audit
+        // row should read back as what they agreed to.
+        diff: changes.map((c) => c.text),
+        consent_text: CONSENT_TEXT,
+        consent_ack: consent,
+      })
+      await queryClient.invalidateQueries()
+      navigate('/calendar')
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : 'Could not save these changes.',
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (record.isLoading) return <LoadingBlock rows={6} />
@@ -682,8 +703,21 @@ export default function MedicinesEdit() {
           </div>
         </Card>
 
-        <Button disabled={!canSave} onClick={saveAndContinue} className="w-full">
-          Save and Continue
+        {saveError && (
+          <Card emphasis="rule">
+            <Label>Not saved</Label>
+            <span className="text-[11px] leading-relaxed text-muted-strong">
+              {saveError} The schedule is unchanged and no call has been altered. Try again.
+            </span>
+          </Card>
+        )}
+
+        <Button
+          disabled={!canSave || saving}
+          onClick={() => void saveAndContinue()}
+          className="w-full"
+        >
+          {saving ? 'Saving…' : 'Save and Continue'}
         </Button>
       </footer>
     </div>
