@@ -28,3 +28,7 @@ evidence/recordings/*
 docs/checklists/*.docx
 docs/checklists/*.html
 docs/checklists/*.zip
+
+# local agent tooling — never commit
+CLAUDE.md
+.claude/
