@@ -1,8 +1,7 @@
 """ExtractionDocument -> the schedule shape the caregiver app can render.
 
-This module does not exist upstream. The handoff is explicit that `normalize.py`
-and `validate.py` are unbuilt, and the app cannot consume a raw ExtractionDocument
-without them: the pipeline emits abstract slots (`["morning", "night"]`) while
+The app cannot consume a raw ExtractionDocument without this step: the pipeline
+emits abstract slots (`["morning", "night"]`) while
 `DraftMedicine.slots` in app/src/setup/store.ts needs local clock times
 (`["08:30", "21:00"]`).
 
@@ -34,9 +33,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .schema import ExtractionDocument, Flag, FoodRelation, Form, MedicineExtraction, ScheduleSlot
 
-# A flag this module raises that is not in the vendored `Flag` enum, because it
+# A flag this module raises that is not in the `Flag` enum in schema.py, because it
 # describes a normalization outcome rather than something the extractor reported.
-# Kept out of the enum so the vendored schema stays byte-identical to upstream.
+# The enum belongs to the model the extractor fills in; this does not go in it.
 STRENGTH_UNKNOWN = "strength_unknown"
 
 # A dose that is just a number — "1", "2", "½", "1/2" — with no unit attached.
@@ -94,9 +93,9 @@ class NormalizedMedicine(BaseModel):
 
     raw_line: str
     confidence: float
-    """Validation flags. Plain strings rather than the vendored `Flag` enum,
-    because this module raises `strength_unknown`, which is a normalization
-    outcome and deliberately not part of upstream's schema."""
+    """Validation flags. Plain strings rather than the `Flag` enum, because this
+    module also raises `strength_unknown`, which is a normalization outcome and
+    deliberately not part of the extraction schema."""
     flags: list[str] = Field(default_factory=list)
     duration_days: int | None = None
 

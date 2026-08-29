@@ -1,4 +1,4 @@
-"""Pipeline B — VLM prescription extraction. Vendored; see VENDORED.md.
+"""Prescription reading — the VLM extraction pipeline. See README.md.
 
 Re-exports the public surface so callers write `from api.rx_extract import ...`
 rather than reaching into module paths that only exist because of how the

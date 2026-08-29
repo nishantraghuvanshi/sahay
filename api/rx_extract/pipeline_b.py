@@ -1,4 +1,4 @@
-"""Pipeline B: VLM direct extraction. Source of truth: design doc §4.2."""
+"""VLM direct extraction — one call, image in, structured JSON out."""
 import base64
 import os
 import time

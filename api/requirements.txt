@@ -5,9 +5,9 @@ python-dotenv
 httpx
 pytest
 
-# Prescription extraction (api/rx_extract, vendored Pipeline B).
+# Prescription reading (api/rx_extract).
 # requests is the pipeline's HTTP client; python-multipart backs the /extract
-# file upload. The handoff also lists pillow, but nothing in Pipeline B's import
-# closure uses it — see api/rx_extract/VENDORED.md.
+# file upload. Pillow is deliberately absent — nothing in the module's import
+# closure uses it. See api/rx_extract/README.md.
 requests
 python-multipart

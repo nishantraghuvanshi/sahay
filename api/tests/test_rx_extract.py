@@ -1,4 +1,4 @@
-"""Tests for prescription extraction: the vendored pipeline, normalize, /extract.
+"""Tests for prescription reading: the pipeline, normalize, and /extract.
 
 Zero network calls — every test injects a fake VLM client, which is the discipline
 the upstream suite follows and the only way to exercise a safety refusal on demand.
