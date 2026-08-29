@@ -112,13 +112,13 @@ export default function Schedule() {
           type="button"
           onClick={() => navigate('/setup/prescription')}
           aria-label="Back"
-          className="px-1 text-[15px] text-muted"
+          className="-ml-1 grid size-11 place-items-center text-[16px] text-muted-strong"
         >
           ←
         </button>
         <h1 className="text-[14px] font-bold">Review schedule</h1>
         <span className="ml-auto">
-          <Chip>Calendar ▾</Chip>
+          <Chip>Calendar</Chip>
         </span>
       </header>
 
@@ -154,7 +154,7 @@ export default function Schedule() {
                 <Label>Frequency</Label>
                 <Label>Times</Label>
                 <Label>Food rule</Label>
-                <Label>Priority · ✎</Label>
+                <Label>Priority</Label>
               </div>
 
               {meds.map((m) => (
@@ -357,19 +357,16 @@ function MedicineRow({
               type="checkbox"
               checked={med.is_priority}
               onChange={(e) => onPriority(e.target.checked)}
-              className="size-3.5 accent-ink"
+              className="size-5 accent-ink"
             />
             priority
           </label>
           {med.unclear && <Chip onClick={() => onChange({ unclear: false })}>✓ resolved</Chip>}
-          <span title="Every field on this row is editable in place" className="text-[12px] text-muted">
-            ✎
-          </span>
           <button
             type="button"
             onClick={onRemove}
             aria-label={`Remove ${med.name || 'medicine'}`}
-            className="ml-auto text-[12px] text-muted"
+            className="ml-auto grid size-11 place-items-center text-[14px] text-muted-strong"
           >
             ✕
           </button>

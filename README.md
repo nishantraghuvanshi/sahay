@@ -69,6 +69,31 @@ uvicorn api.main:app --reload --port 8000
 
 The Care API must be reachable over public HTTPS for the voice agent to call its tools.
 
+### Caregiver app
+
+```bash
+cd app
+npm install
+npm run dev                 # http://localhost:5173 — runs against mock data, no backend needed
+npm run build && npm run preview
+```
+
+The app ships as a static bundle. It talks to exactly one configurable origin:
+
+```bash
+# app/.env.local — unset means mock mode
+VITE_API_BASE=https://your-care-api.example.com
+```
+
+Two things to know before deploying it:
+
+- **Never put `CARE_API_TOKEN` in this file.** Anything prefixed `VITE_` is inlined into the
+  browser bundle (`NFR-7`). The app reads caregiver-scoped endpoints only; the agent-facing tool
+  contract stays server to server.
+- **The host must fall back to `index.html` for unknown paths**, or a cold open of
+  `/h/<token>` — the handoff link, opened by a stranger on their own phone — returns 404.
+  `app/public/_redirects` covers Netlify and Cloudflare Pages; `app/vercel.json` covers Vercel.
+
 ## Documentation
 
 | Doc | Question it answers |

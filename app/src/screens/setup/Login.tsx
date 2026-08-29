@@ -240,7 +240,7 @@ function OtpInput({
           />
         ))}
       </div>
-      <span className="text-[10px] text-muted">{label} — any six digits work in this build</span>
+      <span className="text-[11px] text-muted-strong">{label}</span>
     </div>
   )
 }

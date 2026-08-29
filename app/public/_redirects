@@ -1,0 +1,3 @@
+# Netlify / Cloudflare Pages: every path is served by the SPA.
+# Without this a cold open of /h/<token> — the demo's second-phone moment — 404s.
+/*  /index.html  200

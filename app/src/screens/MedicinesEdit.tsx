@@ -378,6 +378,8 @@ export default function MedicinesEdit() {
   const gateOpen = changes.length > 0 && incomplete === 0 && !uploading
   const canSave = gateOpen && consent
 
+  const [submitted, setSubmitted] = useState(false)
+
   function saveAndContinue() {
     /**
      * TODO(Lane B): there is no mutation endpoint yet, so this is a deliberate no-op.
@@ -389,10 +391,12 @@ export default function MedicinesEdit() {
      *   · the uploaded prescription file ids, when any were attached.
      *
      * That is the `medication_changes` audit row specified in docs/SCHEMA-GAPS-LANE-C.md §3.
-     * Until it exists the screen must not pretend it saved: it navigates, and the record it
-     * came from is unchanged on the next read.
+     *
+     * Until it exists this must NOT navigate to /calendar: the calendar would render the old
+     * schedule and read as a bug rather than as an unfinished integration. So it stays on the
+     * screen and says plainly that the change is held, not sent.
      */
-    navigate('/calendar')
+    setSubmitted(true)
   }
 
   if (record.isLoading) return <LoadingBlock rows={6} />
@@ -468,7 +472,7 @@ export default function MedicinesEdit() {
                 <Label>Frequency</Label>
                 <Label>Times</Label>
                 <Label>Food rule</Label>
-                <Label>Priority · ✎</Label>
+                <Label>Priority</Label>
               </div>
 
               {stopMode && (
@@ -682,7 +686,16 @@ export default function MedicinesEdit() {
           </div>
         </Card>
 
-        <Button disabled={!canSave} onClick={saveAndContinue} className="w-full">
+        {submitted && (
+          <Card emphasis="rule" className="gap-1">
+            <Label>Held on this device</Label>
+            <span className="text-[12px] leading-relaxed">
+              These changes and your attestation are ready to send. They reach {"Sharma-ji's"}{' '}
+              schedule once the Care API accepts them — nothing has changed for them yet.
+            </span>
+          </Card>
+        )}
+        <Button disabled={!canSave || submitted} onClick={saveAndContinue} className="w-full">
           Save and Continue
         </Button>
       </footer>
@@ -862,13 +875,10 @@ function MedicineRow({
               type="checkbox"
               checked={row.is_priority}
               onChange={(e) => onPriority(e.target.checked)}
-              className="size-3.5 accent-ink"
+              className="size-5 accent-ink"
             />
             priority
           </label>
-          <span title="Every field on this row is editable in place" className="text-[12px] text-muted">
-            ✎
-          </span>
           {row.isNew ? (
             <button
               type="button"

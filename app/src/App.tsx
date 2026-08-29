@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './shell/AppShell'
-import Placeholder from './screens/Placeholder'
 import KitchenSink from './screens/KitchenSink'
 import Login from './screens/setup/Login'
 import Parent from './screens/setup/Parent'
@@ -19,6 +18,8 @@ import Calls from './screens/Calls'
 import CallDetail from './screens/CallDetail'
 import Calendar from './screens/Calendar'
 import MedicinesEdit from './screens/MedicinesEdit'
+import NotFound from './screens/NotFound'
+import Settings from './screens/Settings'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -55,12 +56,12 @@ export default function App() {
         <Route path="/record" element={<CareRecord />} />
         <Route path="/doses" element={<DoseHistory />} />
         <Route path="/observations" element={<Observations />} />
-        <Route path="/settings" element={<Placeholder title="Settings" frame="1m / 2k" />} />
-        {/* dev-only review surface, removed before the freeze */}
-        <Route path="/kitchen-sink" element={<KitchenSink />} />
+        <Route path="/settings" element={<Settings />} />
+        {/* dev-only review surface — tree-shaken out of the production bundle */}
+        {import.meta.env.DEV && <Route path="/kitchen-sink" element={<KitchenSink />} />}
       </Route>
 
-      <Route path="*" element={<Placeholder title="Not found" frame="404" />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

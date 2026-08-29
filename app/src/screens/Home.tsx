@@ -94,12 +94,17 @@ export default function Home() {
                   : 'Any time'}
             </div>
             <Row className="flex-wrap gap-2">
-              <Button className="flex-1">Mark taken</Button>
-              <Button variant="outline" className="flex-1">
+              <Button className="flex-1" disabled>
+                Mark taken
+              </Button>
+              <Button variant="outline" className="flex-1" href={`tel:${patient.phone_e164}`}>
                 Call {name}
               </Button>
             </Row>
-            <Button variant="outline">Schedule a call for this dose later</Button>
+            <span className="text-[11px] text-muted-strong">
+              Marking a dose from here needs the Care API — until then the agent confirms it on
+              the call.
+            </span>
             <Divider />
             <Row>
               <span className="flex-1 text-[11px] text-muted-strong">
@@ -155,7 +160,9 @@ export default function Home() {
               Told to {openAlert.sent_to} by {openAlert.channel} · {openAlert.delivery_status}
             </div>
             <Row className="gap-2">
-              <Button className="flex-1">Call {name} now</Button>
+              <Button className="flex-1" href={`tel:${patient.phone_e164}`}>
+                Call {name} now
+              </Button>
               <Button variant="outline" className="flex-1" href={`/alerts/${openAlert.id}`}>
                 Open
               </Button>
@@ -173,7 +180,12 @@ export default function Home() {
                   minute: '2-digit',
                 })}
               </Label>
-              <Chip>Transcript</Chip>
+              <Link
+                to={`/calls/${lastCall.id}`}
+                className="rounded-full border border-line-strong bg-paper px-2.5 py-1 text-[11px]"
+              >
+                Transcript
+              </Link>
             </Row>
             {lastCallObservation ? (
               <>
@@ -243,7 +255,7 @@ function SummaryRow({ item }: { item: DaySummaryItem }) {
 
   const body = (
     <Row className="items-start gap-2.5 py-0.5">
-      <span className="w-11 shrink-0 pt-0.5 text-[10px] font-bold tracking-wide text-muted">
+      <span className="w-11 shrink-0 pt-0.5 text-[11px] font-bold tracking-wide text-muted-strong">
         {time}
       </span>
       <span className="pt-1">

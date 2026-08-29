@@ -101,7 +101,7 @@ const NONE_RECORDED = /^(none|nil|no|nope|none known|no known allergies|na|n\/a)
 /* --------------------------------------------------------------- fragments */
 
 function NotCaptured() {
-  return <span className="text-muted">not captured</span>
+  return <span className="text-muted-strong italic">not captured</span>
 }
 
 /** A value, or the explicit absence of one. Never an empty node. */
@@ -265,7 +265,7 @@ function Record({ view }: { view: HandoffView }) {
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Started
           </dt>
-          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold">
+          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
             <Value text={onset} />
           </dd>
         </div>
@@ -273,7 +273,7 @@ function Record({ view }: { view: HandoffView }) {
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Responsive
           </dt>
-          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold">
+          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
             {responsive ? sentence(responsive) : <NotCaptured />}
           </dd>
         </div>
@@ -281,7 +281,7 @@ function Record({ view }: { view: HandoffView }) {
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Breathing
           </dt>
-          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold">
+          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
             {breathing ? sentence(breathing) : <NotCaptured />}
           </dd>
         </div>

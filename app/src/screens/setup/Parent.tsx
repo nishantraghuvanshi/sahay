@@ -40,7 +40,7 @@ export default function Parent() {
           type="button"
           aria-label="Back"
           onClick={() => navigate('/login')}
-          className="-ml-1 px-1 text-[16px] text-muted"
+          className="-ml-1 grid size-11 place-items-center text-[16px] text-muted-strong"
         >
           &larr;
         </button>
@@ -276,44 +276,9 @@ export default function Parent() {
             </button>
           </Row>
         ))}
-        <Row className="flex-wrap">
-          <Chip
-            onClick={() =>
-              patch({
-                escalation: [
-                  ...draft.escalation,
-                  { name: 'Family member', relationship: 'sibling', after: '15 min' },
-                ],
-              })
-            }
-          >
-            + family member
-          </Chip>
-          <Chip
-            onClick={() =>
-              patch({
-                escalation: [
-                  ...draft.escalation,
-                  { name: draft.doctorName || 'Doctor', relationship: 'doctor', after: 'critical only' },
-                ],
-              })
-            }
-          >
-            + doctor
-          </Chip>
-          <Chip
-            onClick={() =>
-              patch({
-                escalation: [
-                  ...draft.escalation,
-                  { name: 'Neighbour', relationship: 'neighbour', after: 'no answer 3x' },
-                ],
-              })
-            }
-          >
-            + neighbour
-          </Chip>
-        </Row>
+        <AddContact
+          onAdd={(contact) => patch({ escalation: [...draft.escalation, contact] })}
+        />
         <p className="text-[11px] text-muted-strong">Skip this — you can add people later.</p>
       </Card>
 
@@ -334,6 +299,68 @@ export default function Parent() {
  * The hard-coded chip lists cannot describe every parent. Anything typed here is
  * carried verbatim into the agent's context, so an unusual allergy is not silently lost.
  */
+/**
+ * The chips here used to insert a hardcoded "Family member · sibling · after 15 min" row that
+ * looked like captured data and could not be edited. A contact without a number cannot be
+ * escalated to, so this asks for one.
+ */
+function AddContact({ onAdd }: { onAdd: (c: { name: string; relationship: string; after: string }) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [relationship, setRelationship] = useState('')
+
+  if (!open) return <Chip onClick={() => setOpen(true)}>+ add someone</Chip>
+
+  const ready = name.trim().length > 1 && Boolean(toE164(phone))
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-line-strong bg-paper p-2.5">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name"
+          aria-label="Contact name"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-ink"
+        />
+        <input
+          value={relationship}
+          onChange={(e) => setRelationship(e.target.value)}
+          placeholder="Sister, doctor, neighbour…"
+          aria-label="Relationship to your parent"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-ink"
+        />
+        <input
+          value={phone}
+          inputMode="tel"
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+91 98765 43210"
+          aria-label="Contact phone number"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-ink"
+        />
+      </div>
+      <Row>
+        <span className="flex-1 text-[11px] text-muted-strong">
+          We only call someone we have a number for.
+        </span>
+        <Chip onClick={() => setOpen(false)}>Cancel</Chip>
+        <Chip
+          on={ready}
+          onClick={() => {
+            if (!ready) return
+            onAdd({ name: name.trim(), relationship: relationship.trim() || 'contact', after: '15 min' })
+            setName(''); setPhone(''); setRelationship(''); setOpen(false)
+          }}
+        >
+          Add
+        </Chip>
+      </Row>
+    </div>
+  )
+}
+
 function AddChip({ label, onAdd }: { label: string; onAdd: (value: string) => void }) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')

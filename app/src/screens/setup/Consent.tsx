@@ -59,7 +59,7 @@ export default function Consent() {
           type="button"
           aria-label="Back"
           onClick={() => navigate('/setup/schedule')}
-          className="-ml-1 px-1 text-[16px] text-muted"
+          className="-ml-1 grid size-11 place-items-center text-[16px] text-muted-strong"
         >
           &larr;
         </button>

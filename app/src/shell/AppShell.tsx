@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import clsx from 'clsx'
 import { useIsDesktop } from './useBreakpoint'
 import { NAV, TABS } from './nav'
+import { useCareRecord } from '../api/hooks'
 
 /**
  * One shell, two layouts: sidebar + top bar on desktop (wireframe 2e),
@@ -44,10 +45,7 @@ function Sidebar() {
         <span className="text-[13px] font-bold">Kinvox</span>
       </div>
 
-      <div className="mb-2 rounded-lg border border-line-strong bg-paper p-2">
-        <div className="text-[12px] font-semibold">Mom · 71</div>
-        <div className="text-[10px] text-muted">no data yet</div>
-      </div>
+      <PatientCard />
 
       {NAV.map((item) => (
         <NavLink
@@ -67,13 +65,31 @@ function Sidebar() {
   )
 }
 
+/** Reads the record rather than asserting an identity — the sidebar used to disagree with it. */
+function PatientCard() {
+  const { data } = useCareRecord()
+  const patient = data?.patient
+  return (
+    <div className="mb-2 rounded-lg border border-line-strong bg-paper p-2">
+      <div className="text-[12px] font-semibold">
+        {patient ? `${patient.name}${patient.honorific ? `-${patient.honorific}` : ''}` : '—'}
+        {patient?.age != null && ` · ${patient.age}`}
+      </div>
+      <div className="text-[10px] text-muted-strong">
+        {patient?.calls_paused
+          ? 'Calls paused'
+          : patient?.schedule_signed_off_at
+            ? 'Calls active'
+            : 'Not signed off'}
+      </div>
+    </div>
+  )
+}
+
 function TopBar() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-5">
       <span className="text-[15px] font-bold">Kinvox</span>
-      <span className="rounded-full border border-line-strong bg-paper px-2 py-0.5 text-[10px]">
-        scaffold
-      </span>
     </header>
   )
 }
@@ -88,7 +104,7 @@ function TabBar() {
           className={({ isActive }) =>
             clsx(
               'flex flex-1 flex-col items-center gap-1 py-2 text-[10px]',
-              isActive ? 'font-bold text-ink' : 'text-muted',
+              isActive ? 'font-bold text-ink' : 'text-muted-strong',
             )
           }
         >

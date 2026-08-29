@@ -39,7 +39,7 @@ export function Row({ className, children }: Div) {
 
 export function Label({ className, children }: Div) {
   return (
-    <div className={clsx('text-[9px] font-bold tracking-[0.09em] text-muted uppercase', className)}>
+    <div className={clsx('text-[11px] font-bold tracking-[0.08em] text-muted-strong uppercase', className)}>
       {children}
     </div>
   )
@@ -58,7 +58,7 @@ export function Chip({
       {...(onClick && on !== undefined ? { 'aria-pressed': on } : {})}
       onClick={onClick}
       className={clsx(
-        'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap',
+        'inline-flex min-h-[32px] items-center rounded-full border px-3 py-1.5 text-[11px] whitespace-nowrap',
         on ? 'border-ink bg-ink text-white' : 'border-line-strong bg-paper text-ink',
         className,
       )}
@@ -72,7 +72,7 @@ export function Tag({ children, outline, className }: Div & { outline?: boolean 
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide',
+        'inline-flex items-center rounded px-2 py-1 text-[10px] font-extrabold tracking-wide',
         outline ? 'border border-ink bg-paper text-ink' : 'bg-ink text-white',
         className,
       )}
