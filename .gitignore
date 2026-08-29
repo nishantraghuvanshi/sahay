@@ -32,3 +32,6 @@ docs/checklists/*.zip
 # local agent tooling — never commit
 CLAUDE.md
 .claude/
+
+# build artifacts
+*.tsbuildinfo
