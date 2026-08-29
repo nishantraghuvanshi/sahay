@@ -1,5 +1,6 @@
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import Calendar from './Calendar'
@@ -75,6 +76,68 @@ function mount(doses: DoseEvent[], escalations: Escalation[] = [], slots?: strin
 
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+describe('the four views', () => {
+  const openView = async (label: string) => {
+    await userEvent.click(screen.getByRole('button', { name: label }))
+  }
+
+  it('starts on the week', () => {
+    mount([])
+    expect(screen.getByText('The week · every dose at every time')).toBeInTheDocument()
+  })
+
+  it('day drops the week grid and keeps the timeline', async () => {
+    mount([])
+    await openView('Day')
+    expect(screen.queryByText('The week · every dose at every time')).not.toBeInTheDocument()
+    // The day timeline stays — it is the whole of the day view. ("Today" also names
+    // the jump-to-today chip, so match the heading rather than the text alone.)
+    expect(screen.getByText(/what was said on the call/i)).toBeInTheDocument()
+  })
+
+  it('month shows every day of the month as its own cell', async () => {
+    mount([])
+    await openView('Month')
+    expect(screen.getByText(/each day shows confirmed out of due/i)).toBeInTheDocument()
+    // A month grid is whole Monday-start weeks, so never fewer than 28 cells.
+    const now = new Date()
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    expect(screen.getAllByRole('button', { name: /\w{3} \w{3} \d+ \d{4}/ }).length)
+      .toBeGreaterThanOrEqual(last)
+  })
+
+  it('agenda reads the week straight through and drops the day timeline', async () => {
+    mount([])
+    await openView('Agenda')
+    expect(screen.getByText('The week, in order')).toBeInTheDocument()
+    expect(screen.queryByText(/what was said on the call/i)).not.toBeInTheDocument()
+  })
+
+  it('stepping moves by whatever the current view shows', async () => {
+    mount([])
+    // Week view steps a week; the label says so rather than always reading "week".
+    expect(screen.getByRole('button', { name: '‹ Week' })).toBeInTheDocument()
+    await openView('Day')
+    expect(screen.getByRole('button', { name: '‹ Day' })).toBeInTheDocument()
+    await openView('Month')
+    expect(screen.getByRole('button', { name: '‹ Month' })).toBeInTheDocument()
+  })
+
+  it('printing switches to the agenda first rather than printing whatever is up', async () => {
+    const print = vi.fn()
+    vi.stubGlobal('print', print)
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0)
+      return 0
+    })
+    mount([])
+    await userEvent.click(screen.getByRole('button', { name: /print \/ share pdf/i }))
+    expect(screen.getByText('The week, in order')).toBeInTheDocument()
+    expect(print).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+})
 
 describe('the now chip', () => {
   it('marks a slot that is actually happening now', () => {

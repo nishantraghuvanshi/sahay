@@ -50,6 +50,54 @@ import type { DoseStatus, Escalation } from '../api/types'
  */
 const NOW_WINDOW_MS = 45 * 60_000
 
+/**
+ * The four views frame `2f` puts in the header.
+ *
+ * All four read the same expansion — `slotsForDay` — so they cannot disagree about
+ * which medicines are due when. They differ only in how much time is on screen at
+ * once: a day to act on, a week to check, a month to see a pattern, an agenda to
+ * read straight through or hand to a doctor.
+ */
+type View = 'day' | 'week' | 'month' | 'agenda'
+
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'agenda', label: 'Agenda' },
+]
+
+const STEP_LABEL: Record<View, string> = {
+  day: 'Day',
+  week: 'Week',
+  month: 'Month',
+  agenda: 'Week',
+}
+
+/** Move by one screenful of whatever is on screen, not by a fixed week. */
+function step(from: Date, view: View, direction: 1 | -1): Date {
+  if (view === 'day') return addDays(from, direction)
+  if (view === 'month') {
+    const d = new Date(from)
+    d.setMonth(d.getMonth() + direction, 1)
+    return startOfDay(d)
+  }
+  return addDays(from, 7 * direction)
+}
+
+/** Every day of the month `d` falls in, padded to whole Monday-start weeks. */
+function monthGrid(d: Date): Date[] {
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  const start = startOfWeek(first)
+  const days: Date[] = []
+  for (let cur = start; cur <= last || days.length % 7 !== 0; cur = addDays(cur, 1)) {
+    days.push(cur)
+    if (days.length > 41) break
+  }
+  return days
+}
+
 const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer', 'unknown']
 
 /** Said in words, because the four are exactly what a caregiver must not have to guess at. */
@@ -151,6 +199,7 @@ export default function Calendar() {
   // A failure here must not blank the calendar, so it is read without an error gate.
   const escalations = useEscalations()
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()))
+  const [view, setView] = useState<View>('week')
 
   if (record.isLoading || doses.isLoading) return <LoadingBlock rows={6} />
   if (record.error) return <ErrorBlock error={record.error} onRetry={() => record.refetch()} />
@@ -263,18 +312,31 @@ export default function Calendar() {
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-3">
       <Header monthTitle={monthTitle} week={week} name={name} />
 
-      {/* --------------------------------------------------------- week nav */}
-      <Row className="flex-wrap gap-1.5">
-        <Chip onClick={() => setSelected(addDays(selected, -7))}>‹ Previous week</Chip>
-        <Chip on={dayKey(selected) === dayKey(today)} onClick={() => setSelected(today)}>
-          Today
-        </Chip>
-        <Chip onClick={() => setSelected(addDays(selected, 7))}>Next week ›</Chip>
+      {/* ------------------------------------------------- view + range (2f) */}
+      <Row className="flex-wrap gap-1.5 print:hidden">
+        {VIEWS.map((v) => (
+          <Chip key={v.key} on={view === v.key} onClick={() => setView(v.key)}>
+            {v.label}
+          </Chip>
+        ))}
         <span className="ml-auto text-[11px] text-muted-strong">
           {weekDue.length === 0
             ? 'nothing due yet this week'
             : `${weekConfirmed} of ${weekDue.length} confirmed so far this week`}
         </span>
+      </Row>
+
+      {/* The step is whatever the current view shows, so a press always moves the
+          page by exactly one screenful rather than by a fixed week. */}
+      <Row className="flex-wrap gap-1.5 print:hidden">
+        <Chip onClick={() => setSelected(step(selected, view, -1))}>‹ {STEP_LABEL[view]}</Chip>
+        <Chip on={dayKey(selected) === dayKey(today)} onClick={() => setSelected(today)}>
+          Today
+        </Chip>
+        <Chip onClick={() => setSelected(step(selected, view, 1))}>{STEP_LABEL[view]} ›</Chip>
+        <Link to="/medicines/edit" className="ml-auto">
+          <Chip>+ Add dose</Chip>
+        </Link>
       </Row>
 
       {/* The gate, said plainly. A caregiver looking at a full week of doses has no
@@ -301,6 +363,7 @@ export default function Calendar() {
       )}
 
       {/* ------------------------------------------------- week strip (1g) */}
+      {(view === 'day' || view === 'week') && (
       <Card className="gap-2 p-2">
         <div className="flex gap-1">
           {week.map((day, i) => (
@@ -320,10 +383,106 @@ export default function Calendar() {
           doses due that day.
         </p>
       </Card>
+      )}
+
+      {/* ----------------------------------------------------- month (2f) */}
+      {view === 'month' && (
+        <Card className="gap-2 p-2">
+          <div className="grid grid-cols-7 gap-1">
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+              <span key={i} className="px-1 text-center text-[9.5px] text-muted">
+                {d}
+              </span>
+            ))}
+            {monthGrid(selected).map((day) => {
+              const dayTally2 = tally(slotsForDay(medications, events, day))
+              const outside = day.getMonth() !== selected.getMonth()
+              return (
+                <button
+                  key={dayKey(day)}
+                  type="button"
+                  onClick={() => setSelected(day)}
+                  aria-label={day.toDateString()}
+                  className={clsx(
+                    'flex min-h-[3.1rem] flex-col items-start gap-0.5 rounded-md border px-1.5 py-1 text-left',
+                    dayKey(day) === dayKey(selected)
+                      ? 'border-ink bg-paper'
+                      : 'border-line bg-transparent',
+                    outside && 'opacity-35',
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      'text-[11px]',
+                      dayKey(day) === dayKey(today) ? 'font-bold' : 'text-muted-strong',
+                    )}
+                  >
+                    {day.getDate()}
+                  </span>
+                  {dayTally2.total > 0 && (
+                    <span className="text-[9.5px] text-muted">
+                      {dayTally2.recorded === 0
+                        ? `${dayTally2.total} due`
+                        : `${dayTally2.confirmed}/${dayTally2.total}`}
+                    </span>
+                  )}
+                  {dayTally2.attention > 0 && (
+                    <span className="text-[9.5px] font-semibold">
+                      {dayTally2.attention} to check
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <p className="px-1 text-[10px] text-muted">
+            Each day shows confirmed out of due. Tap one to read it below.
+          </p>
+        </Card>
+      )}
+
+      {/* ---------------------------------------------------- agenda (2f)
+          The whole week read straight through, which is the form that prints and the
+          form you hand to a doctor. */}
+      {view === 'agenda' && (
+        <Card className="gap-2">
+          <Label>The week, in order</Label>
+          {week.map((day, i) => {
+            const list = byDay[i] ?? []
+            return (
+              <div key={dayKey(day)} className="flex flex-col gap-1">
+                <Divider />
+                <Row className="flex-wrap items-baseline gap-x-2">
+                  <span className="text-[12px] font-bold">
+                    {day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })}
+                  </span>
+                  {dayKey(day) === dayKey(today) && <Tag outline>today</Tag>}
+                  <span className="ml-auto text-[10.5px] text-muted">
+                    {list.length === 0 ? 'nothing scheduled' : `${list.length} doses`}
+                  </span>
+                </Row>
+                {list.map((dose) => (
+                  <Row key={dose.medication.id + dose.slot} className="items-baseline gap-2">
+                    <span className="w-[3.25rem] shrink-0 text-[10px] font-bold text-muted">
+                      {slotLabel(dose.slot)}
+                    </span>
+                    <span className="min-w-0 flex-1 text-[12px]">
+                      {dose.medication.name}{' '}
+                      <span className="text-muted-strong">{dose.medication.dose}</span>
+                    </span>
+                    <SlotStatus dose={dose} now={now} />
+                  </Row>
+                ))}
+              </div>
+            )
+          })}
+        </Card>
+      )}
 
       {/* ------------------------------------------- day timeline (1g) — phone
           Shown on every width: on desktop it stays as the detail for the day picked
           out of the grid above it. */}
+      {view !== 'agenda' && (
       <Card className="gap-2">
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="text-[13px] font-bold">{selectedHeading}</span>
@@ -430,10 +589,12 @@ export default function Calendar() {
           .
         </div>
       </Card>
+      )}
 
       {/* --------------------------------------------- week grid (2f) — sm+
           Held back below `sm` and scrolled inside its own box above it, so the page
           itself never scrolls sideways on a 390px phone. */}
+      {view === 'week' && (
       <Card className="hidden gap-2 sm:flex">
         <Row className="items-baseline gap-2">
           <Label className="flex-1">The week · every dose at every time</Label>
@@ -524,6 +685,7 @@ export default function Calendar() {
           nothing on this grid can be dragged, because nothing here would save.
         </p>
       </Card>
+      )}
 
       {/* ------------------------------------------------------------ legend */}
       <Card className="gap-2">
@@ -555,13 +717,29 @@ export default function Calendar() {
       {/* --------------------------------------------------------- CTAs (1g)
           Both land on the same editor — one opens on the medicine list, the other on the
           uploader — exactly as the client redrew them. */}
-      <div className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row">
+      <div className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row print:hidden">
         <Link to="/medicines/edit" className={clsx(BTN_PRIMARY, 'flex-1')}>
           Edit these medicines
         </Link>
         <Link to="/medicines/edit" className={clsx(BTN_OUTLINE, 'flex-1')}>
           Upload new prescription
         </Link>
+        {/* Frame `2f`. The browser's own print dialog is also the share sheet and the
+            save-as-PDF on every platform this runs on, so there is nothing to build
+            behind it — and a schedule a caregiver can hand to a doctor on paper is
+            the most useful thing this screen produces. Agenda prints best, so the
+            button switches to it first rather than printing whatever happens to be
+            on screen. */}
+        <button
+          type="button"
+          onClick={() => {
+            setView('agenda')
+            requestAnimationFrame(() => window.print())
+          }}
+          className={clsx(BTN_OUTLINE, 'flex-1')}
+        >
+          Print / share PDF
+        </button>
       </div>
     </section>
   )
