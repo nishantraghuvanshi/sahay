@@ -932,6 +932,31 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
+   * Record a human's judgement of what actually happened on a call, so an
+   * automated outcome can later be measured against it.
+   *
+   * Throws on an unknown call id rather than silently matching zero rows —
+   * the same lesson as endSession()/setDoseStatus() above: an UPDATE that
+   * matches nothing must never look like a successful write.
+   *
+   * @param {string} callId
+   * @param {string} groundTruth - Free-text human judgement of the outcome
+   * @returns {Object} The updated call row
+   */
+  async setGroundTruth(callId, groundTruth) {
+    const result = this.db
+      .prepare('UPDATE calls SET ground_truth = ? WHERE call_id = ?')
+      .run(groundTruth, callId);
+
+    if (result.changes === 0) {
+      throw new Error(`Unknown call: "${callId}"`);
+    }
+
+    logger.log('db_ground_truth_set', { callId, groundTruth });
+    return this.getCall(callId);
+  }
+
+  /**
    * Save a conversation message.
    * @param {Object} message - { callId, role, content, toolCalls }
    */
