@@ -61,12 +61,18 @@ class VapiTransportAdapter extends TransportPort {
           return;
         }
 
+        // Vapi announces the real audio format in its 'start' control message.
+        // This used to be hardcoded to 2 while only sampleRate was logged, so a
+        // mono stream would be de-interleaved as if stereo — every other sample
+        // taken, yielding noise that Sarvam accepts and silently declines to
+        // transcribe. No error, healthy socket, empty transcript, and the call
+        // dies on silence-timed-out. Trust what the transport says it is sending.
+        let streamChannels = 2;
+
         ws.on('message', async (data, isBinary) => {
           try {
             if (isBinary) {
-              // Binary frame = audio chunk
-              // Vapi streams 2-channel PCM; the caller declares this because the
-              // playground streams mono through the same adapter.
+              // Binary frame = audio chunk. Channel 0 is the customer.
               await sttAdapter.transcribe(data, (transcript, isFinal, channel) => {
                 const response = {
                   type: 'transcriber-response',
@@ -75,12 +81,31 @@ class VapiTransportAdapter extends TransportPort {
                   transcriptType: isFinal ? 'final' : 'partial',
                 };
                 if (ws.readyState === 1) ws.send(JSON.stringify(response));
-              }, { channels: 2 });
+              }, { channels: streamChannels });
             } else {
               // Text frame = JSON config message
               const message = JSON.parse(data.toString());
               if (message.type === 'start') {
-                logger.log('stt_started', { sampleRate: message.sampleRate });
+                if (Number.isInteger(message.channels) && message.channels > 0) {
+                  streamChannels = message.channels;
+                }
+                logger.log('stt_started', {
+                  sampleRate: message.sampleRate,
+                  channels: message.channels,
+                  usingChannels: streamChannels,
+                  configuredSampleRate: this.providerRegistry.getSTTConfig().sample_rate,
+                });
+                if (
+                  message.sampleRate &&
+                  message.sampleRate !== this.providerRegistry.getSTTConfig().sample_rate
+                ) {
+                  logger.log('stt_sample_rate_mismatch', {
+                    transportSays: message.sampleRate,
+                    weSendToProvider: this.providerRegistry.getSTTConfig().sample_rate,
+                    consequence:
+                      'audio will be transcribed at the wrong rate — expect empty or garbled transcripts',
+                  });
+                }
               }
             }
           } catch (err) {
