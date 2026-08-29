@@ -15,10 +15,10 @@ import type { DraftMedicine } from '../../setup/store'
  */
 
 const STAGES = [
-  { label: 'Enhancing & deskewing image', ms: 700 },
-  { label: 'Extracting text (OCR)', ms: 1200 },
-  { label: 'Matching 3 medicines to drug database', ms: 1300 },
-  { label: 'Building dose schedule', ms: 800 },
+  { label: 'Enhancing & deskewing image', ms: 420 },
+  { label: 'Extracting text (OCR)', ms: 720 },
+  { label: 'Matching 3 medicines to drug database', ms: 780 },
+  { label: 'Building dose schedule', ms: 480 },
 ] as const
 
 /** Cumulative finish time per stage — also what each completed row prints. */
@@ -76,8 +76,12 @@ export default function Analysing() {
 
   useEffect(() => {
     if (!allDone) return
-    patch({ medicines: DETECTED, ocrDone: true })
-  }, [allDone, patch])
+    // Write the detection ONCE. Coming back to this screen (Schedule's back button, or the
+    // browser's) must never overwrite medicines the caregiver has since edited — and if it
+    // ever did write, the sign-off would be sitting on a list they never saw (FR-4).
+    if (draft.ocrDone) return
+    patch({ medicines: DETECTED, ocrDone: true, scheduleConfirmed: false })
+  }, [allDone, draft.ocrDone, patch])
 
   /**
    * Names surface as the stages clear — nothing before OCR has run, everything once the
@@ -158,6 +162,17 @@ export default function Analysing() {
           </Card>
         </div>
       </div>
+
+      {allDone && draft.allergies.length > 0 && (
+        <Card emphasis="rule">
+          <Row>
+            <Tag outline>check</Tag>
+            <span className="flex-1 text-[11px] leading-relaxed text-muted-strong">
+              {draft.allergies.join(', ')} on file — nothing in this prescription conflicts.
+            </span>
+          </Row>
+        </Card>
+      )}
 
       <Button className="w-full" disabled={!allDone} onClick={() => navigate('/setup/schedule')}>
         Continue

@@ -86,7 +86,7 @@ export default function Prescription() {
       <Row>
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/setup/parent')}
           aria-label="Back"
           className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-[15px] text-muted"
         >
@@ -190,11 +190,14 @@ export default function Prescription() {
 
       <Button
         className="w-full"
-        disabled={files.length === 0}
+        disabled={files.length === 0 || files.some((f) => f.progress < 100)}
         onClick={() => navigate('/setup/analysing')}
       >
         Analyse prescription
       </Button>
+      {files.some((f) => f.progress < 100) && (
+        <p className="text-center text-[11px] text-muted">Waiting for the upload to finish…</p>
+      )}
       <p className="text-[10px] text-muted">
         Three ways in — camera, gallery, files. The same uploader is reused whenever a new
         prescription arrives.

@@ -7,6 +7,7 @@ import Parent from './screens/setup/Parent'
 import Prescription from './screens/setup/Prescription'
 import Analysing from './screens/setup/Analysing'
 import Schedule from './screens/setup/Schedule'
+import Consent from './screens/setup/Consent'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -24,7 +25,7 @@ export default function App() {
         <Route path="prescription" element={<Prescription />} />
         <Route path="analysing" element={<Analysing />} />
         <Route path="schedule" element={<Schedule />} />
-        <Route path="consent" element={<Placeholder title="Before we call Mom" frame="1E.2 / 2D.2" />} />
+        <Route path="consent" element={<Consent />} />
       </Route>
 
       {/* handoff — no login, no chrome, its own layout (TRD §11) */}

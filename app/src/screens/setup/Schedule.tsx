@@ -60,6 +60,8 @@ export default function Schedule() {
   }
 
   function setSlot(id: string, index: number, time: string) {
+    // <input type="time"> emits '' mid-edit; committing that makes an unschedulable row.
+    if (!time) return
     const m = meds.find((x) => x.id === id)
     if (!m) return
     const slots = m.slots.map((s, i) => (i === index ? time : s))
@@ -92,7 +94,15 @@ export default function Schedule() {
     commit([...meds, row])
   }
 
-  const canSignOff = meds.length > 0 && unclear === 0
+  /** A row that cannot generate a dose event must not be signable (FR-4 means what it says). */
+  const incomplete = meds.filter(
+    (m) =>
+      !m.name.trim() ||
+      !m.dose.trim() ||
+      m.slots.length === 0 ||
+      m.slots.some((t) => !/^\d{2}:\d{2}$/.test(t)),
+  ).length
+  const canSignOff = meds.length > 0 && unclear === 0 && incomplete === 0
 
   return (
     <div className="flex h-full flex-col bg-canvas">
@@ -100,7 +110,7 @@ export default function Schedule() {
       <header className="flex items-center gap-2 border-b border-line bg-surface px-3 py-2.5">
         <button
           type="button"
-          onClick={() => navigate('/setup/analysing')}
+          onClick={() => navigate('/setup/prescription')}
           aria-label="Back"
           className="px-1 text-[15px] text-muted"
         >
@@ -174,7 +184,7 @@ export default function Schedule() {
       </div>
 
       {/* pinned sign-off — FR-4 */}
-      <footer className="border-t border-line bg-surface px-3 py-3">
+      <footer className="border-t border-line bg-surface px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto flex max-w-4xl flex-col gap-2.5">
           <Card emphasis="rule">
             <div className="flex items-start gap-2.5">
@@ -197,7 +207,9 @@ export default function Schedule() {
                   {!canSignOff &&
                     (meds.length === 0
                       ? ' Add at least one medicine first.'
-                      : ' Resolve the unclear rows first.')}
+                      : unclear > 0
+                        ? ' Resolve the unclear rows first.'
+                        : ' Every medicine needs a name, a dose and at least one time.')}
                   {canSignOff && ' Editing a row after ticking clears the tick.'}
                 </span>
               </label>
