@@ -31,8 +31,13 @@ CREATE TABLE IF NOT EXISTS caregivers (
 
 CREATE TABLE IF NOT EXISTS patients (
   id            TEXT PRIMARY KEY,
-  caregiver_id  TEXT NOT NULL REFERENCES caregivers(id),
-  name          TEXT NOT NULL,
+  -- Nullable: the agent resolves inbound callers, and a patient it has met but
+  -- whose caregiver nobody has recorded is a real state, not a broken row. It was
+  -- NOT NULL while onboarding was the only thing that created patients.
+  caregiver_id  TEXT REFERENCES caregivers(id),
+  -- Nullable: an inbound caller the agent has resolved by number but who has told
+  -- it no name is a real record, not a broken one.
+  name          TEXT,
   honorific     TEXT,
   phone_e164    TEXT NOT NULL UNIQUE,     -- HOT PATH: inbound resolution
   language      TEXT NOT NULL DEFAULT 'hi-IN',
@@ -43,6 +48,20 @@ CREATE TABLE IF NOT EXISTS patients (
   doctor_phone  TEXT,
   address_text  TEXT,
   meal_times    TEXT,                     -- {"breakfast":"08:00",...}
+
+  -- From the scheduler's model. `timezone` is what makes a local 'HH:MM' slot a real
+  -- instant, and getting it wrong moves every dose by hours; `quiet_windows` is the
+  -- caregiver's do-not-call hours, which the dialler honours except for a priority
+  -- medicine. Both are load-bearing for placing a call at the right moment.
+  timezone      TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  quiet_windows TEXT,                     -- [{"from":"22:00","to":"07:00"}]
+
+  -- The single medicine the agent was originally built around, before
+  -- `medications` existed. Still read on the call path to fill a prompt variable.
+  -- Superseded by `medications`; kept because 28 call sites still name it.
+  drug_name     TEXT,
+  notes         TEXT,
+  updated_at    TEXT,
 
   -- FR-4 gate. NULL = no call may ever be placed.
   schedule_signed_off_at TEXT,
@@ -80,7 +99,12 @@ CREATE TABLE IF NOT EXISTS medications (
   -- When the course begins. From the scheduler's model (agent/): without it a
   -- taper — the same medicine at a different dose from a later date — cannot be
   -- expressed, and the dialler has no way to know a course has not started yet.
-  start_date    TEXT,
+  --
+  -- NOT NULL deliberately. It is half of the (patient_id, name, start_date) key
+  -- that lets a taper exist as two rows, and SQLite treats NULLs as distinct in a
+  -- unique index — so a nullable start_date would silently admit duplicates of the
+  -- regimen the index exists to deduplicate.
+  start_date    TEXT NOT NULL DEFAULT (date('now')),
 
   -- [GAP-7] Provenance. Safety rule S3 requires the verbatim line the model read
   -- to survive to a reviewer; without these the evidence for every row is
@@ -97,11 +121,19 @@ CREATE TABLE IF NOT EXISTS medications (
   excluded         INTEGER NOT NULL DEFAULT 0,
   exclusion_reason TEXT,
 
-  -- design doc §10: the scheduler accepts only confirmed schedules, and these are
-  -- REQUIRED rather than nullable-with-a-default. A nullable confirmed_by is a
-  -- gate that defaults to open.
-  confirmed_by  TEXT NOT NULL REFERENCES caregivers(id),
-  confirmed_at  TEXT NOT NULL,
+  -- Who signed this row off, and when. Nullable, which reverses an earlier call in
+  -- this file — the reasoning changed when the two schemas merged.
+  --
+  -- design doc §10 requires that no unconfirmed schedule reaches the scheduler. That
+  -- is enforced in the two places that actually bite: POST /app/onboarding refuses a
+  -- draft whose schedule was not signed off, and the dial policy's *first* check is
+  -- `patient.schedule_signed_off_at == null -> skip`. Making the column NOT NULL as
+  -- well only blocked rows that legitimately exist before anyone has confirmed them
+  -- — a seeded regimen, or a prescription read but not yet reviewed.
+  confirmed_by  TEXT REFERENCES caregivers(id),
+  confirmed_at  TEXT,
+  created_at    TEXT,
+  updated_at    TEXT,
 
   -- When the caregiver stopped this medicine. Soft rather than a DELETE: dose_events
   -- reference this row, and a stopped medicine's history is still the record of what
@@ -109,6 +141,12 @@ CREATE TABLE IF NOT EXISTS medications (
   stopped_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_meds_patient ON medications(patient_id);
+
+-- One regimen per medicine per start date. Re-running a seed, or the same taper
+-- being written twice, updates the row instead of adding a duplicate; a later
+-- start_date is a genuinely different regimen and gets its own row.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meds_patient_name_start
+  ON medications(patient_id, name, start_date);
 
 -- ============ calls ============
 
@@ -143,6 +181,11 @@ CREATE TABLE IF NOT EXISTS dose_events (
   -- status='deferred', which already means "put off to a later time, still expected".
   rescheduled_to  TEXT,
   call_session_id TEXT REFERENCES call_sessions(id),
+  -- The provider's own call id, which is what the dialler has to hand when it logs
+  -- an outcome. Not a duplicate of call_session_id: that points at `call_sessions`
+  -- (the record's view of a call), this at `calls` (the dialler's working state).
+  -- Either may be set without the other.
+  call_id         TEXT,
   -- 'pending' is the scheduler's own state: the row exists so retry bookkeeping has
   -- somewhere to live, and nothing has been established yet. It is NOT an outcome —
   -- the app reads it exactly as it reads no row at all.
@@ -161,6 +204,9 @@ CREATE TABLE IF NOT EXISTS dose_events (
   -- caregiver ticked in the app and one the patient confirmed on a call are
   -- different facts, and the record should not flatten them.
   actor           TEXT,
+  -- When the outcome was established, as distinct from when the row was written.
+  confirmed_at    TEXT,
+  updated_at      TEXT,
   note            TEXT,
   created_at      TEXT NOT NULL
 );
@@ -241,4 +287,63 @@ CREATE TABLE IF NOT EXISTS medication_changes (
   diff         TEXT NOT NULL,
   consent_text TEXT NOT NULL,
   consent_ack  INTEGER NOT NULL
+);
+
+
+-- ============ the dialler's own working state ============
+--
+-- Owned by agent/. Nothing outside it reads these: they are how a call is conducted,
+-- not what a call produced. What a call *produced* — a dose outcome, an observation,
+-- an escalation — lands in the tables above, which is what the caregiver app renders.
+--
+-- Kept as their own tables rather than merged into `call_sessions` because the two
+-- describe different things at different grains, and a merge would be a third
+-- rewrite for no reader's benefit.
+
+CREATE TABLE IF NOT EXISTS calls (
+  id               TEXT PRIMARY KEY,
+  call_id          TEXT UNIQUE NOT NULL,   -- the provider's id
+  use_case         TEXT,
+  language         TEXT,
+  phone            TEXT,
+  variables        TEXT,
+  outcome_label    TEXT,
+  outcome_source   TEXT,
+  outcome_reason   TEXT,
+  transcript       TEXT,
+  duration_seconds REAL,
+  cost             REAL,
+  created_at       TEXT DEFAULT (datetime('now')),
+  ended_at         TEXT,
+  prompt_version   TEXT,
+  parent_id        TEXT,
+  attempt_number   INTEGER,
+  recording_url    TEXT,
+  ground_truth     TEXT,
+  -- When the caregiver was told about this call, and how. Stamped by the alert
+  -- plugin so a second failure does not send a second alert about the same call.
+  alert_sent_at    TEXT,
+  alert_channel    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT UNIQUE NOT NULL,
+  patient_id    TEXT REFERENCES patients(id) ON DELETE CASCADE,
+  call_id       TEXT,
+  direction     TEXT,
+  status        TEXT NOT NULL,
+  fields_so_far TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT,
+  ended_at      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id         TEXT PRIMARY KEY,
+  call_id    TEXT NOT NULL REFERENCES calls(call_id) ON DELETE CASCADE,
+  role       TEXT NOT NULL,
+  content    TEXT,
+  tool_calls TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
 );

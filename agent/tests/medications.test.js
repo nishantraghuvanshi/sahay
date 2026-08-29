@@ -69,8 +69,8 @@ describe('medications', () => {
     assert.strictEqual(meds.length, 1);
     assert.strictEqual(meds[0].name, 'Metformin');
     assert.strictEqual(meds[0].dose, '500mg');
-    assert.strictEqual(meds[0].food_rule, 'after');
-    assert.deepStrictEqual(JSON.parse(meds[0].times), ['08:00', '20:00']);
+    assert.strictEqual(meds[0].with_food, 'after');
+    assert.deepStrictEqual(JSON.parse(meds[0].slots), ['08:00', '20:00']);
   });
 
   test('upsertMedication is idempotent on (patientId, name, startDate)', async () => {

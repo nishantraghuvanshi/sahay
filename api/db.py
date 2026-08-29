@@ -128,7 +128,20 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "escalations": {
         "dose_event_id": "TEXT",
     },
+    "patients": {
+        "timezone": "TEXT NOT NULL DEFAULT 'Asia/Kolkata'",
+        "quiet_windows": "TEXT",
+        "drug_name": "TEXT",
+        "notes": "TEXT",
+        "updated_at": "TEXT",
+    },
 }
+_ADDED_COLUMNS["calls"] = {"alert_sent_at": "TEXT", "alert_channel": "TEXT"}
+_ADDED_COLUMNS["medications"].update({"created_at": "TEXT", "updated_at": "TEXT"})
+_ADDED_COLUMNS["dose_events"]["call_id"] = "TEXT"
+_ADDED_COLUMNS["dose_events"].update(
+    {"confirmed_at": "TEXT", "updated_at": "TEXT"}
+)
 
 
 def _migrate(con: sqlite3.Connection) -> list[str]:
