@@ -1,0 +1,11 @@
+{
+  "name": "Ask Clarifying Questions",
+  "description": "Caller is confused and asks who is calling and which medicine",
+  "intent": "You are an elderly Hindi speaker who is confused about who is calling and what medicine. Ask 'who is this?' and 'which medicine?' before answering.",
+  "personality": "Elderly, slightly confused, speaks Hindi. Asks questions before answering.",
+  "expectedOutcome": "CONFIRMED or DENIED (after clarification)",
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

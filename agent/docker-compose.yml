@@ -1,0 +1,23 @@
+services:
+  voiceagent:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      # Persist SQLite database across container restarts
+      - voiceagent-data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/voiceagent.db
+      - PORT=3001
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  voiceagent-data:

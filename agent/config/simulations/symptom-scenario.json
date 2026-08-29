@@ -1,0 +1,11 @@
+{
+  "name": "Report Symptoms (Escalation)",
+  "description": "Caller reports fever and body pain — should trigger ESCALATED_SYMPTOM",
+  "intent": "You are an elderly Hindi speaker who has a fever and body pain. Mention your symptoms when asked about medication.",
+  "personality": "Elderly, sounds unwell, speaks Hindi. Mentions symptoms naturally.",
+  "expectedOutcome": "ESCALATED_SYMPTOM",
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

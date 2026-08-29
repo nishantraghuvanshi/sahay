@@ -1,0 +1,12 @@
+{
+  "name": "Long Silence Mid-Call",
+  "description": "Tests the turn manager's silence watchdog and retry prompt — the caller answers, then goes quiet.",
+  "intent": "You are an elderly Hindi speaker. Say 'नमस्ते' and then stay completely silent for a long time. Do not respond to further questions.",
+  "personality": "Elderly, hard of hearing, distracted, speaks Hindi.",
+  "expectedOutcome": "UNCLEAR",
+  "expectBehaviour": "Agent issues one retry prompt, waits, then ends the call gracefully rather than hanging.",
+  "variables": {
+    "parent_name": "रोहन",
+    "drug_name": "Crocin"
+  }
+}

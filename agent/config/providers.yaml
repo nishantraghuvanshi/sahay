@@ -1,0 +1,85 @@
+# Provider Configuration
+# =====================
+# Swap any STT/TTS/LLM provider by changing the "active" section below.
+# No code changes needed — the bridge server reads this file at startup.
+#
+# To add a new provider:
+#   1. Create a new file in src/providers/<type>/<name>.js
+#   2. Implement the interface in src/providers/<type>/base.js
+#   3. Register it in src/providers/registry.js
+#   4. Add its config below
+#   5. Set the active provider name
+
+active:
+  stt: sarvam
+  llm: sarvam
+  tts: sarvam
+
+# ── STT (Speech-to-Text) ──────────────────────────────────────────
+
+stt:
+  sarvam:
+    model: "saaras:v3"
+    language: "hi-IN"          # hi-IN, en-IN, ta-IN, etc. Use "unknown" for auto-detect
+    mode: "transcribe"         # "transcribe" (same language) or "translate" (to English)
+    sample_rate: 16000
+    high_vad_sensitivity: true
+    api_key_env: "SARVAM_API_KEY"
+    # Bridge server route: /api/stt/sarvam (WebSocket)
+
+  deepgram:
+    model: "nova-3"
+    language: "hi"
+    smart_format: true
+    endpointing: 300           # ms of silence to trigger endpoint
+    api_key_env: "DEEPGRAM_API_KEY"
+    # Native Vapi provider — no bridge server route needed
+    # To use: set active.stt to "deepgram" and remove custom-transcriber from assistant.json
+
+# ── LLM (Language Model) ──────────────────────────────────────────
+
+llm:
+  sarvam:
+    model: "sarvam-105b"
+    base_url: "https://api.sarvam.ai/v1"
+    temperature: 0.3
+    max_tokens: 250
+    api_key_env: "SARVAM_API_KEY"
+    # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
+
+  groq:
+    model: "llama-3.3-70b-versatile"
+    base_url: "https://api.groq.com/openai/v1"
+    temperature: 0.3
+    max_tokens: 250
+    api_key_env: "GROQ_API_KEY"
+    # Bridge server route: /llm/chat/completions (OpenAI-compatible proxy)
+
+  openai:
+    model: "gpt-4o-mini"
+    base_url: "https://api.openai.com/v1"
+    temperature: 0.3
+    max_tokens: 250
+    api_key_env: "OPENAI_API_KEY"
+    # Native Vapi provider — no bridge server route needed
+
+# ── TTS (Text-to-Speech) ──────────────────────────────────────────
+
+tts:
+  sarvam:
+    model: "bulbul:v3"
+    speaker: "shubh"            # Male voices: shubh, aditya, rahul, etc.
+    target_language_code: "hi-IN"
+    speech_sample_rate: 8000   # 8000 for telephony, 22050 for general use
+    output_audio_codec: "mulaw" # mulaw for telephony, mp3 for general use
+    pace: 0.9                   # 0.9 = slightly slower (elderly-friendly)
+    api_key_env: "SARVAM_API_KEY"
+    # Bridge server route: /api/tts/sarvam (HTTP webhook)
+
+  elevenlabs:
+    model: "eleven_turbo_v2_5"
+    voice_id: "pNoyz6rXpT7jW"
+    stability: 0.5
+    similarity_boost: 0.75
+    api_key_env: "ELEVENLABS_API_KEY"
+    # Bridge server route: /api/tts/elevenlabs (HTTP webhook)
