@@ -7,8 +7,9 @@ const { OUTCOMES } = require('../outcomes');
 /**
  * Escalation Alert Plugin
  *
- * Closes the loop on ESCALATED_SYMPTOM. Without it the highest-stakes outcome
- * the product can produce is a database row that nobody reads.
+ * Closes the loop on ESCALATED_SYMPTOM and ESCALATED_DISTRESS. Without it the
+ * highest-stakes outcomes the product can produce are a database row that
+ * nobody reads.
  *
  * Two messages, two recipients, deliberately different (PILOT-PLAN.md §2.3):
  *
@@ -51,7 +52,8 @@ class EscalationAlertPlugin {
    * @param {Object} callData - { callId, variables, ... }
    */
   async onEscalation(outcome, callData = {}) {
-    if (!outcome || outcome.label !== OUTCOMES.ESCALATED_SYMPTOM) return;
+    const ESCALATING_LABELS = [OUTCOMES.ESCALATED_SYMPTOM, OUTCOMES.ESCALATED_DISTRESS];
+    if (!outcome || !ESCALATING_LABELS.includes(outcome.label)) return;
 
     const callId = callData.callId;
     const vars = callData.variables || {};
@@ -98,8 +100,9 @@ class EscalationAlertPlugin {
         console.error(JSON.stringify({
           event: 'escalation_alert_failed',
           callId,
+          label: outcome.label,
           error: err.message,
-          detail: 'ESCALATED_SYMPTOM alert could not be delivered.',
+          detail: `${outcome.label} alert could not be delivered.`,
         }));
       }
     }
@@ -121,7 +124,7 @@ class EscalationAlertPlugin {
 /** @private */
 function operatorMessage(outcome, callData) {
   return [
-    `ESCALATED_SYMPTOM · ${callData.variables?.parent_name || 'unknown'} · ${callData.callId}`,
+    `${outcome.label} · ${callData.variables?.parent_name || 'unknown'} · ${callData.callId}`,
     `source: ${outcome.source}`,
     `reason: ${outcome.reason}`,
   ].join('\n');

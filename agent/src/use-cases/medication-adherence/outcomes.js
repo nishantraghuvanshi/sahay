@@ -4,6 +4,7 @@ const {
   CONFIRMED_KEYWORDS,
   DENIED_KEYWORDS,
   SYMPTOM_KEYWORDS,
+  DISTRESS_KEYWORDS,
   NEGATION_AFTER,
   NEGATION_BEFORE,
   NEGATION_EXEMPT_KEYWORDS,
@@ -21,12 +22,25 @@ const {
  * UNCLEAR was likewise split out of DENIED — "I have not taken it" and
  * "we could not understand them" are different facts, and counting the
  * second as the first corrupts the adherence rate.
+ *
+ * ESCALATED_DISTRESS was split out of ESCALATED_SYMPTOM: a medical emergency
+ * (chest pain, a fall, confusion) needs a doctor NOW and a fixed, unhurried
+ * reassurance sequence, whereas emotional distress (wanting to stop
+ * treatment, self-harm ideation) needs no probing or coping advice, only a
+ * gentle close and a caregiver who can call back. Conflating them would have
+ * either rushed a person in distress through a "contact your doctor now"
+ * script, or under-reacted to a real medical emergency by routing it through
+ * a softer close. A stale prompt still emitting the legacy `ESCALATED` label
+ * (see normaliseLabel) always normalises to ESCALATED_SYMPTOM, never to
+ * ESCALATED_DISTRESS — the safer of the two outcomes is the one silence
+ * defaults to.
  */
 const OUTCOMES = {
   CONFIRMED: 'CONFIRMED',
   DENIED: 'DENIED',
   UNCLEAR: 'UNCLEAR',
   ESCALATED_SYMPTOM: 'ESCALATED_SYMPTOM',
+  ESCALATED_DISTRESS: 'ESCALATED_DISTRESS',
   INCOMPLETE: 'INCOMPLETE',
   NO_ANSWER: 'NO_ANSWER',
   ERROR: 'ERROR',
@@ -211,6 +225,9 @@ function negatedAt(text, idx, kw) {
 /**
  * Keyword matching on the caller's speech (fallback).
  * Symptom keywords checked FIRST — "haan le liya lekin bukhar bhi hai" escalates.
+ * Distress keywords checked second, ahead of confirmed/denied, for the same
+ * reason: a person in distress who also answers the dose question still
+ * needs to be routed to ESCALATED_DISTRESS, not CONFIRMED or DENIED.
  * @private
  */
 function checkKeywords(callerText) {
@@ -223,6 +240,14 @@ function checkKeywords(callerText) {
       label: OUTCOMES.ESCALATED_SYMPTOM,
       source: 'keyword_match',
       reason: 'symptom_keyword_detected',
+    };
+  }
+  const distressHit = DISTRESS_KEYWORDS.some((kw) => text.includes(kw) && !isNegated(text, kw));
+  if (distressHit) {
+    return {
+      label: OUTCOMES.ESCALATED_DISTRESS,
+      source: 'keyword_match',
+      reason: 'distress_keyword_detected',
     };
   }
   if (CONFIRMED_KEYWORDS.some((kw) => text.includes(kw))) {

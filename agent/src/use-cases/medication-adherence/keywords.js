@@ -41,6 +41,27 @@ const SYMPTOM_KEYWORDS = [
 ];
 
 /**
+ * Distress stems that trigger ESCALATED_DISTRESS — separate from
+ * SYMPTOM_KEYWORDS because a medical emergency and emotional distress get
+ * different (and differently urgent) responses. Kept as multi-word phrases
+ * rather than single stems, since a bare stem like "जीना" (to live) only
+ * signals distress in combination with a negation, and matching on the full
+ * phrase avoids re-running that negation logic against itself.
+ */
+const DISTRESS_KEYWORDS = [
+  // Romanized
+  'marna chahta hoon', 'marna chahti hoon', 'jeena nahi chahta', 'jeena nahi chahti',
+  'jeene ka man nahi', 'khud ko nuksan', 'atmahatya',
+  'dawai band karna chahta hoon', 'dawai band karna chahti hoon',
+  'ilaj band karna chahta hoon', 'ilaj band karna chahti hoon',
+  // Devanagari
+  'मरना चाहता हूँ', 'मरना चाहती हूँ', 'जीना नहीं चाहता', 'जीना नहीं चाहती',
+  'जीने का मन नहीं', 'खुद को नुकसान', 'आत्महत्या',
+  'दवाई बंद करना चाहता हूँ', 'दवाई बंद करना चाहती हूँ',
+  'इलाज बंद करना चाहता हूँ', 'इलाज बंद करना चाहती हूँ',
+];
+
+/**
  * Negation tokens that FOLLOW the thing being negated.
  *
  * Hindi negation is post-positional — "दर्द नहीं है" (pain not is). A trailing
@@ -73,6 +94,7 @@ module.exports = {
   CONFIRMED_KEYWORDS,
   DENIED_KEYWORDS,
   SYMPTOM_KEYWORDS,
+  DISTRESS_KEYWORDS,
   NEGATION_AFTER,
   NEGATION_BEFORE,
   NEGATION_EXEMPT_KEYWORDS,

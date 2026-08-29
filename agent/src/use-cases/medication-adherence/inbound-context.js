@@ -67,7 +67,7 @@ function buildContextLine(resolution, lang) {
   // Reference that a previous call happened, without restating a clinical
   // claim we would then be asserting. The reason field is our own label,
   // not the caller's words, so it is not repeated back as if quoted.
-  if (last.outcome_label === 'ESCALATED_SYMPTOM') {
+  if (last.outcome_label === 'ESCALATED_SYMPTOM' || last.outcome_label === 'ESCALATED_DISTRESS') {
     return lang === 'hi'
       ? 'पिछली बार आपने तबीयत की बात की थी। '
       : 'Last time you mentioned not feeling well. ';
