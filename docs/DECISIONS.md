@@ -90,6 +90,7 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 | 06:12 | A one-off move is a `dose_events` row keyed on the slot it **came from**, status `deferred`, with the new time in `rescheduled_to` | `deferred` already means "put off to a later time, and still expected", which is exactly what a moved dose is. Keying on the original slot makes the move idempotent and reversible — a second move corrects the first instead of stacking rows |
 | 06:14 | An **answered dose cannot be moved**, in the UI and at the endpoint | A confirmed dose is a record of what happened. Silently rewriting its time would falsify that rather than reschedule anything |
 | 06:16 | `slotsForDay` applies reschedules, including across days, and never draws a moved occurrence twice | Drawing it at both the old and new time would also make the count of what is due wrong on both days — and that count is what the week strip and the day tally are built from |
+| 06:25 | ⚠️ **Calendar drag-to-reschedule ships mouse-only** — no keyboard path, no touch. Flagged and deferred, not fixed | HTML5 drag-and-drop does not fire on a touchscreen, so on a phone the `2f` gesture does nothing. Accepted for now because nothing could be rescheduled at all before and the medicine editor is still a full accessible path to every time change — no capability is drag-only. The fix is a per-dose Move control calling the same `POST /app/doses/move` and `postMedications` the drop already calls, so it is a second way in rather than new behaviour |
 
 ---
 

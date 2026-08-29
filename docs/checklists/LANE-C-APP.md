@@ -313,6 +313,17 @@
 - [ ] Caregiver app usable on a phone
 - [ ] Tap targets sized for a thumb — and the 8.5px micro-label is **not** shipped at
       8.5px (10–11px, see `WIREFRAMES §2.2`)
+- [ ] ⚠️ **Calendar drag-to-reschedule has no keyboard or touch path.** The week grid uses
+      HTML5 drag-and-drop, which is mouse-only: it does not respond to a keyboard, and it
+      does not fire on a touchscreen. So on the device the demo is most likely to be filmed
+      on, the gesture `2f` specifies simply does nothing.
+      ↳ Not a regression — nothing could be rescheduled at all before. The medicine editor
+      remains a full keyboard-accessible path to every time change, so no capability is
+      exclusive to the drag. Flagged, deliberately deferred.
+      ↳ The fix is a per-dose **Move** control on the day timeline: a button opening an
+      `<input type="time">` (plus a day picker for cross-day moves), calling the same
+      `POST /app/doses/move` and `postMedications` the drop already calls. The writes exist
+      and are tested; this is a second way in, not new behaviour
 - [ ] `tel:` links actually open the dialler on a real handset, number pre-filled
 - [ ] Test on a **second physical device** — this is what happens on camera
 

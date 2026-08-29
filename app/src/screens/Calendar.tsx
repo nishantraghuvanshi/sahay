@@ -46,6 +46,13 @@ import type { DoseStatus, Escalation } from '../api/types'
  * medicine's slot itself and moves every future day with it. Picking the wrong one is
  * destructive in a way a caregiver would not notice, so the cell says which it will be before
  * the drop and an answered dose refuses to move at all: that is history, not schedule.
+ *
+ * ⚠️ KNOWN GAP, flagged and deferred: the drag is HTML5 drag-and-drop, so it is mouse-only.
+ * It does not respond to a keyboard and does not fire on a touchscreen — on a phone the
+ * gesture does nothing at all. No capability is exclusive to it (the medicine editor changes
+ * every time, accessibly), but the accessible equivalent *on this screen* is a per-dose Move
+ * control calling the same two writes the drop already calls. See docs/checklists/LANE-C-APP.md
+ * under Mobile.
  */
 
 /**
