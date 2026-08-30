@@ -3,7 +3,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
 
-const { assertSafeToServe, OPT_OUT } = require('../src/core/safety-guard');
+const { assertSafeToServe, resolveBindHost, isInsecureLocalOn, OPT_OUT } = require('../src/core/safety-guard');
 
 /**
  * The guard exists because an audit found API_KEY empty and
@@ -145,5 +145,55 @@ describe('safety-guard', () => {
 
   test('throws a clear error when called without a transport', () => {
     assert.throws(() => assertSafeToServe(SAFE), /needs the resolved active transport/);
+  });
+
+  test('a missing transport still throws even when insecure mode is on', () => {
+    // Ordering matters: the transport check is a programming-error guard, not
+    // a security check, and must not be swallowed by ALLOW_INSECURE_LOCAL.
+    assert.throws(
+      () => assertSafeToServe({ [OPT_OUT]: '1' }),
+      /needs the resolved active transport/
+    );
+  });
+});
+
+describe('safety-guard — isInsecureLocalOn', () => {
+  test('mirrors the opt-out semantics assertSafeToServe uses', () => {
+    assert.strictEqual(isInsecureLocalOn({ [OPT_OUT]: '1' }), true);
+    assert.strictEqual(isInsecureLocalOn({ [OPT_OUT]: 'false' }), false);
+    assert.strictEqual(isInsecureLocalOn({}), false);
+  });
+});
+
+describe('safety-guard — resolveBindHost', () => {
+  test('secure mode: HOST passes through unchanged, including unset', () => {
+    assert.strictEqual(resolveBindHost({}), undefined);
+    assert.strictEqual(resolveBindHost({ HOST: '0.0.0.0' }), '0.0.0.0');
+    assert.strictEqual(resolveBindHost({ HOST: '127.0.0.1' }), '127.0.0.1');
+  });
+
+  test('insecure mode with HOST unset defaults to loopback, not "all interfaces"', () => {
+    assert.strictEqual(resolveBindHost({ [OPT_OUT]: '1' }), '127.0.0.1');
+  });
+
+  test('insecure mode with HOST explicitly loopback passes through', () => {
+    assert.strictEqual(resolveBindHost({ [OPT_OUT]: '1', HOST: '127.0.0.1' }), '127.0.0.1');
+    assert.strictEqual(resolveBindHost({ [OPT_OUT]: '1', HOST: 'localhost' }), 'localhost');
+    assert.strictEqual(resolveBindHost({ [OPT_OUT]: '1', HOST: '::1' }), '::1');
+  });
+
+  test('insecure mode with an explicit non-loopback HOST refuses to start', () => {
+    assert.throws(
+      () => resolveBindHost({ [OPT_OUT]: '1', HOST: '0.0.0.0' }),
+      /HOST=0\.0\.0\.0 is not loopback/
+    );
+    assert.throws(
+      () => resolveBindHost({ [OPT_OUT]: '1', HOST: '10.0.0.5' }),
+      /is not loopback/
+    );
+  });
+
+  test('a false-y opt-out leaves HOST=0.0.0.0 alone (secure mode is not this function\'s job)', () => {
+    assert.strictEqual(resolveBindHost({ [OPT_OUT]: 'false', HOST: '0.0.0.0' }), '0.0.0.0');
   });
 });

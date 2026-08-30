@@ -19,7 +19,7 @@ const { loadProvidersConfig } = require('./core/config/loader');
 const ConversationEngine = require('./core/engine/engine');
 const PluginRegistry = require('./core/plugins/registry');
 const { assertPersistenceSatisfied } = require('./core/persistence-guard');
-const { assertSafeToServe } = require('./core/safety-guard');
+const { assertSafeToServe, resolveBindHost, isInsecureLocalOn, OPT_OUT } = require('./core/safety-guard');
 const { asyncRoute, errorMiddleware, installProcessHandlers } = require('./core/errors');
 const { createScheduler } = require('./core/scheduler/loop');
 const { createDoseTick } = require('./use-cases/medication-adherence/scheduling/tick');
@@ -79,6 +79,11 @@ const repository = useSqlite
   ? new SqliteRepository({ dbPath: useSqlite })
   : new ConsoleRepository();
 
+// Resolved absolute path for the boot log — repository.dbPath may be
+// relative (a test spawning a server with DB_PATH=./tmp/x.db), and null for
+// ConsoleRepository, which has no file at all.
+const dbPath = repository.dbPath ? path.resolve(repository.dbPath) : null;
+
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
 //     without persistence (inbound context, resume-after-drop).
 assertPersistenceSatisfied(useCase, repository);
@@ -118,6 +123,26 @@ const playgroundTransport = transportRegistry.getTransport('playground');
 //     moving it this far down still fails closed before any request can
 //     reach a route.
 assertSafeToServe(process.env, transport);
+
+// 8d. When ALLOW_INSECURE_LOCAL is on, the process must not become reachable
+// from the network — this project routinely exposes the server through a
+// public tunnel, and a process bound to all interfaces with API_KEY,
+// transport secrets and operator alerting all off is one tunnel restart away
+// from an open PHI endpoint. resolveBindHost() throws if HOST names anything
+// but loopback while insecure; otherwise it defaults insecure mode to
+// 127.0.0.1 and leaves HOST alone when insecure mode is off.
+const BIND_HOST = resolveBindHost(process.env);
+if (isInsecureLocalOn(process.env)) {
+  // Loud on every boot, not once — this is exactly the state that must never
+  // be missed by whoever is reading the log.
+  console.log(JSON.stringify({
+    event: 'auth_disabled',
+    detail: `${OPT_OUT} is set — API_KEY, the active transport's own secret(s), guardrails ` +
+      `and operator alerting are NOT enforced. Bound to ${BIND_HOST} only. Never set ` +
+      `${OPT_OUT} in a deployment.`,
+    timestamp: new Date().toISOString(),
+  }));
+}
 
 // --- Server ---
 
@@ -175,6 +200,13 @@ server.on('upgrade', (req, socket, head) => {
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
+// The webhook URL actually wired into the transport — computed once and
+// reused verbatim in the boot log below, so the two can never disagree. A
+// log rebuilt from PORT alone can print localhost while the transport is
+// genuinely pointed at a public tunnel hostname, which is exactly the wrong
+// answer during the debugging session where this line matters.
+const webhookUrl = process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`;
+
 // Start transport — the active transport wires whatever routes/sockets it
 // needs. Vapi may add /llm/chat/completions, /api/tts/:provider, /webhook
 // and the /api/stt socket (only the bridged ones); ElevenLabs and the
@@ -185,7 +217,7 @@ transport.start(server, engine, {
   providersConfig,
   strategy,
   repository,
-  webhookUrl: process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`,
+  webhookUrl,
 }).catch((err) => {
   // A transport that cannot finish starting must not take the server with it.
   // The routes it registered synchronously are already live, and the other
@@ -546,10 +578,20 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
 }
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+
+// BIND_HOST is only set when it must be — insecure mode (forced to
+// loopback), or an operator explicitly configured HOST. Passing an explicit
+// `undefined` host to listen() is not the same overload as omitting the
+// argument entirely, so branch rather than rely on that being interchangeable.
+const bootListening = () => {
   console.log(JSON.stringify({
     event: 'server_listening',
     port: PORT,
+    host: BIND_HOST || '0.0.0.0',
+    active_transport: transportRegistry.getActiveTransportName(),
+    db_path: dbPath,
+    auth_mode: isInsecureLocalOn(process.env) ? 'INSECURE' : 'enforced',
+    webhook_url: webhookUrl,
     use_case: strategy.name,
     prompt_version: strategy.getPromptVersion(),
     active_stt: providersConfig.active.stt,
@@ -565,4 +607,10 @@ server.listen(PORT, () => {
     },
     timestamp: new Date().toISOString(),
   }));
-});
+};
+
+if (BIND_HOST) {
+  server.listen(PORT, BIND_HOST, bootListening);
+} else {
+  server.listen(PORT, bootListening);
+}
