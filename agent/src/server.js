@@ -16,6 +16,8 @@ const PluginRegistry = require('./core/plugins/registry');
 const { assertPersistenceSatisfied } = require('./core/persistence-guard');
 const { assertSafeToServe } = require('./core/safety-guard');
 const { asyncRoute, errorMiddleware, installProcessHandlers } = require('./core/errors');
+const { createScheduler } = require('./core/scheduler/loop');
+const { createDoseTick } = require('./use-cases/medication-adherence/scheduling/tick');
 
 const { createWebhookCapture } = require('./utils/webhook-capture');
 
@@ -331,6 +333,50 @@ app.get('/api/calls/:callId', asyncRoute(async (req, res) => {
 // walks one ordered stack, so a handler mounted earlier would catch nothing —
 // the same ordering property that once served patient data before the auth
 // middleware ran.
+// --- Dose scheduler ---
+//
+// OFF unless SCHEDULER_ENABLED is explicitly true. This is a deliberate
+// exception to the fail-closed default used everywhere else in this file: the
+// dangerous state here is not "unconfigured", it is "dialling". An
+// auto-starting dialler would place real phone calls to whatever numbers are
+// seeded, from any machine that happens to run `npm start`, at whatever hour.
+// Off-unless-asked is the safe default when the side effect leaves the process.
+const SCHEDULER_ENABLED = String(process.env.SCHEDULER_ENABLED || '').toLowerCase() === 'true';
+const SCHEDULER_INTERVAL_MS = Number(process.env.SCHEDULER_INTERVAL_MS || 60000);
+
+/**
+ * The one piece of transport the tick needs. Injected here so the use-case
+ * layer keeps importing no vendor code.
+ */
+async function dialPatient({ doseEvent, medication, patient }) {
+  const assistantId = process.env.VAPI_ASSISTANT_ID;
+  if (!assistantId) throw new Error('VAPI_ASSISTANT_ID not set — cannot dial a scheduled dose');
+
+  const call = await transport.createCall(assistantId, patient.phone_e164, {
+    parent_name: patient.name,
+    drug_name: medication && medication.name,
+    language: patient.language || 'hi',
+  });
+  return { callId: call && call.id };
+}
+
+let scheduler = null;
+if (SCHEDULER_ENABLED) {
+  scheduler = createScheduler({
+    tick: createDoseTick({ repository, dial: dialPatient }),
+    intervalMs: SCHEDULER_INTERVAL_MS,
+  });
+  scheduler.start();
+}
+console.log(JSON.stringify({
+  event: SCHEDULER_ENABLED ? 'scheduler_started' : 'scheduler_disabled',
+  intervalMs: SCHEDULER_ENABLED ? SCHEDULER_INTERVAL_MS : null,
+  detail: SCHEDULER_ENABLED
+    ? 'Due doses will be dialled automatically.'
+    : 'No dose will be dialled. Set SCHEDULER_ENABLED=true to enable outbound dialling.',
+  timestamp: new Date().toISOString(),
+}));
+
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 3001;
