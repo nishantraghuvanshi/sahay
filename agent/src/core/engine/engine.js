@@ -75,22 +75,35 @@ class ConversationEngine {
       // The alert plugin stamps alert_sent_at via an UPDATE, so the row has to
       // exist first — otherwise the stamp lands on zero rows and escalation
       // latency is silently unrecordable.
+      //
+      // A failed save must never take the escalation check down with it — a
+      // lost row is recoverable, a lost caregiver alert is not. So this is
+      // its own try/catch, and everything below runs unconditionally whether
+      // save() succeeded or not.
       if (this.repository) {
-        await this.repository.save({
-          ...outcome,
-          callId: callData.callId,
-          transcript: callData.transcript,
-          duration: callData.duration,
-          cost: callData.cost,
-          recordingUrl: callData.recordingUrl || null,
-          // Which prompt produced this outcome. Without it, a mid-pilot prompt
-          // change makes every prior call unattributable.
-          promptVersion: typeof this.strategy.getPromptVersion === 'function'
-            ? String(this.strategy.getPromptVersion())
-            : null,
-          parentId: callData.parentId || callData.variables?.parent_id || null,
-          attemptNumber: callData.attemptNumber ?? null,
-        });
+        try {
+          await this.repository.save({
+            ...outcome,
+            callId: callData.callId,
+            transcript: callData.transcript,
+            duration: callData.duration,
+            cost: callData.cost,
+            recordingUrl: callData.recordingUrl || null,
+            // Which prompt produced this outcome. Without it, a mid-pilot prompt
+            // change makes every prior call unattributable.
+            promptVersion: typeof this.strategy.getPromptVersion === 'function'
+              ? String(this.strategy.getPromptVersion())
+              : null,
+            parentId: callData.parentId || callData.variables?.parent_id || null,
+            attemptNumber: callData.attemptNumber ?? null,
+          });
+        } catch (e) {
+          console.error(JSON.stringify({
+            event: 'outcome_save_failed',
+            callId: callData.callId,
+            error: e.message,
+          }));
+        }
       }
 
       // Check if escalation is needed

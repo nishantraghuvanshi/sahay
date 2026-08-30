@@ -114,6 +114,43 @@ describe('SqliteRepository — save outcome', () => {
     assert.equal(call.outcome_label, 'NO_ANSWER');
     assert.equal(call.transcript, null);
   });
+
+  it('a second save with no label keeps the outcome from the first (retried webhook)', async () => {
+    await repo.createCall({ callId: 'test-5' });
+    await repo.save({
+      callId: 'test-5',
+      label: 'CONFIRMED',
+      source: 'tool_call',
+      reason: 'patient said yes',
+    });
+
+    // A retried Vapi webhook, or a later derivation pass that produced
+    // nothing new — outcome fields are absent, not empty strings.
+    await repo.save({ callId: 'test-5' });
+
+    const call = await repo.getCall('test-5');
+    assert.equal(call.outcome_label, 'CONFIRMED');
+    assert.equal(call.outcome_source, 'tool_call');
+    assert.equal(call.outcome_reason, 'patient said yes');
+  });
+});
+
+describe('SqliteRepository — recordAlert', () => {
+  it('stamps alert_sent_at and alert_channel on an existing call', async () => {
+    await repo.createCall({ callId: 'alert-1' });
+    await repo.recordAlert('alert-1', 'telegram');
+
+    const call = await repo.getCall('alert-1');
+    assert.equal(call.alert_channel, 'telegram');
+    assert.ok(call.alert_sent_at);
+  });
+
+  it('throws on an unknown call id instead of silently matching zero rows', async () => {
+    await assert.rejects(
+      () => repo.recordAlert('no-such-call', 'telegram'),
+      /Unknown call/
+    );
+  });
 });
 
 describe('SqliteRepository — list', () => {

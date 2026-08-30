@@ -72,6 +72,11 @@ class SqliteRepository extends OutcomeRepositoryPort {
     this.db = new DatabaseSync(this.dbPath);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA foreign_keys = ON;');
+    // Wait rather than fail when another process holds the write lock. SQLite is
+    // single-writer, and seed-medications.js / ground-truth.js are both meant to
+    // run against a live DB — without this they throw SQLITE_BUSY instantly
+    // instead of waiting the moment they overlap with a call in progress.
+    this.db.exec('PRAGMA busy_timeout = 5000;');
 
     this._migrate();
   }
@@ -1039,9 +1044,9 @@ class SqliteRepository extends OutcomeRepositoryPort {
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(call_id) DO UPDATE SET
-        outcome_label   = excluded.outcome_label,
-        outcome_source  = excluded.outcome_source,
-        outcome_reason  = excluded.outcome_reason,
+        outcome_label   = COALESCE(excluded.outcome_label, calls.outcome_label),
+        outcome_source  = COALESCE(excluded.outcome_source, calls.outcome_source),
+        outcome_reason  = COALESCE(excluded.outcome_reason, calls.outcome_reason),
         transcript      = COALESCE(excluded.transcript, calls.transcript),
         duration_seconds= COALESCE(excluded.duration_seconds, calls.duration_seconds),
         cost            = COALESCE(excluded.cost, calls.cost),
@@ -1087,7 +1092,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
     const stmt = this.db.prepare(`
       UPDATE calls SET alert_sent_at = datetime('now'), alert_channel = ? WHERE call_id = ?
     `);
-    stmt.run(channel, callId);
+    const result = stmt.run(channel, callId);
+
+    if (result.changes === 0) {
+      throw new Error(`Unknown call: "${callId}"`);
+    }
+
     logger.log('db_alert_recorded', { callId, channel });
   }
 
