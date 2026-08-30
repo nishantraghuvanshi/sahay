@@ -261,10 +261,13 @@ describe('buildAssistantConfig — post-call webhook registration', () => {
       // platform_settings at the top level too. Nesting it was silently
       // accepted with a 200, because conversation_config allows additional
       // properties, so the webhook id went nowhere and nothing said so.
-      // Asserts the webhook block specifically, not the whole of
-      // platform_settings — data_collection lives alongside it now.
-      assert.deepStrictEqual(cfg.platform_settings.workspace_overrides, {
-        webhooks: { post_call_webhook_id: 'webhook_abc123', events: ['transcript'] },
+      // Asserts the post-call block specifically. workspace_overrides also
+      // carries the conversation-initiation webhook, and platform_settings
+      // carries data_collection and overrides, so equality against either
+      // whole object pins unrelated things.
+      assert.deepStrictEqual(cfg.platform_settings.workspace_overrides.webhooks, {
+        post_call_webhook_id: 'webhook_abc123',
+        events: ['transcript'],
       });
       assert.strictEqual(
         cfg.conversation_config.platform_settings,
@@ -777,7 +780,9 @@ describe('data_collection — a backstop when report_outcome is not called', () 
     const a = new ElevenLabsTransportAdapter({});
     const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
     assert.ok(cfg.platform_settings.data_collection);
-    assert.strictEqual(cfg.platform_settings.workspace_overrides, undefined);
+    // workspace_overrides always exists now — it also carries the
+    // conversation-initiation webhook. Only the post-call block is conditional.
+    assert.strictEqual(cfg.platform_settings.workspace_overrides.webhooks, undefined);
   });
 });
 
@@ -815,5 +820,49 @@ describe('call duration — a stuck call must end on its own', () => {
     });
     const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
     assert.strictEqual(cfg.conversation_config.conversation.max_duration_seconds, 90);
+  });
+});
+
+describe('inbound — the agent must be told who is calling', () => {
+  // The outbound prompt is a dose-reminder opener: "your Metformin is due, have
+  // you taken it?". An inbound caller gets that too, with no dynamic variables,
+  // so the placeholders arrive empty or are spoken literally. That is why the
+  // number still routes to the previous product's agent.
+  //
+  // The fix is per-call config: ElevenLabs asks a webhook at conversation start
+  // and we answer with the inbound prompt and this caller's variables.
+  test('registers the conversation-initiation webhook with an auth header', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x.ngrok-free.dev');
+    const hook = cfg.platform_settings.workspace_overrides
+      .conversation_initiation_client_data_webhook;
+    assert.strictEqual(hook.url, 'https://x.ngrok-free.dev/el/conversation-init');
+    // Same shared secret as the tool routes: this endpoint is on the same
+    // public tunnel and it decides what the agent says to a caller.
+    assert.ok(hook.request_headers['X-Kinvox-Token'] !== undefined);
+  });
+
+  test('turns the webhook on, which is off by default', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(
+      cfg.platform_settings.overrides.enable_conversation_initiation_client_data_from_webhook,
+      true
+    );
+  });
+
+  test('permits exactly the overrides the webhook needs, and no others', () => {
+    // Overrides are false by default, per field. A webhook that returns a
+    // first_message the agent will not accept is ignored in silence — the same
+    // failure shape as platform_settings nested one level too deep.
+    const a = new ElevenLabsTransportAdapter({});
+    const o = a.buildAssistantConfig(STRATEGY, {}, 'https://x')
+      .platform_settings.overrides.conversation_config_override;
+    assert.strictEqual(o.agent.first_message, true);
+    assert.strictEqual(o.agent.prompt.prompt, true);
+    // Not opened up: a per-call override of the voice or the model would let a
+    // webhook response change what the caller hears, well beyond who they are.
+    assert.notStrictEqual(o.tts?.voice_id, true);
+    assert.notStrictEqual(o.agent.prompt.llm, true);
   });
 });

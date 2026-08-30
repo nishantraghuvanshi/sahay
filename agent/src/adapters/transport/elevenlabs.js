@@ -4,7 +4,15 @@ const crypto = require('crypto');
 const TransportPort = require('../../core/ports/transport');
 const { verifyElevenLabsSignature } = require('./elevenlabs-signature');
 const { captureField } = require('../../core/call/lifecycle');
-const { INTAKE_FIELDS } = require('../../use-cases/medication-adherence/inbound-context');
+const {
+  INTAKE_FIELDS,
+  buildInboundVariables,
+} = require('../../use-cases/medication-adherence/inbound-context');
+const { resolveInboundCall } = require('../../core/inbound/resolve-caller');
+const {
+  buildScheduleVariables,
+} = require('../../use-cases/medication-adherence/scheduling/call-variables');
+const { utcToLocalParts } = require('../../utils/time');
 const { EVENT_TYPES } = require('../../core/events/types');
 const logger = require('../../utils/logger');
 
@@ -229,6 +237,91 @@ class ElevenLabsTransportAdapter extends TransportPort {
           // public, unauthenticated-by-name caller.
           return res.status(500).json({ ok: false, error: 'tool dispatch failed' });
         }
+      });
+
+      // --- HTTP route: /el/conversation-init ---
+      //
+      // ElevenLabs asks this at the start of an INBOUND call and uses the
+      // answer as that call's configuration. Without it the caller reaches the
+      // stored prompt, which is an outbound dose-reminder opener — "your
+      // Metformin is due, have you taken it?" — with none of its variables
+      // filled. That is why the number still routes to the previous product's
+      // agent, and this is what makes reassigning it safe.
+      //
+      // Request shape from ElevenLabs' Twilio personalization docs: caller_id,
+      // agent_id, called_number, call_sid, conversation_id.
+      config.app.post('/el/conversation-init', async (req, res) => {
+        const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
+        if (!expected || req.get('X-Kinvox-Token') !== expected) {
+          logger.log('el_init_unauthorized', {});
+          return res.status(401).json({ ok: false, error: 'unauthorized' });
+        }
+
+        const callerId = (req.body || {}).caller_id || null;
+        // "anonymous" is what a withheld number arrives as; it is not a phone
+        // number and must not be looked up as one.
+        const phone = callerId && callerId.startsWith('+') ? callerId : null;
+
+        let variables;
+        try {
+          const resolution = await resolveInboundCall({ repository: this.repository, phone });
+          variables = buildInboundVariables(resolution, 'hi');
+
+          // The same schedule lines the outbound path speaks. A caller who
+          // rings in and asks when their next dose is should get the same
+          // answer the call would have given them.
+          Object.assign(
+            variables,
+            await buildScheduleVariables({
+              repository: this.repository,
+              phone,
+              nowHHMM: utcToLocalParts(new Date().toISOString(), 'Asia/Kolkata').hhmm,
+            })
+          );
+        } catch (err) {
+          // Losing the caller's history degrades the call. Failing the request
+          // ends it: ElevenLabs would have no configuration at all and the
+          // person who dialled hears nothing. Answer with what we can.
+          logger.log('el_init_resolution_failed', { error: err.message });
+          variables = buildInboundVariables({ patient: null, fieldsSoFar: {} }, 'hi');
+        }
+
+        const strategy = this.strategy;
+        const filled = {
+          ...(typeof strategy?.getVariables === 'function' ? strategy.getVariables() : {}),
+          ...variables,
+        };
+
+        // Rendered here rather than templated, because inbound is the branch
+        // where the values genuinely differ per caller and there is nothing to
+        // gain from sending a template ElevenLabs must fill. dynamic_variables
+        // goes too: their docs require it to carry every variable the agent
+        // defines, and a missing one fails the call outright.
+        let firstMessage = '';
+        let prompt = '';
+        try {
+          firstMessage = strategy.buildFirstMessage(filled, 'inbound');
+          prompt = strategy.buildSystemPrompt(filled, 'inbound');
+        } catch (err) {
+          logger.log('el_init_render_failed', { error: err.message });
+          return res.status(500).json({ ok: false, error: 'could not build the call' });
+        }
+
+        logger.log('el_init_served', {
+          known: Boolean(variables.parent_name && phone),
+          hasSchedule: Boolean(variables.next_call_line),
+        });
+
+        return res.json({
+          type: 'conversation_initiation_client_data',
+          conversation_config_override: {
+            agent: { first_message: firstMessage, prompt: { prompt } },
+          },
+          // Strings only: a null here reads as a missing variable.
+          dynamic_variables: Object.fromEntries(
+            Object.entries(filled).map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)])
+          ),
+        });
       });
 
       // --- HTTP route: /el/post-call ---
@@ -649,6 +742,32 @@ class ElevenLabsTransportAdapter extends TransportPort {
       // surfaced the moment someone registered the workspace webhook and
       // concluded the feature was finished.
       platform_settings: {
+        // Per-call configuration for INBOUND calls.
+        //
+        // The stored prompt is an outbound dose-reminder opener. A caller who
+        // dials in gets that too, with none of its variables filled, so the
+        // placeholders arrive empty or are spoken aloud — which is exactly why
+        // the number still routes to the previous product's agent.
+        //
+        // ElevenLabs asks a webhook at conversation start and we answer with
+        // the inbound prompt and that caller's own context. Every field below
+        // is off by default, and a webhook whose response touches a field that
+        // was never enabled is ignored in silence — the same shape as
+        // platform_settings nested one level too deep, or built_in_tools sent
+        // beside tools.
+        overrides: {
+          enable_conversation_initiation_client_data_from_webhook: true,
+          conversation_config_override: {
+            agent: {
+              first_message: true,
+              prompt: { prompt: true },
+              // Left closed deliberately. A per-call override of the voice, the
+              // model or the call duration would let a webhook response change
+              // what the caller hears, which is far beyond deciding who they
+              // are and what to say to them.
+            },
+          },
+        },
         // Extracted from the transcript after the call, independently of any
         // tool the agent did or did not invoke mid-conversation. deriveOutcome
         // reads it as tier 2, below a real report_outcome and above keyword
@@ -663,16 +782,24 @@ class ElevenLabsTransportAdapter extends TransportPort {
             description: DOSE_OUTCOME_EXTRACTION,
           },
         },
-        ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
-          ? {
-              workspace_overrides: {
+        workspace_overrides: {
+          conversation_initiation_client_data_webhook: {
+            url: `${webhookUrl}/el/conversation-init`,
+            // The same shared secret the tool routes use. This endpoint sits on
+            // the same public tunnel and decides what the agent says to whoever
+            // dialled; leaving it open would let anyone who finds the URL
+            // choose the prompt for a real caller.
+            request_headers: { 'X-Kinvox-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
+          },
+          ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
+            ? {
                 webhooks: {
                   post_call_webhook_id: process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID,
                   events: ['transcript'],
                 },
-              },
-            }
-          : {}),
+              }
+            : {}),
+        },
       },
     };
   }
