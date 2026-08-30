@@ -48,19 +48,26 @@ async function main() {
   }
 
   const body = await res.json();
-  // Field name assumed from ElevenLabs' id-naming convention elsewhere in the
-  // API (agent_id, phone_number_id, conversation_id); not independently
-  // confirmed against a live response since this script must not be run
-  // here. If the API actually returns a different key, this will print
-  // `undefined` — check the raw response body before pasting anything.
+  // Confirmed against a live 200 on 30 Aug 2026: the response is exactly
+  // { webhook_id, webhook_secret }. There is no webhook_url echoed back.
+  //
+  // webhook_secret is the HMAC key ElevenLabs signs post-call requests with,
+  // and it is returned HERE AND NOWHERE ELSE — it cannot be read back off the
+  // webhook later. An earlier run of this script dropped it on the floor, so
+  // the only way to recover was to register a replacement webhook. Print it.
   const id = body.webhook_id;
+  const secret = body.webhook_secret;
   if (!id) {
     console.error('Webhook created, but no webhook_id found in the response. Raw response:');
     console.error(JSON.stringify(body, null, 2));
     process.exit(1);
   }
 
-  console.log(`\nRegistered. Put this in your .env:\n\n  ELEVENLABS_POST_CALL_WEBHOOK_ID=${id}\n`);
+  console.log(`\nRegistered. Put BOTH of these in agent/.env:\n`);
+  console.log(`  ELEVENLABS_POST_CALL_WEBHOOK_ID=${id}`);
+  console.log(`  ELEVENLABS_POST_CALL_SECRET=${secret || '(MISSING — see raw response below)'}\n`);
+  if (!secret) console.error(JSON.stringify(body, null, 2));
+  console.log('The secret is shown once. Losing it means registering a new webhook.\n');
 }
 
 main().catch((e) => {

@@ -80,6 +80,27 @@ const strategy = new StrategyClass();
 // which this adapter cannot use and used to treat as a filename.
 const useSqlite =
   process.env.DB_PATH || process.env.TURSO_DATABASE_URL || process.env.VOXIKIN_DB;
+
+// Say out loud which one won when more than one is set.
+//
+// DB_PATH keeps priority so a test spawning its own temp database is never
+// redirected at the shared one — that ordering matters more now, not less, since
+// the repo-root .env holds real Turso credentials and the wrong precedence would
+// point a test suite at production.
+//
+// The cost is that a leftover DB_PATH silently outranks a deliberately-set
+// TURSO_DATABASE_URL, and dotenv refills DB_PATH from agent/.env after the shell
+// unsets it — which is exactly how a "deployment" boot test here came up green
+// while running against a local file. The image excludes .env, so this cannot
+// happen in a real deployment, but a wrong-database boot is invisible by nature
+// and worth one log line.
+if (process.env.DB_PATH && process.env.TURSO_DATABASE_URL) {
+  logger.log('db_source_ambiguous', {
+    using: 'DB_PATH',
+    ignored: 'TURSO_DATABASE_URL',
+    detail: 'DB_PATH is set and takes precedence. Unset it to use Turso.',
+  });
+}
 const repository = useSqlite
   ? new SqliteRepository({ dbPath: useSqlite, authToken: process.env.TURSO_AUTH_TOKEN })
   : new ConsoleRepository();

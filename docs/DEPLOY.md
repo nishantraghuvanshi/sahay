@@ -198,11 +198,37 @@ npm run setup-elevenlabs-webhook   # prints the post-call secret ONCE
 and it also forces a `127.0.0.1` bind — on a real host that is a service nothing
 can reach. Leave `HOST` unset so it binds all interfaces.
 
-**`WEBHOOK_URL` is chicken-and-egg.** The agent rewrites every tool URL on the
-live ElevenLabs agent to `${WEBHOOK_URL}/el/tools/${name}` at startup, so it has
-to be the final origin *before* the first successful boot. Deploy once to learn
-the URL, set it, redeploy. Editing those URLs in the ElevenLabs dashboard is
-pointless — the next boot overwrites them.
+**`WEBHOOK_URL` is not chicken-and-egg here, because the hostnames already
+exist.** `voice.voxikin.com` and `api.voxikin.com` currently resolve to a
+Cloudflare tunnel pointing at a laptop. This migration is a **DNS repoint, not a
+new setup**: stand the services up on the new host, attach those same two custom
+domains, cut DNS over, stop the tunnel. `WEBHOOK_URL=https://voice.voxikin.com`
+never changes, so the ElevenLabs agent never needs re-patching to a new origin
+and there is no window where a stale URL is registered.
+
+That also settles the cookie question — see step 4.
+
+If you ever *do* move to a new origin: the agent rewrites every tool URL on the
+live ElevenLabs agent to `${WEBHOOK_URL}/el/tools/${name}` at startup, so it must
+be the final origin before the first successful boot. Editing those URLs in the
+ElevenLabs dashboard is pointless — the next boot overwrites them.
+
+### ElevenLabs resources (already provisioned)
+
+| Thing | Value |
+|---|---|
+| Agent | `agent_7601m182ajm7eyqrpnfmee816d0g` — "Kinvox Dose Call (outbound)" |
+| Post-call webhook | `a5bdc85bd56d421f8b1193fe62b71793` → `https://voice.voxikin.com/el/post-call` |
+
+Both already existed or are now created; **do not run `npm run setup-elevenlabs`**,
+which would duplicate the source agent a second time. The workspace also still
+holds an older webhook `f20f7329…` pointing at a dead ngrok host
+(`unprosaically-hyperfunctional-genie.ngrok-free.dev`, confirmed 404). Its HMAC
+secret was shown once and lost, which is why it could not be repaired and a
+replacement was registered instead. Delete the stale one when convenient.
+
+`webhook_secret` is returned by the create call **and nowhere else** — it cannot
+be read back. Losing it means registering another webhook.
 
 These must be publicly reachable over HTTPS: `/el/tools/:name`,
 `/el/conversation-init`, `/el/post-call`. The host must also allow WebSocket
@@ -217,11 +243,20 @@ cookie, but the API's CORS middleware does **not** set `allow_credentials=True`.
 In dev this is invisible because Vite proxies same-origin. Split across two
 origins, **login silently stops working.**
 
-**Recommended: keep the browser same-origin.** Proxy the API under the app's own
-origin with Vercel rewrites and leave `VITE_API_BASE` empty. No backend change,
-the cookie stays `SameSite=Lax`, and it is what `app/src/config.ts` says the
-design wants: *"Empty means same-origin, which is what a reverse-proxied
-deployment wants."*
+**This is already done — verified against the live site.** `app.voxikin.com`
+answers `/auth/me` and `/app/record` with real API JSON while `/health` falls
+through to the SPA, so the rewrites are in place (configured in the Vercel
+dashboard, not in `app/vercel.json`). `VITE_API_BASE` is empty, the browser never
+makes a cross-origin call, and the cookie stays `SameSite=Lax`. **No Vercel change
+is needed for this migration** — keeping the `api.voxikin.com` hostname means the
+rewrite destination stays valid.
+
+`allow_credentials=True` has been added to the API's CORS middleware anyway. It
+changes nothing while the proxy is in front, and it is what stops login breaking
+silently the day someone points `VITE_API_BASE` straight at the API. A live
+preflight against `api.voxikin.com` confirmed the header was previously absent.
+
+For reference, the equivalent rewrite config in the repo would be:
 
 ```json
 {

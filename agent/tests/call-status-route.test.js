@@ -145,7 +145,12 @@ describe('POST /api/call — asks the active transport, never one vendor by name
   describe('elevenlabs active, ELEVENLABS_AGENT_ID unset', () => {
     let state;
     before(async () => {
-      state = bootServer('elevenlabs', {});
+      // Blanked explicitly, per bootServer's contract above. This passed an
+      // empty override while agent/.env simply had no ELEVENLABS_AGENT_ID line,
+      // so the scenario was resting on a machine's local config rather than
+      // asserting the absence it names — and started failing the moment a real
+      // agent id was configured.
+      state = bootServer('elevenlabs', { ELEVENLABS_AGENT_ID: '' });
       await readyOrFail(state);
     });
     after(() => teardown(state));
