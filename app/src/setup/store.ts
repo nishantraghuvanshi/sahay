@@ -33,9 +33,14 @@ export interface SetupDraft {
   phone: string
   phoneVerified: boolean
   phoneOtpSent: boolean
+  /** When the code was sent, epoch ms. The flag survives a reload on purpose, but
+   *  the code behind it dies in `otp_ttl_min` (api/config.py), so a flag with no
+   *  timestamp — or an old one — means "no code is in flight", not "resume". */
+  phoneOtpSentAt: number | null
   email: string
   emailVerified: boolean
   emailOtpSent: boolean
+  emailOtpSentAt: number | null
 
   /* 1b — parent */
   parentName: string
@@ -75,9 +80,11 @@ export const EMPTY_DRAFT: SetupDraft = {
   phone: '',
   phoneVerified: false,
   phoneOtpSent: false,
+  phoneOtpSentAt: null,
   email: '',
   emailVerified: false,
   emailOtpSent: false,
+  emailOtpSentAt: null,
 
   parentName: '',
   honorific: '',

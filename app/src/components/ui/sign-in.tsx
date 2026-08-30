@@ -31,6 +31,30 @@ interface SignInPageProps {
   onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
   onCreateAccount?: () => void;
+
+  /* ---- additions for the Kinvox integration. All optional: leave them off and
+     the component behaves exactly as it shipped. ----------------------------- */
+
+  /** Replaces the built-in email/password form (and the Google button, the
+   *  divider and the create-account footer) with arbitrary content, keeping the
+   *  split layout, the hero and the entrance animations. `/signup` uses this to
+   *  drop the five-step OTP machine into the same shell. */
+  children?: React.ReactNode;
+  /** Server-side failure, announced to screen readers. */
+  error?: React.ReactNode;
+  /** Request in flight — disables submit and swaps its label. */
+  busy?: boolean;
+  submitLabel?: string;
+  busyLabel?: string;
+  /** The first field is an email upstream; Kinvox accepts a phone there too. */
+  identifierName?: string;
+  identifierType?: React.HTMLInputTypeAttribute;
+  identifierLabel?: string;
+  identifierPlaceholder?: string;
+  showGoogle?: boolean;
+  showResetPassword?: boolean;
+  createAccountPrompt?: React.ReactNode;
+  createAccountLabel?: React.ReactNode;
 }
 
 // --- SUB-COMPONENTS ---
@@ -63,23 +87,41 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   onGoogleSignIn,
   onResetPassword,
   onCreateAccount,
+  children,
+  error,
+  busy = false,
+  submitLabel = 'Sign In',
+  busyLabel = 'Signing in…',
+  identifierName = 'email',
+  identifierType = 'email',
+  identifierLabel = 'Email Address',
+  identifierPlaceholder = 'Enter your email address',
+  showGoogle = true,
+  showResetPassword = true,
+  createAccountPrompt = 'New to our platform?',
+  createAccountLabel = 'Create Account',
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row font-geist w-[100dvw]">
       {/* Left column: sign-in form */}
-      <section className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
+      {/* `m-auto` on the child rather than `items-center` on the section: a centred
+          flex item whose content is taller than the scroll box gets its top edge
+          clipped and unreachable. `/signup` puts five step cards in here. */}
+      <section className="flex-1 flex flex-col overflow-y-auto p-8">
+        <div className="m-auto w-full max-w-md py-4">
           <div className="flex flex-col gap-6">
             <h1 className="animate-element animate-delay-100 text-4xl md:text-5xl font-semibold leading-tight">{title}</h1>
             <p className="animate-element animate-delay-200 text-muted-foreground">{description}</p>
 
+            {children ?? (
+              <>
             <form className="space-y-5" onSubmit={onSignIn}>
               <div className="animate-element animate-delay-300">
-                <label className="text-sm font-medium text-muted-foreground">Email Address</label>
+                <label className="text-sm font-medium text-muted-foreground">{identifierLabel}</label>
                 <GlassInputWrapper>
-                  <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none" />
+                  <input name={identifierName} type={identifierType} autoComplete="username" placeholder={identifierPlaceholder} className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none" />
                 </GlassInputWrapper>
               </div>
 
@@ -87,7 +129,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 <label className="text-sm font-medium text-muted-foreground">Password</label>
                 <GlassInputWrapper>
                   <div className="relative">
-                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none" />
+                    <input name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
                       {showPassword ? <EyeOff className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" /> : <Eye className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />}
                     </button>
@@ -100,27 +142,43 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                   <input type="checkbox" name="rememberMe" className="custom-checkbox" />
                   <span className="text-foreground/90">Keep me signed in</span>
                 </label>
-                <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-violet-400 transition-colors">Reset password</a>
+                {showResetPassword && (
+                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-violet-400 transition-colors">Reset password</a>
+                )}
               </div>
 
-              <button type="submit" className="animate-element animate-delay-600 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-                Sign In
+              {error && (
+                <p role="alert" aria-live="polite" className="animate-element text-sm font-semibold text-destructive">
+                  {error}
+                </p>
+              )}
+
+              <button type="submit" disabled={busy} className="animate-element animate-delay-600 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">
+                {busy ? busyLabel : submitLabel}
               </button>
             </form>
 
-            <div className="animate-element animate-delay-700 relative flex items-center justify-center">
-              <span className="w-full border-t border-border"></span>
-              <span className="px-4 text-sm text-muted-foreground bg-background absolute">Or continue with</span>
-            </div>
+            {showGoogle && (
+              <>
+                <div className="animate-element animate-delay-700 relative flex items-center justify-center">
+                  <span className="w-full border-t border-border"></span>
+                  <span className="px-4 text-sm text-muted-foreground bg-background absolute">Or continue with</span>
+                </div>
 
-            <button onClick={onGoogleSignIn} className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-border rounded-2xl py-4 hover:bg-secondary transition-colors">
-                <GoogleIcon />
-                Continue with Google
-            </button>
+                <button onClick={onGoogleSignIn} className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-border rounded-2xl py-4 hover:bg-secondary transition-colors">
+                    <GoogleIcon />
+                    Continue with Google
+                </button>
+              </>
+            )}
 
-            <p className="animate-element animate-delay-900 text-center text-sm text-muted-foreground">
-              New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-violet-400 hover:underline transition-colors">Create Account</a>
-            </p>
+            {onCreateAccount && (
+              <p className="animate-element animate-delay-900 text-center text-sm text-muted-foreground">
+                {createAccountPrompt} <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount(); }} className="text-violet-400 hover:underline transition-colors">{createAccountLabel}</a>
+              </p>
+            )}
+              </>
+            )}
           </div>
         </div>
       </section>

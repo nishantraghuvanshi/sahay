@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { cloneElement, Fragment, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -27,6 +27,10 @@ import { SESSION_KEY, useSession } from '../auth/SessionProvider'
  * phoneless identity.
  */
 
+/** Mirrors `otp_ttl_min` in api/config.py. If that changes, change this — a code
+ *  the UI still believes in is a step the caregiver cannot complete. */
+const OTP_TTL_MS = 10 * 60 * 1000
+
 type StepState = 'done' | 'active' | 'locked'
 
 /** What went wrong, per step. `null` clears on the next attempt. */
@@ -39,11 +43,18 @@ function message(err: unknown): string {
 
 export function AuthSteps({
   variant = 'page',
+  reveal = 'all',
   onDone,
 }: {
   /** `page` = /login, own scroll and a footer pushed to the bottom.
    *  `inset` = the landing's auth column, sized by its container. */
   variant?: 'page' | 'inset'
+  /** `all` draws the five cards stacked, locked ones greyed — the landing column
+   *  wants that: it is a shop window, and seeing the whole shape of the signup is
+   *  the point. `active` draws one card at a time under a progress rail, which is
+   *  what a page whose only job is signing up should do. Four cards of disabled
+   *  inputs are not information, they are a wall. */
+  reveal?: 'all' | 'active'
   /** Overrides where a completed sign-in lands. Defaults to the deep-link-aware
    *  destination below, which is what /login wants. */
   onDone?: () => void
@@ -78,9 +89,17 @@ export function AuthSteps({
   /** Remembered from the verify response — decides onboarding vs straight in. */
   const [isNew, setIsNew] = useState(false)
 
-  // Sent-flags live in the draft: a reload mid-verification must not force a re-send.
-  const phoneOtpSent = draft.phoneOtpSent
-  const emailOtpSent = draft.emailOtpSent
+  // Sent-flags live in the draft: a reload mid-verification must not force a
+  // re-send. But the draft outlives the code by weeks — localStorage has no
+  // expiry and the OTP has a ten-minute one — so a bare flag is not enough. A
+  // flag older than the TTL (or written before this field existed, hence null)
+  // means no code is in flight, and the flow starts at the phone field again.
+  // `sentNow` keeps a code the caregiver just asked for from expiring out from
+  // under them the moment the clock crosses the boundary.
+  const [sentNow, setSentNow] = useState({ phone: false, email: false })
+  const fresh = (at: number | null) => at !== null && Date.now() - at < OTP_TTL_MS
+  const phoneOtpSent = draft.phoneOtpSent && (sentNow.phone || fresh(draft.phoneOtpSentAt))
+  const emailOtpSent = draft.emailOtpSent && (sentNow.email || fresh(draft.emailOtpSentAt))
 
   // The session is the truth about what is verified. The draft only remembers
   // what was typed, so a reload does not cost the caregiver their progress.
@@ -131,7 +150,8 @@ export function AuthSteps({
     setPhoneErr(null)
     try {
       const { resend_after_s } = await auth.start('sms', e164)
-      patch({ phone: e164, phoneOtpSent: true })
+      patch({ phone: e164, phoneOtpSent: true, phoneOtpSentAt: Date.now() })
+      setSentNow((n) => ({ ...n, phone: true }))
       setPhoneCooldown(resend_after_s)
     } catch (err) {
       setPhoneErr(message(err))
@@ -163,7 +183,8 @@ export function AuthSteps({
     setEmailErr(null)
     try {
       const { resend_after_s } = await auth.start('email', email.trim())
-      patch({ email: email.trim(), emailOtpSent: true })
+      patch({ email: email.trim(), emailOtpSent: true, emailOtpSentAt: Date.now() })
+      setSentNow((n) => ({ ...n, email: true }))
       setEmailCooldown(resend_after_s)
     } catch (err) {
       setEmailErr(message(err))
@@ -186,8 +207,6 @@ export function AuthSteps({
     }
   }
 
-  // A fragment, not a wrapper: `page` relies on being a direct child of the
-  // screen's flex column so the footer's mt-auto reaches the bottom of the page.
   const saveDetails = async () => {
     setBusy('details')
     setDetailsErr(null)
@@ -202,8 +221,15 @@ export function AuthSteps({
     }
   }
 
-  return (
-    <>
+  // Every step, in order, with the state that decides whether it is drawn. The
+  // cards are built once and rendered by either mode — two copies of these five
+  // would drift the moment one of them gained a field.
+  const steps = [
+    {
+      n: 1,
+      title: 'Phone number',
+      state: phoneStep,
+      node: (
       <Step n={1} title="Phone number" state={phoneStep} error={phoneErr}>
         <input
           inputMode="tel"
@@ -226,7 +252,24 @@ export function AuthSteps({
           </Row>
         )}
       </Step>
-
+      ),
+    },
+    {
+      n: 2,
+      title: 'Verify phone',
+      state: phoneOtpStep,
+      back: phoneVerified
+        ? undefined
+        : {
+            label: 'Change phone number',
+            run: () => {
+              setPhoneOtp('')
+              setPhoneOtpErr(null)
+              setSentNow((n) => ({ ...n, phone: false }))
+              patch({ phoneOtpSent: false, phoneOtpSentAt: null })
+            },
+          },
+      node: (
       <Step n={2} title="Verify phone" state={phoneOtpStep} error={phoneOtpErr}>
         <OtpInput
           value={phoneOtp}
@@ -250,7 +293,13 @@ export function AuthSteps({
           />
         )}
       </Step>
-
+      ),
+    },
+    {
+      n: 3,
+      title: 'Email address',
+      state: emailStep,
+      node: (
       <Step n={3} title="Email address" state={emailStep} error={emailErr}>
         <input
           type="email"
@@ -272,7 +321,24 @@ export function AuthSteps({
           </Button>
         )}
       </Step>
-
+      ),
+    },
+    {
+      n: 4,
+      title: 'Verify email',
+      state: emailOtpStep,
+      back: emailVerified
+        ? undefined
+        : {
+            label: 'Change email address',
+            run: () => {
+              setEmailOtp('')
+              setEmailOtpErr(null)
+              setSentNow((n) => ({ ...n, email: false }))
+              patch({ emailOtpSent: false, emailOtpSentAt: null })
+            },
+          },
+      node: (
       <Step n={4} title="Verify email" state={emailOtpStep} error={emailOtpErr}>
         <OtpInput
           value={emailOtp}
@@ -296,7 +362,13 @@ export function AuthSteps({
           />
         )}
       </Step>
-
+      ),
+    },
+    {
+      n: 5,
+      title: 'Your details',
+      state: detailsStep,
+      node: (
       <Step n={5} title="Your details" state={detailsStep} error={detailsErr}>
         <input
           value={name}
@@ -339,17 +411,118 @@ export function AuthSteps({
           </span>
         )}
       </Step>
+      ),
+    },
+  ]
 
-      <div className={clsx('flex flex-col gap-3', variant === 'page' ? 'mt-auto pt-4' : 'pt-1')}>
-        <p className="text-sm leading-relaxed text-muted-strong">
-          By continuing you agree to the Terms and consent to automated voice calls being placed to
-          your parent.
-        </p>
+  const footer = (
+    <div className={clsx('flex flex-col gap-3', variant === 'page' && reveal === 'all' ? 'mt-auto pt-4' : 'pt-1')}>
+      <p className="text-sm leading-relaxed text-muted-strong">
+        By continuing you agree to the Terms and consent to automated voice calls being placed to
+        your parent.
+      </p>
+      {(reveal === 'all' || allDone) && (
         <Button disabled={!allDone} onClick={finish}>
           Continue
         </Button>
-      </div>
+      )}
+    </div>
+  )
+
+  // A fragment, not a wrapper: `page` relies on being a direct child of the
+  // screen's flex column so the footer's mt-auto reaches the bottom of the page.
+  if (reveal === 'all') {
+    return (
+      <>
+        {steps.map((s) => (
+          <Fragment key={s.n}>{s.node}</Fragment>
+        ))}
+        {footer}
+      </>
+    )
+  }
+
+  // One card at a time. The rail carries the steps that are not drawn, so the
+  // shape of what is left is still visible — the thing the stacked cards were
+  // doing, at a twentieth of the height.
+  //
+  // The LAST active step, not the first: step 1 stays `active` until the phone is
+  // verified, so once the code is sent both 1 and 2 are active and `find` would
+  // sit on the phone field while the rail had already moved to the code.
+  const currentIndex = steps.reduce((last, s, i) => (s.state === 'active' ? i : last), -1)
+  const current = currentIndex >= 0 ? steps[currentIndex] : undefined
+
+  return (
+    <>
+      <StepRail steps={steps} currentIndex={currentIndex} />
+      {current ? (
+        <Fragment key={current.n}>
+          {cloneElement(current.node, { bare: true })}
+          {current.back && (
+            <button
+              type="button"
+              onClick={current.back.run}
+              className="self-start text-sm font-semibold text-muted-strong underline"
+            >
+              {current.back.label}
+            </button>
+          )}
+        </Fragment>
+      ) : (
+        <Card emphasis="border" className="gap-1">
+          <Label>All set</Label>
+          <span className="text-sm text-muted-strong">
+            Phone and email verified{session?.name ? `, signed in as ${session.name}` : ''}.
+          </span>
+        </Card>
+      )}
+      {footer}
     </>
+  )
+}
+
+/** The five steps as a single line: what is done, what is now, what is left.
+ *  Never colour alone — a done step carries a tick, the active one carries its
+ *  number and the only label on the rail. */
+function StepRail({
+  steps,
+  currentIndex,
+}: {
+  steps: { n: number; title: string; state: StepState }[]
+  currentIndex: number
+}) {
+  const current = currentIndex >= 0 ? steps[currentIndex] : undefined
+  const doneCount = steps.filter((s) => s.state === 'done').length
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Row>
+        <span className="text-sm font-semibold text-ink">{current ? current.title : 'Done'}</span>
+        <span className="tnum ml-auto text-sm text-muted-strong">
+          Step {currentIndex >= 0 ? currentIndex + 1 : steps.length} of {steps.length}
+        </span>
+      </Row>
+      <ol
+        className="flex items-center gap-1.5"
+        aria-label={`Signup progress: ${doneCount} of ${steps.length} steps done`}
+      >
+        {steps.map((s, i) => (
+          <li
+            key={s.n}
+            title={s.title}
+            aria-current={i === currentIndex ? 'step' : undefined}
+            className={clsx(
+              'h-1.5 flex-1 rounded-full transition-colors',
+              // Ahead of the shown step is "still to come", even when the machine
+              // also calls it active — the rail must agree with the one card drawn.
+              i < currentIndex || s.state === 'done' ? 'bg-accent'
+                : i === currentIndex ? 'bg-accent-2'
+                : 'bg-line-strong',
+            )}
+          />
+        ))}
+      </ol>
+    </div>
   )
 }
 
@@ -361,12 +534,16 @@ function Step({
   title,
   state,
   error,
+  bare = false,
   children,
 }: {
   n: number
   title: string
   state: StepState
   error?: Err
+  /** Drops the card's own number and title — the rail above already carries
+   *  them, and printing them twice is the loudest thing on the screen. */
+  bare?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -375,6 +552,7 @@ function Step({
       className={clsx('gap-2', state === 'locked' && 'bg-canvas')}
       aria-disabled={state === 'locked'}
     >
+      {!bare && (
       <Row>
         {state === 'done' ? <Tag>{n}</Tag> : <Tag outline>{n}</Tag>}
         <Label className="flex-1">{title}</Label>
@@ -384,6 +562,7 @@ function Step({
           <span className="text-sm text-muted-strong">locked</span>
         ) : null}
       </Row>
+      )}
       {children}
       {error && (
         // aria-live so the failure is announced, not just drawn — the caregiver

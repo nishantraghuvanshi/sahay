@@ -75,7 +75,10 @@ function SiteHeader() {
         <Button variant="outline" href="/login" className="hidden min-h-[36px] px-4 text-sm whitespace-nowrap sm:inline-flex">
           Log in
         </Button>
-        <Button variant="accent" href="#get-started" className="min-h-[36px] px-4 text-sm whitespace-nowrap">
+        {/* was: href="#get-started" — scrolled to the inline auth column below.
+            Now opens the split-screen signup page. Old line kept for rollback:
+            <Button variant="accent" href="#get-started" className="min-h-[36px] px-4 text-sm whitespace-nowrap">Get started</Button> */}
+        <Button variant="accent" href="/signup" className="min-h-[36px] px-4 text-sm whitespace-nowrap">
           Get started
         </Button>
       </div>
