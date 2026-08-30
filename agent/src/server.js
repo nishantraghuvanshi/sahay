@@ -44,9 +44,18 @@ const StrategyClass = useCase.strategy;
 const strategy = new StrategyClass();
 
 // 4. Set up repository (Phase 1: SQLite, fallback to console if no DB)
-const useSqlite = process.env.DB_PATH || process.env.DATABASE_URL;
+// KINVOX_DB is the shared database the Python Care API also reads; DB_PATH and
+// DATABASE_URL predate it and still work. Any of the three selects SQLite —
+// without this, setting only KINVOX_DB left the console repository active and the
+// persistence guard rejected the boot while a real database sat configured.
+// DB_PATH and DATABASE_URL come first deliberately: they are set per invocation
+// (a test spawning a server with its own temp file), and must beat KINVOX_DB, which
+// is the shared product database and typically comes from .env. The other order
+// silently pointed an isolated test at the real database.
+const useSqlite =
+  process.env.DB_PATH || process.env.DATABASE_URL || process.env.KINVOX_DB;
 const repository = useSqlite
-  ? new SqliteRepository({ dbPath: process.env.DB_PATH || process.env.DATABASE_URL })
+  ? new SqliteRepository({ dbPath: useSqlite })
   : new ConsoleRepository();
 
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
