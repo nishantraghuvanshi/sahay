@@ -12,7 +12,8 @@
     "update-assistant": "node scripts/update-assistant.js",
     "make-call": "node scripts/make-call.js",
     "simulate": "node scripts/run-simulation.js",
-    "generate-tools": "node scripts/generate-tools.js"
+    "generate-tools": "node scripts/generate-tools.js",
+    "setup-elevenlabs": "node scripts/setup-elevenlabs-agent.js"
   },
   "dependencies": {
     "express": "^4.19.0",
