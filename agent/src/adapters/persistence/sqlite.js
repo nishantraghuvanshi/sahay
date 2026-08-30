@@ -142,6 +142,27 @@ class SqliteRepository extends OutcomeRepositoryPort {
     this._ensureColumn('patients', 'timezone', 'TEXT');
     this._ensureColumn('patients', 'schedule_signed_off_at', 'TEXT');
     this._ensureColumn('patients', 'quiet_windows', 'TEXT');
+    // The caregiver-app columns. api/schema.sql grew these in its CREATE TABLE,
+    // which never reaches a patients table that already exists — so a database
+    // from before the app landed is missing all thirteen and every query that
+    // names one fails at runtime (the playground's patient list was the first
+    // to hit it, on `p.caregiver_id`). Listed here, not left to a rebuild,
+    // because these databases carry real call history.
+    // caregiver_id defaults to NULL, which is what SQLite requires of an added
+    // column carrying a REFERENCES clause.
+    this._ensureColumn('patients', 'caregiver_id', 'TEXT REFERENCES caregivers(id)');
+    this._ensureColumn('patients', 'honorific', 'TEXT');
+    this._ensureColumn('patients', 'age', 'INTEGER');
+    this._ensureColumn('patients', 'conditions', "TEXT NOT NULL DEFAULT '[]'");
+    this._ensureColumn('patients', 'allergies', "TEXT NOT NULL DEFAULT '[]'");
+    this._ensureColumn('patients', 'doctor_name', 'TEXT');
+    this._ensureColumn('patients', 'doctor_phone', 'TEXT');
+    this._ensureColumn('patients', 'address_text', 'TEXT');
+    this._ensureColumn('patients', 'meal_times', 'TEXT');
+    this._ensureColumn('patients', 'calls_paused', 'INTEGER NOT NULL DEFAULT 0');
+    this._ensureColumn('patients', 'intro_call_at', 'TEXT');
+    this._ensureColumn('patients', 'intro_call_status', 'TEXT');
+    this._ensureColumn('patients', 'consents', 'TEXT');
     this._ensureColumn('medications', 'is_priority', 'INTEGER DEFAULT 0');
     this._ensureColumn('dose_events', 'attempt_count', 'INTEGER DEFAULT 0');
     this._ensureColumn('dose_events', 'next_attempt_at', 'TEXT');
