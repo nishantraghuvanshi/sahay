@@ -2,6 +2,7 @@
 
 const { loadProvidersConfig } = require('../../core/config/loader');
 const VapiTransportAdapter = require('./vapi');
+const ElevenLabsTransportAdapter = require('./elevenlabs');
 const PlaygroundTransportAdapter = require('./playground');
 
 /**
@@ -21,6 +22,7 @@ const PlaygroundTransportAdapter = require('./playground');
  */
 const TRANSPORT_ADAPTERS = {
   vapi: VapiTransportAdapter,
+  elevenlabs: ElevenLabsTransportAdapter,
   playground: PlaygroundTransportAdapter,
 };
 

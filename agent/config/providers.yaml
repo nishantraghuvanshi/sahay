@@ -42,6 +42,14 @@ transport:
     assistant_id_env: "VAPI_ASSISTANT_ID"
     # Inbound routing is configured by scripts/setup-inbound.js
 
+  elevenlabs:
+    # OUTBOUND ONLY. While this is active.transport, inbound calls are not
+    # answered by this server — the number still rings and nothing handles it.
+    # Switch back to vapi for the inbound path.
+    api_key_env: "ELEVENLABS_API_KEY"
+    agent_id_env: "ELEVENLABS_AGENT_ID"
+    phone_number_id: "phnum_2001m0m0dch2fvhv1jar36bfzd5p"
+
 # ── STT (Speech-to-Text) ──────────────────────────────────────────
 
 stt:
