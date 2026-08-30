@@ -235,15 +235,15 @@ describe('boot log — an explicit non-loopback bind while insecure refuses to s
 });
 
 describe('boot log — db_path redacts a credential-bearing value', () => {
-  test('a DB_PATH set to a connection string never puts the password in the log', async () => {
-    // Reproduces the exact hole found in the working tree: DB_PATH taken
-    // literally as a filename by SqliteRepository, then logged as db_path.
-    // Contained inside dbDir so cleanup below removes everything the
-    // repository creates, unlike the leaked one this test is named after.
-    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-'));
-    const password = 'sup3r-secret-pw';
-    const connectionStringPath = path.join(dbDir, `postgresql://kinvox:${password}@localhost:5432/kinvox`);
-
+  // Contained inside a tmpdir per test so cleanup removes everything
+  // SqliteRepository creates, unlike the leaked artifact this file is named
+  // after. Built with template-literal concatenation, NOT path.join/
+  // path.resolve — those collapse "://" down to a single "/" before the
+  // value ever reaches redactCredentials(), which would silently defeat the
+  // very scheme match this test means to exercise, and does not represent
+  // how DB_PATH is actually set in practice (a raw connection string, no
+  // unrelated directory prefix).
+  async function assertRedacted({ dbDir, connectionStringPath, secret, dbPathPattern }) {
     const handle = spawnServer({
       DB_PATH: connectionStringPath,
       ALLOW_INSECURE_LOCAL: '1',
@@ -254,18 +254,87 @@ describe('boot log — db_path redacts a credential-bearing value', () => {
       assert.ok(healthy, `server failed to boot:\n${handle.getStderr()}`);
 
       const stdout = handle.getStdout();
-      assert.ok(
-        !stdout.includes(password),
-        `password leaked into boot log output: ${stdout}`
-      );
+      assert.ok(!stdout.includes(secret), `secret leaked into boot log output: ${stdout}`);
 
       const line = parseServerListeningLine(stdout);
       assert.ok(line, 'no server_listening line found');
       assert.ok(line.db_path, 'db_path should still be present and useful');
-      assert.ok(!line.db_path.includes(password), 'db_path field itself must not carry the password');
-      assert.match(line.db_path, /kinvox:\*\*\*@/, 'db_path should redact to user:***@, not drop the field entirely');
+      assert.ok(!line.db_path.includes(secret), 'db_path field itself must not carry the secret');
+      assert.match(line.db_path, dbPathPattern, 'db_path should redact to user:***@, not drop the field entirely');
     } finally {
       if (handle.child.exitCode === null && handle.child.signalCode === null) handle.child.kill();
+      fs.rmSync(dbDir, { recursive: true, force: true });
+    }
+  }
+
+  test('a DB_PATH set to a connection string never puts the password in the log', async () => {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-'));
+    const password = 'sup3r-secret-pw';
+    await assertRedacted({
+      dbDir,
+      connectionStringPath: `${dbDir}/postgresql://kinvox:${password}@localhost:5432/kinvox`,
+      secret: password,
+      dbPathPattern: /kinvox:\*\*\*@/,
+    });
+  });
+
+  test('a password containing an unencoded @ is fully redacted, not just up to the first @', async () => {
+    // Regression for the round-1 fix: a first-'@'-scan stops at "pa" and
+    // leaves "ssXYZ" — the part after the embedded '@' — in clear text.
+    // The real userinfo/host boundary is the LAST '@' before the authority
+    // ends, per RFC 3986.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-at-'));
+    const password = 'pa@ssXYZsecret';
+    await assertRedacted({
+      dbDir,
+      connectionStringPath: `${dbDir}/postgresql://kinvox:${password}@localhost:5432/kinvox`,
+      secret: 'ssXYZsecret', // the part after the embedded '@' — the exact bypass
+      dbPathPattern: /kinvox:\*\*\*@localhost:5432\/kinvox$/,
+    });
+  });
+
+  test('a password containing an unencoded / is fully redacted', async () => {
+    // An unencoded '/' inside a password makes the value stop looking like
+    // a well-formed URL (the parser would otherwise read it as the start of
+    // the path) — must still be redacted, not left in the clear because the
+    // string technically isn't a valid URL.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-slash-'));
+    const password = 'pw/with/slash-secret';
+    await assertRedacted({
+      dbDir,
+      connectionStringPath: `${dbDir}/postgresql://kinvox:${password}@localhost:5432/db`,
+      secret: 'slash-secret',
+      dbPathPattern: /kinvox:\*\*\*@localhost:5432\/db$/,
+    });
+  });
+
+  test('legitimate filesystem paths containing @ or : pass through unmangled', async () => {
+    // Must matter more than the leak: a redactor that corrupts a real path
+    // breaks database selection. Neither of these contains "://", so
+    // redactCredentials() must not touch them at all.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-legit-'));
+    const legitPaths = [
+      path.join(dbDir, 'a@b', 'x.db'),
+      path.join(dbDir, 'a:b', 'x.db'),
+    ];
+    try {
+      for (const dbPath of legitPaths) {
+        const handle = spawnServer({
+          DB_PATH: dbPath,
+          ALLOW_INSECURE_LOCAL: '1',
+          TRANSPORT: 'vapi',
+        });
+        try {
+          const healthy = await waitForHealth(handle.baseUrl, handle.child);
+          assert.ok(healthy, `server failed to boot for ${dbPath}:\n${handle.getStderr()}`);
+          const line = parseServerListeningLine(handle.getStdout());
+          assert.ok(line, 'no server_listening line found');
+          assert.strictEqual(line.db_path, path.resolve(dbPath), `${dbPath} must pass through byte-identical`);
+        } finally {
+          if (handle.child.exitCode === null && handle.child.signalCode === null) handle.child.kill();
+        }
+      }
+    } finally {
       fs.rmSync(dbDir, { recursive: true, force: true });
     }
   });

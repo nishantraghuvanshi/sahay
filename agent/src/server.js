@@ -88,8 +88,48 @@ const repository = useSqlite
 // below: resolving first would collapse the connection string's "//" and
 // hide the credential from a "//user:pass@" pattern while leaving the raw
 // password characters in the string, so redact the source value instead.
+//
+// Not `new URL()`: it throws on an ordinary filesystem path (no scheme),
+// which is the common case and must pass through untouched — that part is
+// fine — but it also throws on a password containing an unencoded '/'
+// (RFC 3986 says such a password must be percent-encoded, so the URL parser
+// treats the '/' as the start of the path and the string stops looking like
+// a URL at all), and an unencoded '/' in a password is exactly the kind of
+// value someone finds out about the hard way. A thrown error there would
+// leave the raw value to fall through unredacted, defeating the point.
+//
+// Only a substring shaped like an actual URL scheme (`word://`) is ever
+// touched, so a plain filesystem path — which never contains "://" — is
+// never misread as one. Within that, the userinfo/host boundary is the
+// LAST '@' before the authority's own
+// terminating '/', '?' or '#' — a password may itself contain '@' (RFC 3986
+// again allows unencoded '@' in userinfo), so scanning for the first '@'
+// redacts too little, as happened in the previous version of this function.
+// If that bounded scan finds no '@' at all, an unencoded '/' inside the
+// password may have made the real boundary look like a path already
+// started — fall back to the last '@' in the whole remainder so that case
+// is still redacted rather than left in the clear.
 function redactCredentials(value) {
-  return String(value).replace(/([\w.+-]+):([^@/\s]+)@/g, '$1:***@');
+  const str = String(value);
+  return str.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([\s\S]*)$/, (full, scheme, rest) => {
+    const boundary = rest.search(/[/?#]/);
+    const authority = boundary === -1 ? rest : rest.slice(0, boundary);
+
+    let atIndex = authority.lastIndexOf('@');
+    if (atIndex === -1) atIndex = rest.lastIndexOf('@');
+    if (atIndex === -1) return full; // no userinfo — nothing to redact
+
+    const userinfo = rest.slice(0, atIndex);
+    const afterAt = rest.slice(atIndex + 1);
+    const colonIndex = userinfo.indexOf(':');
+    if (colonIndex === -1) return `${scheme}${userinfo}@${afterAt}`; // username only, no password
+
+    const password = userinfo.slice(colonIndex + 1);
+    if (password === '') return full; // explicit empty password — nothing to leak
+
+    const user = userinfo.slice(0, colonIndex);
+    return `${scheme}${user}:***@${afterAt}`;
+  });
 }
 
 // Resolved absolute path for the boot log — repository.dbPath may be
