@@ -57,6 +57,10 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return [];
   }
 
+  async findPatientById() {
+    return null;
+  }
+
   async setPatientSchedule(patientId, updates) {
     this._noop('patient_schedule_set_skipped', { patientId, ...updates });
     return null;
@@ -131,6 +135,10 @@ class ConsoleRepository extends OutcomeRepositoryPort {
 
   async listMedications() {
     return [];
+  }
+
+  async findMedicationById() {
+    return null;
   }
 
   async upsertDoseEvent(event) {

@@ -24,6 +24,10 @@ const VapiTransportAdapter = require('../src/adapters/transport/vapi');
  * documented { results: [{ toolCallId, result }] } response envelope.
  */
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 const tmpDbs = [];
 
 function freshRepo() {
@@ -79,7 +83,7 @@ describe('webhook tool-calls (plural) dispatch and response envelope', () => {
   async function postWebhook(message) {
     const res = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({ message }),
     });
     return { res, body: await res.json() };

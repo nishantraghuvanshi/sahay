@@ -58,6 +58,34 @@ function generate() {
   return { assistantConfig, strategy, providersConfig, webhookUrl };
 }
 
+/**
+ * The value written into every secret-bearing field of the COMMITTED config.
+ *
+ * config/assistant.json is tracked and this repo becomes public. The generated
+ * config legitimately carries VAPI_SECRET in four places (assistant server,
+ * transcriber URL query, custom-LLM header, TTS server) because that is how
+ * Vapi is told the secret — but a tracked file must never hold the live value.
+ *
+ * Compounding it: tests/assistant-config-staleness.test.js asserts the
+ * committed file matches a fresh generation, so without redaction the test
+ * would actively pressure a real secret into the repo to stay green.
+ *
+ * So the on-disk artifact is redacted and update-assistant.js PATCHes from the
+ * in-memory config, which still carries the real secret.
+ */
+const REDACTED_SECRET = '__FROM_ENV_VAPI_SECRET__';
+
+/**
+ * Return a deep copy with every occurrence of the live secret replaced.
+ * Substring-based rather than key-based, because the secret also appears
+ * inside the transcriber's ws URL as an api_key query parameter.
+ */
+function redactSecrets(config, secret = process.env.VAPI_SECRET) {
+  if (!secret) return config;
+  const json = JSON.stringify(config).split(secret).join(REDACTED_SECRET);
+  return JSON.parse(json);
+}
+
 function main() {
   const args = process.argv.slice(2);
   let outputPath = path.join(__dirname, '..', 'config', 'assistant.json');
@@ -71,7 +99,8 @@ function main() {
   const { assistantConfig, strategy, providersConfig, webhookUrl } = generate();
 
   // Write config file
-  fs.writeFileSync(outputPath, JSON.stringify(assistantConfig, null, 2) + '\n');
+  // Redacted: the committed artifact must never carry the live secret.
+  fs.writeFileSync(outputPath, JSON.stringify(redactSecrets(assistantConfig), null, 2) + '\n');
 
   // Print summary
   console.log(JSON.stringify({
@@ -95,4 +124,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { generate };
+module.exports = { generate, redactSecrets, REDACTED_SECRET };

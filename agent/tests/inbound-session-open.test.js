@@ -25,6 +25,10 @@ const MedicationAdherenceStrategy = require('../src/use-cases/medication-adheren
  * close.
  */
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 const tmpDbs = [];
 
 function freshRepo() {
@@ -88,7 +92,7 @@ describe('assistant-request with no call.id', () => {
   test('answers the call but opens no session', async () => {
     const res = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'assistant-request',

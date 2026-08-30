@@ -14,7 +14,7 @@ const { assertSafeToServe, OPT_OUT } = require('../src/core/safety-guard');
  * process.env, so these tests cannot leak into any other test file.
  */
 
-const SAFE = { API_KEY: 'shared-secret' };
+const SAFE = { API_KEY: 'shared-secret', VAPI_SECRET: 'vapi-shared-secret' };
 
 describe('safety-guard', () => {
   test('accepts an API key with guardrails left on', () => {
@@ -25,8 +25,13 @@ describe('safety-guard', () => {
   });
 
   test('refuses to start when API_KEY is unset — every PHI route would answer anyone', () => {
-    assert.throws(() => assertSafeToServe({}), /API_KEY is not set/);
-    assert.throws(() => assertSafeToServe({ API_KEY: '' }), /API_KEY is not set/);
+    assert.throws(() => assertSafeToServe({ VAPI_SECRET: 'x' }), /API_KEY is not set/);
+    assert.throws(() => assertSafeToServe({ API_KEY: '', VAPI_SECRET: 'x' }), /API_KEY is not set/);
+  });
+
+  test('refuses to start when VAPI_SECRET is unset — /webhook and the bridges would answer anyone', () => {
+    assert.throws(() => assertSafeToServe({ API_KEY: 'x' }), /VAPI_SECRET is not set/);
+    assert.throws(() => assertSafeToServe({ API_KEY: 'x', VAPI_SECRET: '' }), /VAPI_SECRET is not set/);
   });
 
   test('refuses to start when guardrails are disabled', () => {

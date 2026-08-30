@@ -31,6 +31,10 @@ function loadFixture(name) {
   return JSON.parse(fs.readFileSync(path.join(FIXTURES, `${name}.json`), 'utf8'));
 }
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 const tmpDbs = [];
 
 function freshRepo() {
@@ -109,7 +113,7 @@ describe('real Vapi payload shapes are not silently discarded', () => {
   async function postWebhook(message) {
     const res = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({ message }),
     });
     const body = await res.json();

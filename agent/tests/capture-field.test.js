@@ -23,6 +23,12 @@ const VapiTransportAdapter = require('../src/adapters/transport/vapi');
  * fields_so_far.
  */
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally — these
+// webhook posts stand in for Vapi itself, so they need the header Vapi would
+// send.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 const tmpDbs = [];
 
 /** Fresh on-disk database per test — no shared state between cases. */
@@ -116,7 +122,7 @@ describe('webhook tool-call handling for capture_field', () => {
   async function postCapture(callId, field, value) {
     return fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'tool-call',

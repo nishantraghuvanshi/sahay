@@ -8,6 +8,11 @@ const SarvamSTTAdapter = require('../src/adapters/providers/stt/sarvam');
 const VapiTransportAdapter = require('../src/adapters/transport/vapi');
 const logger = require('../src/utils/logger');
 
+// authenticateVapiWebSocket (auth.js) now guards the /api/stt connection —
+// the fake connection URL below carries the matching api_key.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 /**
  * FIX6 — two real calls both died `silence-timed-out` with an empty
  * transcript. Root cause: telephony audio arrives at 8kHz, but Sarvam was
@@ -182,6 +187,7 @@ function fakeClientWs() {
       if (handlers[event]) handlers[event](...args);
     },
     send() {},
+    close() {},
   };
 }
 
@@ -225,7 +231,7 @@ async function startVapiSttRoute({ configuredSampleRate = 16000 } = {}) {
   });
 
   const ws = fakeClientWs();
-  await connectionHandler(ws, { url: '/api/stt' });
+  await connectionHandler(ws, { url: `/api/stt?api_key=${TEST_VAPI_SECRET}`, socket: {} });
   // sttAdapter.init() runs inside the async connection handler before any
   // listeners are attached synchronously — give it a tick to settle.
   await new Promise((resolve) => setImmediate(resolve));

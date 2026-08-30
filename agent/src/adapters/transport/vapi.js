@@ -8,6 +8,26 @@ const {
 } = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
 const logger = require('../../utils/logger');
+const {
+  vapiSecretAuth,
+  authenticateVapiWebSocket,
+  verifyVapiSecret,
+  extractVapiSecret,
+} = require('../../core/middleware/auth');
+const { createRateLimiter } = require('../../core/middleware/rate-limit');
+
+// Fixed-window budgets, generous enough that real Vapi traffic for a handful
+// of concurrent calls is never throttled — a false-positive throttle drops a
+// live call, which is worse than the cost-amplification risk these guard
+// against. See rate-limit.js for why a fixed window is enough precision here.
+const WEBHOOK_RATE_LIMIT_WINDOW_MS = 60_000;
+const WEBHOOK_RATE_LIMIT_MAX = 600; // ~10/s — one call emits several webhook events
+const STT_CONNECT_RATE_LIMIT_WINDOW_MS = 60_000;
+const STT_CONNECT_RATE_LIMIT_MAX = 100; // new STT socket connections per IP per minute
+const LLM_RATE_LIMIT_WINDOW_MS = 60_000;
+const LLM_RATE_LIMIT_MAX = 300; // chat-completion calls per IP per minute
+const TTS_RATE_LIMIT_WINDOW_MS = 60_000;
+const TTS_RATE_LIMIT_MAX = 300; // synthesize calls per IP per minute
 
 /**
  * Vapi Transport Adapter
@@ -25,6 +45,30 @@ class VapiTransportAdapter extends TransportPort {
     this.providerRegistry = providerRegistry;
     this.engine = null;
     this.webhookUrl = null;
+
+    // One limiter instance per route, held for the transport's lifetime —
+    // a limiter created per-request would never accumulate a window's worth
+    // of hits and would rate-limit nothing.
+    this._webhookRateLimiter = createRateLimiter({
+      windowMs: WEBHOOK_RATE_LIMIT_WINDOW_MS,
+      max: WEBHOOK_RATE_LIMIT_MAX,
+      name: 'webhook',
+    });
+    this._sttConnectRateLimiter = createRateLimiter({
+      windowMs: STT_CONNECT_RATE_LIMIT_WINDOW_MS,
+      max: STT_CONNECT_RATE_LIMIT_MAX,
+      name: 'stt_connect',
+    });
+    this._llmRateLimiter = createRateLimiter({
+      windowMs: LLM_RATE_LIMIT_WINDOW_MS,
+      max: LLM_RATE_LIMIT_MAX,
+      name: 'llm',
+    });
+    this._ttsRateLimiter = createRateLimiter({
+      windowMs: TTS_RATE_LIMIT_WINDOW_MS,
+      max: TTS_RATE_LIMIT_MAX,
+      name: 'tts',
+    });
   }
 
   /**
@@ -48,6 +92,20 @@ class VapiTransportAdapter extends TransportPort {
     // and never dials in here.
     if (this.providerRegistry.isBridged('stt')) {
       wss.on('connection', async (ws, req) => {
+        const remoteAddress = req.socket?.remoteAddress || 'unknown';
+        if (!this._sttConnectRateLimiter.allow(remoteAddress)) {
+          ws.close(1008, 'rate limited');
+          return;
+        }
+
+        // Unauthenticated by default: this socket opens a billed STT session
+        // per connection, with no operator API key possible on a route Vapi
+        // itself must reach. See auth.js / safety-guard.js.
+        if (!authenticateVapiWebSocket(req)) {
+          ws.close(4001, 'Unauthorized: invalid or missing Vapi secret');
+          return;
+        }
+
         logger.log('stt_connect', { url: req.url });
 
         let sttAdapter;
@@ -144,7 +202,11 @@ class VapiTransportAdapter extends TransportPort {
     // when LLM is bridged — a native LLM provider is called by Vapi
     // directly and never posts here.
     if (this.providerRegistry.isBridged('llm')) {
-      app.post('/llm/chat/completions', async (req, res) => {
+      app.post(
+        '/llm/chat/completions',
+        this._llmRateLimiter.middleware,
+        vapiSecretAuth,
+        async (req, res) => {
         const llmAdapter = this.providerRegistry.getActiveLLM();
         const llmConfig = this.providerRegistry.getLLMConfig();
 
@@ -203,7 +265,8 @@ class VapiTransportAdapter extends TransportPort {
             res.status(500).json({ error: err.message });
           }
         }
-      });
+        }
+      );
     } else {
       logger.log('route_skipped_native_provider', {
         type: 'llm',
@@ -216,7 +279,7 @@ class VapiTransportAdapter extends TransportPort {
     // TTS is bridged — a native TTS provider is synthesized by Vapi
     // directly and never posts here.
     if (this.providerRegistry.isBridged('tts')) {
-      app.post('/api/tts/:provider', async (req, res) => {
+      app.post('/api/tts/:provider', this._ttsRateLimiter.middleware, vapiSecretAuth, async (req, res) => {
         const ttsAdapter = this.providerRegistry.getActiveTTS();
         const ttsConfig = this.providerRegistry.getTTSConfig();
         try {
@@ -238,6 +301,23 @@ class VapiTransportAdapter extends TransportPort {
     // --- HTTP route: /webhook ---
     // Vapi sends server messages (end-of-call, tool-call, call-started, etc.)
     app.post('/webhook', async (req, res) => {
+      // A forged end-of-call-report or tool-call here writes fake rows into
+      // `calls` / fabricated symptom text into a patient's record — this
+      // route had no auth at all before vapiSecretAuth existed. It stays a
+      // 200 on rejection (not the 401 the other bridge routes use): a real
+      // caller is waiting on this response, and NFR-6 requires errors to be
+      // data, never a stalled transport, on this specific endpoint.
+      const remoteAddress = req.ip || req.socket?.remoteAddress || 'unknown';
+      if (!this._webhookRateLimiter.allow(remoteAddress)) {
+        logger.log('webhook_rate_limited', { remoteAddress });
+        return res.status(200).json({ ok: false, error: 'rate limited' });
+      }
+
+      if (!verifyVapiSecret(extractVapiSecret(req))) {
+        logger.log('vapi_secret_rejected', { path: '/webhook', method: 'POST' });
+        return res.status(200).json({ ok: false, error: 'Invalid or missing Vapi secret' });
+      }
+
       const message = req.body.message || req.body;
       const eventBus = this.engine.getEventBus();
 
@@ -389,9 +469,19 @@ class VapiTransportAdapter extends TransportPort {
                   || {},
                 transcript,
                 analysis,
-                endedReason: callData.endedReason,
-                duration: callData.durationSeconds,
-                cost: callData.cost,
+                // Read from message.* FIRST. In real captured payloads
+                // (tests/fixtures/vapi-real/call-sequences.json) endedReason,
+                // durationSeconds and cost are top-level on the message and
+                // null inside message.call — reading only the nested copy meant
+                // duration and cost were never persisted, and closeCall below
+                // received endedReason undefined. session-status.js maps an
+                // unrecognised reason to 'dropped', and a dropped session is
+                // what makes a call resumable, so every completed call looked
+                // resumable for the whole resume window. The nested fallback is
+                // kept because other Vapi configurations may populate it.
+                endedReason: message.endedReason ?? callData.endedReason,
+                duration: message.durationSeconds ?? callData.durationSeconds,
+                cost: message.cost ?? callData.cost,
                 recordingUrl: this._extractRecordingUrl(message),
               },
             });
@@ -402,7 +492,7 @@ class VapiTransportAdapter extends TransportPort {
             await closeCall({
               repository: this.repository,
               callId: callData.id,
-              endedReason: callData.endedReason,
+              endedReason: message.endedReason ?? callData.endedReason,
             });
             break;
           }
@@ -525,8 +615,19 @@ class VapiTransportAdapter extends TransportPort {
    * @private
    */
   _extractRecordingUrl(message) {
+    // Same story as endedReason/durationSeconds/cost above: the real capture
+    // carries recordingUrl at the top level of message AND inside
+    // message.artifact — this already worked because it happened to check
+    // the nested copy, but reading top-level first keeps all four fields
+    // consistent about which shape wins rather than three agreeing and one
+    // differing by accident.
     const artifact = message.artifact || message.call?.artifact || {};
-    return artifact.recordingUrl || artifact.stereoRecordingUrl || null;
+    return (
+      message.recordingUrl ||
+      artifact.recordingUrl ||
+      artifact.stereoRecordingUrl ||
+      null
+    );
   }
 
   /**
@@ -594,6 +695,19 @@ class VapiTransportAdapter extends TransportPort {
     const isLlmBridged = this.providerRegistry.isBridged('llm');
     const isTtsBridged = this.providerRegistry.isBridged('tts');
 
+    // The one secret Vapi presents on every route it calls into this
+    // server: server.secret (→ X-Vapi-Secret header) on the three
+    // server-url shapes below, and model.headers on the custom-llm model
+    // (Authorization is reserved for the custom-llm credential, so it can't
+    // carry this). auth.js's vapiSecretAuth / authenticateVapiWebSocket
+    // verify against the same VAPI_SECRET env var these read.
+    // '' rather than undefined: JSON.stringify drops undefined-valued keys
+    // on write, so a config generated with VAPI_SECRET unset would compare
+    // unequal to itself after a round trip through the committed file (see
+    // assistant-config-staleness.test.js) — an empty string round-trips
+    // identically either way.
+    const vapiSecret = process.env.VAPI_SECRET || '';
+
     const systemMessage = {
       role: 'system',
       content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
@@ -602,9 +716,18 @@ class VapiTransportAdapter extends TransportPort {
     // Build transcriber config
     let transcriber;
     if (isSttBridged) {
+      // Belt and suspenders: `secret` asks Vapi to send X-Vapi-Secret like
+      // every other server-url shape, and `?api_key=` is appended to the URL
+      // itself because a WebSocket upgrade is not guaranteed to carry a
+      // custom header through — authenticateVapiWebSocket (auth.js) already
+      // reads api_key off the connection URL.
+      const sttUrl = `${webhookUrl.replace(/^http/, 'ws')}/api/stt`;
       transcriber = {
         provider: 'custom-transcriber',
-        server: { url: `${webhookUrl.replace(/^http/, 'ws')}/api/stt` },
+        server: {
+          url: `${sttUrl}?api_key=${encodeURIComponent(vapiSecret || '')}`,
+          secret: vapiSecret,
+        },
       };
     } else {
       // Native shape: Vapi runs the provider itself, naming it by our
@@ -625,6 +748,11 @@ class VapiTransportAdapter extends TransportPort {
         provider: 'custom-llm',
         model: llm.model,
         url: `${webhookUrl}/llm/chat/completions`,
+        // Custom-llm models can't use `server.secret` (there is no `server`
+        // object here) and `Authorization` is reserved for the custom-llm
+        // credential per Vapi's docs, so the shared secret rides on its own
+        // header instead — vapiSecretAuth reads the same header name.
+        headers: { 'x-vapi-secret': vapiSecret },
         messages: [systemMessage],
         temperature: llm.temperature,
         maxTokens: llm.max_tokens,
@@ -654,7 +782,7 @@ class VapiTransportAdapter extends TransportPort {
     if (isTtsBridged) {
       voice = {
         provider: 'custom-voice',
-        server: { url: `${webhookUrl}/api/tts/${activeTts}` },
+        server: { url: `${webhookUrl}/api/tts/${activeTts}`, secret: vapiSecret },
       };
     } else if (activeTts === 'elevenlabs') {
       // UNVERIFIED: 'provider: "11labs"' is Vapi's documented identifier
@@ -727,7 +855,7 @@ class VapiTransportAdapter extends TransportPort {
         backoffSeconds: 1.0,
         acknowledgementPhrases: ['अच्छा', 'ठीक', 'ठीक है', 'हम्म', 'जी', 'ओके', 'okay'],
       },
-      server: { url: `${webhookUrl}/webhook` },
+      server: { url: `${webhookUrl}/webhook`, secret: vapiSecret },
       // Recording is deliberately enabled — previously nothing set this, so
       // whether a call was recorded depended on an unverified account
       // default. Explicit, not left to Vapi's default.

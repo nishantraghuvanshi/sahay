@@ -29,6 +29,10 @@ const MedicationAdherenceStrategy = require('../src/use-cases/medication-adheren
  * below covers that directly.
  */
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 const tmpDbs = [];
 
 function freshRepo() {
@@ -147,7 +151,7 @@ describe('webhook — transcript and tool-call events write turn history', () =>
 
       await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: {
             type: 'transcript',
@@ -160,7 +164,7 @@ describe('webhook — transcript and tool-call events write turn history', () =>
       });
       await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: {
             type: 'transcript',
@@ -187,7 +191,7 @@ describe('webhook — transcript and tool-call events write turn history', () =>
 
       await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: {
             type: 'tool-call',
@@ -212,7 +216,7 @@ describe('webhook — transcript and tool-call events write turn history', () =>
     try {
       const res = await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: { type: 'transcript', role: 'user', transcript: 'no call here', transcriptType: 'final' },
         }),

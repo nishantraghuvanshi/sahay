@@ -29,7 +29,7 @@ const SqliteRepository = require('./adapters/persistence/sqlite');
 const { handlePlaygroundConnection } = require('./playground/ws-handler');
 
 // Middleware
-const { apiKeyAuth, authenticateWebSocket } = require('./core/middleware/auth');
+const { apiKeyAuth, authenticateWebSocket, hasValidApiKey } = require('./core/middleware/auth');
 
 // Use cases
 const { getActiveUseCase } = require('./use-cases/registry');
@@ -180,17 +180,30 @@ playgroundWss.on('connection', (ws, req) => {
 // Apply API key auth to all /api routes
 app.use('/api', apiKeyAuth);
 
-// Health check (public — no auth)
+// Health check (public — no auth). Must stay public and answer 200 when
+// healthy: the Dockerfile and compose healthcheck both hit this with no
+// credential. It used to hand every anonymous caller the use case, prompt
+// version, active provider names, plugin list and persistence class — none
+// of that is needed to know "is this alive", and all of it hands a would-be
+// attacker a map of what to target. The liveness shape below never changes;
+// the detail only appears for a caller who already holds API_KEY.
 app.get('/health', (req, res) => {
-  res.json({
+  const body = {
     status: 'ok',
-    useCase: strategy.name,
-    promptVersion: strategy.getPromptVersion(),
-    providers: providerRegistry.getActiveProviderNames(),
-    plugins: plugins.plugins.map((p) => p.name),
-    persistence: repository.constructor.name,
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  if (hasValidApiKey(req)) {
+    Object.assign(body, {
+      useCase: strategy.name,
+      promptVersion: strategy.getPromptVersion(),
+      providers: providerRegistry.getActiveProviderNames(),
+      plugins: plugins.plugins.map((p) => p.name),
+      persistence: repository.constructor.name,
+    });
+  }
+
+  res.json(body);
 });
 
 // Playground page

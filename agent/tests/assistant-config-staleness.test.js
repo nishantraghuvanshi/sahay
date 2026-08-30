@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { generate } = require('../scripts/generate-assistant-config');
+const { generate, redactSecrets } = require('../scripts/generate-assistant-config');
 
 /**
  * config/assistant.json is what create-assistant.js / update-assistant.js PATCH
@@ -43,9 +43,13 @@ describe('committed config/assistant.json is not stale', () => {
   test('matches what the generator would write', () => {
     const onDisk = JSON.parse(fs.readFileSync(ASSISTANT_JSON, 'utf8'));
     const { assistantConfig } = generate();
+    // Compare against the redacted form: the committed file deliberately
+    // carries a placeholder where VAPI_SECRET goes, so that a tracked, soon
+    // to be public artifact never holds the live secret. Without this the
+    // staleness check would pressure the real secret into the repo.
     assert.deepStrictEqual(
       onDisk,
-      assistantConfig,
+      redactSecrets(assistantConfig),
       'config/assistant.json is stale — run `node scripts/generate-assistant-config.js`'
     );
   });
@@ -100,5 +104,33 @@ describe('the deployed prompt carries its safety guardrails', () => {
         'prompt refers to "your guardrails" but contains no guardrail block'
       );
     }
+  });
+});
+
+describe('the committed config never carries a live secret', () => {
+  test('no secret-bearing field holds anything but the placeholder', () => {
+    const raw = fs.readFileSync(ASSISTANT_JSON, 'utf8');
+    const { REDACTED_SECRET } = require('../scripts/generate-assistant-config');
+    const secrets = [
+      ...raw.matchAll(/"secret"\s*:\s*"([^"]*)"/g),
+      ...raw.matchAll(/"x-vapi-secret"\s*:\s*"([^"]*)"/g),
+      ...raw.matchAll(/api_key=([^"&]*)/g),
+    ].map((m) => m[1]);
+
+    for (const value of secrets) {
+      assert.ok(
+        value === '' || value === REDACTED_SECRET,
+        `config/assistant.json contains what looks like a live secret (${value.slice(0, 6)}...). ` +
+          'It is tracked and this repo goes public — regenerate so it is redacted.'
+      );
+    }
+  });
+
+  test('the generator actually replaces a live secret when one is set', () => {
+    const { redactSecrets, REDACTED_SECRET } = require('../scripts/generate-assistant-config');
+    const sample = { server: { url: 'https://x/webhook?api_key=s3cr3t', secret: 's3cr3t' } };
+    const out = redactSecrets(sample, 's3cr3t');
+    assert.strictEqual(out.server.secret, REDACTED_SECRET);
+    assert.ok(!JSON.stringify(out).includes('s3cr3t'), 'secret survived redaction');
   });
 });

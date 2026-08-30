@@ -396,6 +396,18 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
+   * Look up a patient by primary key. The scheduler's dose tick starts from
+   * a dose_events row (which carries patient_id, not a phone number), so
+   * findPatientByPhone doesn't fit — this is that lookup.
+   * @param {number} patientId
+   * @returns {Object|null}
+   */
+  async findPatientById(patientId) {
+    const row = this.db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
+    return row ? _withDefaultTimezone(row) : null;
+  }
+
+  /**
    * Set the scheduling gate on a patient: sign-off, quiet windows, and
    * timezone. CRUD only — no policy. Whether an unsigned-off schedule
    * blocks a dial, and whether a quiet window is honoured, both live in
@@ -741,6 +753,18 @@ class SqliteRepository extends OutcomeRepositoryPort {
     return this.db
       .prepare(`SELECT * FROM medications WHERE patient_id = ?${where} ORDER BY id ASC`)
       .all(patientId);
+  }
+
+  /**
+   * Look up a medication by primary key. The scheduler's dose tick starts
+   * from a dose_events row (which carries medication_id, not a patient_id
+   * to list medications under), so listMedications doesn't fit — this is
+   * that lookup.
+   * @param {number} medicationId
+   * @returns {Object|null}
+   */
+  async findMedicationById(medicationId) {
+    return this.db.prepare('SELECT * FROM medications WHERE id = ?').get(medicationId) || null;
   }
 
   // ── Dose Events ─────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 /**
  * Boot-time safety guard.
  *
- * Two of this service's protections default to OFF when unconfigured:
+ * Three of this service's protections default to OFF when unconfigured:
  *
  *   - `apiKeyAuth` (core/middleware/auth.js) skips authentication entirely when
  *     API_KEY is unset, so every PHI route answers anyone.
@@ -11,11 +11,18 @@
  *     composed system prompt, leaving an agent with no emergency sequence, no
  *     anti-diagnosis rule, and nothing forbidding a claim that help was
  *     dispatched.
+ *   - `VAPI_SECRET` (core/middleware/auth.js's vapiSecretAuth) guards /webhook,
+ *     /llm/chat/completions, /api/tts/:provider and the /api/stt WebSocket —
+ *     the four endpoints Vapi must reach without an operator API key. Unset,
+ *     they are open to the internet: a forged webhook writes fake rows into
+ *     `calls`, and the STT/LLM bridges are a paid-vendor-call amplifier for
+ *     anyone who finds the URL.
  *
- * Both are useful locally and catastrophic in production, and neither announces
- * itself: auth-off logs nothing, and a guardrail-free prompt is still valid,
- * still fluent, still answers the phone. An audit found both set that way in a
- * working .env at the same time.
+ * All three are useful locally and catastrophic in production, and none
+ * announces itself: auth-off logs nothing, a guardrail-free prompt is still
+ * valid, still fluent, still answers the phone, and an unauthenticated webhook
+ * looks identical to Vapi's own traffic. An audit found the first two set that
+ * way in a working .env at the same time.
  *
  * So the check happens at boot, where it costs one restart instead of one
  * caller. This mirrors assertPersistenceSatisfied() — the only other guard in
@@ -61,6 +68,16 @@ function assertSafeToServe(env = process.env) {
     failures.push(
       'API_KEY is not set, so apiKeyAuth serves every /api route unauthenticated ' +
         '(patient names, phone numbers, transcripts). Set API_KEY to a shared secret.'
+    );
+  }
+
+  if (!env.VAPI_SECRET) {
+    failures.push(
+      'VAPI_SECRET is not set, so /webhook, /llm/chat/completions, /api/tts/:provider ' +
+        'and the /api/stt WebSocket accept anyone — a forged webhook can write fake ' +
+        'call rows, and the bridged endpoints are a free paid-vendor-call amplifier. ' +
+        'Set VAPI_SECRET to a shared secret and configure it on the Vapi assistant/phone ' +
+        'number as well.'
     );
   }
 

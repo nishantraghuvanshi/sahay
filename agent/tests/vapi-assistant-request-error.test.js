@@ -27,6 +27,10 @@ const MedicationAdherenceStrategy = require('../src/use-cases/medication-adheren
 
 const PHONE = '+919876500043';
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 describe('assistant-request when resolution throws', () => {
   let server;
   let baseUrl;
@@ -74,7 +78,7 @@ describe('assistant-request when resolution throws', () => {
   test('answers with an error, not a silent {status:"ok"}, when resolution fails', async () => {
     const res = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'assistant-request',

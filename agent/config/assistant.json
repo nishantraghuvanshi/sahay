@@ -3,13 +3,17 @@
   "transcriber": {
     "provider": "custom-transcriber",
     "server": {
-      "url": "wss://producers-exposed-pure-percentage.trycloudflare.com/api/stt"
+      "url": "wss://producers-exposed-pure-percentage.trycloudflare.com/api/stt?api_key=",
+      "secret": ""
     }
   },
   "model": {
     "provider": "custom-llm",
     "model": "sarvam-105b-conversations",
     "url": "https://producers-exposed-pure-percentage.trycloudflare.com/llm/chat/completions",
+    "headers": {
+      "x-vapi-secret": ""
+    },
     "messages": [
       {
         "role": "system",
@@ -124,7 +128,8 @@
     ]
   },
   "server": {
-    "url": "https://producers-exposed-pure-percentage.trycloudflare.com/webhook"
+    "url": "https://producers-exposed-pure-percentage.trycloudflare.com/webhook",
+    "secret": ""
   },
   "artifactPlan": {
     "recordingEnabled": true
