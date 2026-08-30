@@ -233,3 +233,40 @@ describe('boot log — an explicit non-loopback bind while insecure refuses to s
     }
   });
 });
+
+describe('boot log — db_path redacts a credential-bearing value', () => {
+  test('a DB_PATH set to a connection string never puts the password in the log', async () => {
+    // Reproduces the exact hole found in the working tree: DB_PATH taken
+    // literally as a filename by SqliteRepository, then logged as db_path.
+    // Contained inside dbDir so cleanup below removes everything the
+    // repository creates, unlike the leaked one this test is named after.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-'));
+    const password = 'sup3r-secret-pw';
+    const connectionStringPath = path.join(dbDir, `postgresql://kinvox:${password}@localhost:5432/kinvox`);
+
+    const handle = spawnServer({
+      DB_PATH: connectionStringPath,
+      ALLOW_INSECURE_LOCAL: '1',
+      TRANSPORT: 'vapi',
+    });
+    try {
+      const healthy = await waitForHealth(handle.baseUrl, handle.child);
+      assert.ok(healthy, `server failed to boot:\n${handle.getStderr()}`);
+
+      const stdout = handle.getStdout();
+      assert.ok(
+        !stdout.includes(password),
+        `password leaked into boot log output: ${stdout}`
+      );
+
+      const line = parseServerListeningLine(stdout);
+      assert.ok(line, 'no server_listening line found');
+      assert.ok(line.db_path, 'db_path should still be present and useful');
+      assert.ok(!line.db_path.includes(password), 'db_path field itself must not carry the password');
+      assert.match(line.db_path, /kinvox:\*\*\*@/, 'db_path should redact to user:***@, not drop the field entirely');
+    } finally {
+      if (handle.child.exitCode === null && handle.child.signalCode === null) handle.child.kill();
+      fs.rmSync(dbDir, { recursive: true, force: true });
+    }
+  });
+});

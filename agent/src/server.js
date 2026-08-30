@@ -79,10 +79,23 @@ const repository = useSqlite
   ? new SqliteRepository({ dbPath: useSqlite })
   : new ConsoleRepository();
 
+// Redact userinfo (user:password@) out of a value before it reaches a log
+// line. db_path is meant to be a SQLite filesystem path, but DB_PATH,
+// DATABASE_URL and VOXIKIN_DB have all been seen set to a Postgres
+// connection string by mistake — SqliteRepository takes that literally as a
+// filename (see agent/postgresql:/... in this working tree), and logging it
+// verbatim would put the password in the log. Applied before path.resolve()
+// below: resolving first would collapse the connection string's "//" and
+// hide the credential from a "//user:pass@" pattern while leaving the raw
+// password characters in the string, so redact the source value instead.
+function redactCredentials(value) {
+  return String(value).replace(/([\w.+-]+):([^@/\s]+)@/g, '$1:***@');
+}
+
 // Resolved absolute path for the boot log — repository.dbPath may be
 // relative (a test spawning a server with DB_PATH=./tmp/x.db), and null for
 // ConsoleRepository, which has no file at all.
-const dbPath = repository.dbPath ? path.resolve(repository.dbPath) : null;
+const dbPath = repository.dbPath ? path.resolve(redactCredentials(repository.dbPath)) : null;
 
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
 //     without persistence (inbound context, resume-after-drop).
