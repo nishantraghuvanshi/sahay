@@ -7,7 +7,12 @@ const path = require('path');
 const dotenv = require('dotenv');
 
 // Load environment variables
+// Two files, deliberately. agent/.env holds what only the agent needs
+// (WEBHOOK_URL, ports); the repo-root .env holds credentials shared with the
+// Python Care API, so a key is configured once rather than copied. agent/.env
+// is loaded first and dotenv does not overwrite, so the local file wins.
 dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 // Core
 const { loadProvidersConfig } = require('./core/config/loader');
