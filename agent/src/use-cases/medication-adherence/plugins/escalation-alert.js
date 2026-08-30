@@ -32,11 +32,11 @@ class EscalationAlertPlugin {
    */
   constructor(deps = {}) {
     this.repository = deps.repository || null;
-    this.send = deps.send !== undefined ? deps.send : buildTelegramSender();
+    this.send = deps.send !== undefined ? deps.send : buildSender();
     this.operatorContact = deps.operatorContact !== undefined
       ? deps.operatorContact
       : process.env.ALERT_OPERATOR_CONTACT || null;
-    this.channel = deps.channel || process.env.ALERT_CHANNEL || 'telegram';
+    this.channel = deps.channel || channelName();
     this.retries = deps.retries ?? 2;
   }
 
@@ -147,6 +147,70 @@ function caregiverMessage(parentName) {
  * away with the rest of this stack.
  * @private
  */
+function channelName() {
+  if (process.env.ALERT_CHANNEL) return process.env.ALERT_CHANNEL;
+  // Whichever transport is actually credentialled, rather than a fixed default
+  // that names a channel nothing can send on. The label is recorded against the
+  // call, so it has to describe what really carried the message.
+  if (process.env.ALERT_TELEGRAM_BOT_TOKEN) return 'telegram';
+  if (process.env.RESEND_API_KEY) return 'email';
+  return 'telegram';
+}
+
+/**
+ * Pick the transport the environment can actually use.
+ *
+ * This returned `buildTelegramSender()` unconditionally, and with no bot token
+ * that is null — so every escalation took the `!this.send` branch, recorded
+ * `channel: 'none'` and notified nobody. A real call on 30 Aug hit exactly that:
+ * the agent told a patient it would inform their family, and nothing was sent.
+ * @private
+ */
+function buildSender() {
+  const channel = channelName();
+  if (channel === 'email') return buildEmailSender();
+  return buildTelegramSender();
+}
+
+/**
+ * Email over Resend's HTTP API — `fetch`, no new dependency, and the same
+ * credential the API already sends OTPs with.
+ *
+ * Caveat worth knowing before trusting it: on Resend's shared sandbox domain
+ * only the account holder's own address is deliverable. An alert to anyone else
+ * is accepted and dropped, which is why delivery is verified rather than assumed
+ * (`api/config.py` records the same limitation for OTP email).
+ * @private
+ */
+function buildEmailSender() {
+  const key = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+  if (!key || !from) return null;
+
+  return async (to, text) => {
+    if (!String(to).includes('@')) {
+      // A phone number reached an email transport. Throwing rather than posting
+      // it keeps the failure countable: it lands in the delivery tally and is
+      // recorded as 'failed', instead of Resend 200-ing on an address that can
+      // never receive anything.
+      throw new Error(`Alert recipient "${to}" is not an email address`);
+    }
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: 'Voxikin alert — a call needs a person',
+        text,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Resend send failed (${response.status}): ${await response.text()}`);
+    }
+  };
+}
+
 function buildTelegramSender() {
   const token = process.env.ALERT_TELEGRAM_BOT_TOKEN;
   if (!token) return null;

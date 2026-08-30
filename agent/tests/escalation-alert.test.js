@@ -176,3 +176,66 @@ describe('plugin contract', () => {
     assert.strictEqual(new EscalationAlertPlugin().name, 'escalation-alert');
   });
 });
+
+describe('choosing a transport that can actually send', () => {
+  const KEEP = {};
+  const VARS = ['ALERT_CHANNEL', 'ALERT_TELEGRAM_BOT_TOKEN', 'RESEND_API_KEY', 'RESEND_FROM'];
+
+  beforeEach(() => {
+    for (const v of VARS) { KEEP[v] = process.env[v]; delete process.env[v]; }
+  });
+
+  function restore() {
+    for (const v of VARS) {
+      if (KEEP[v] === undefined) delete process.env[v];
+      else process.env[v] = KEEP[v];
+    }
+  }
+
+  test('with only Resend credentialled, the channel is email and a sender exists', () => {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM = 'alerts@example.com';
+    const plugin = new EscalationAlertPlugin({ repository: makeRepo() });
+    assert.strictEqual(plugin.channel, 'email');
+    assert.ok(plugin.send, 'an email sender must be built when Resend is configured');
+    restore();
+  });
+
+  test('with nothing credentialled there is no sender, and the escalation is recorded as undelivered', async () => {
+    // The state a real call hit on 30 Aug: the agent told a patient it would
+    // inform their family, and no transport existed to do it.
+    const repo = makeRepo();
+    const plugin = new EscalationAlertPlugin({ repository: repo, operatorContact: 'op-1' });
+    assert.strictEqual(plugin.send, null);
+    await plugin.onEscalation({ label: 'ESCALATED_SYMPTOM', source: 'analysis' }, CALL);
+    assert.deepStrictEqual(repo.alerts, [{ callId: 'call-1', channel: 'none' }]);
+    restore();
+  });
+
+  test('a telegram token still wins, so existing deployments do not silently move channel', () => {
+    process.env.ALERT_TELEGRAM_BOT_TOKEN = 'tok';
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM = 'alerts@example.com';
+    assert.strictEqual(new EscalationAlertPlugin({ repository: makeRepo() }).channel, 'telegram');
+    restore();
+  });
+
+  test('an explicit ALERT_CHANNEL overrides the guess', () => {
+    process.env.ALERT_CHANNEL = 'email';
+    process.env.ALERT_TELEGRAM_BOT_TOKEN = 'tok';
+    assert.strictEqual(new EscalationAlertPlugin({ repository: makeRepo() }).channel, 'email');
+    restore();
+  });
+
+  test('the email transport refuses a phone number rather than posting it', async () => {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM = 'alerts@example.com';
+    const plugin = new EscalationAlertPlugin({ repository: makeRepo() });
+    await assert.rejects(
+      () => plugin.send('+919876543210', 'body'),
+      /not an email address/,
+      'a phone number must not be handed to Resend, which would 200 and drop it',
+    );
+    restore();
+  });
+});
