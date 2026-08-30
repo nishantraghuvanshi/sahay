@@ -280,7 +280,12 @@ async def login(body: LoginBody, request: Request, response: Response, settings:
     would turn this endpoint into a way to enumerate who has an account, which
     is the same leak `/auth/otp/start` is shaped to avoid.
     """
-    identifier = body.identifier.strip()
+    # Normalised the same way `/auth/otp/start` normalises a destination. It was
+    # a bare .strip(), and the two halves of auth disagreeing about how a phone
+    # number is spelled meant a caregiver could sign up successfully and then be
+    # told their password did not match — typing the number exactly the way the
+    # login field's own placeholder shows it ("+91 98765 43210") found no row.
+    identifier = otp.normalise_identifier(body.identifier)
     invalid = {"ok": False, "error": "invalid_credentials"}
 
     async with db.transaction() as conn:

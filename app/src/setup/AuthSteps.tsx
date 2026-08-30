@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Button, Card, Label, Row, Tag } from '../ui'
-import { isEmail, isOtp, toE164, useSetupDraft } from './store'
+import { isEmail, isOtp, normalizePhoneInput, toE164, useSetupDraft } from './store'
 import { ApiError } from '../api/client'
 import { auth } from '../auth/api'
 import { SESSION_KEY, useSession } from '../auth/SessionProvider'
@@ -236,7 +236,7 @@ export function AuthSteps({
           autoComplete="tel"
           value={phone}
           disabled={phoneVerified}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => setPhone(normalizePhoneInput(e.target.value))}
           placeholder="98765 43210"
           aria-label="Your phone number"
           className={inputCls}

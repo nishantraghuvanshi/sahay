@@ -27,6 +27,7 @@ import Calendar from './screens/Calendar'
 import MedicinesEdit from './screens/MedicinesEdit'
 import NotFound from './screens/NotFound'
 import Settings from './screens/Settings'
+import Checkout from './screens/Checkout'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -58,6 +59,9 @@ export default function App() {
           <Route path="schedule" element={<Schedule />} />
           <Route path="consent" element={<Consent />} />
         </Route>
+        {/* Checkout is signed-in but chrome-free, like /setup: a tab bar during a
+            payment is an invitation to wander off mid-transfer. */}
+        <Route path="/checkout" element={<Checkout />} />
       </Route>
 
       {/* handoff — no login, no chrome, its own layout (TRD §11) */}

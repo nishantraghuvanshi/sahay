@@ -16,6 +16,13 @@ from api.payments import plans, upi
 
 UTR_RE = re.compile(r"^\d{12}$")
 
+# Stamped on `payments.confirmed_by` when BILLING_AUTOCONFIRM granted the month
+# on the buyer's word instead of a person matching the credit. Spelled out
+# rather than a flag or a blank, because the one question anyone will ask of
+# this table later is "which of these did somebody actually check", and the
+# answer has to be readable in the row itself.
+AUTO_CONFIRMED_BY = "auto — unverified claim"
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()

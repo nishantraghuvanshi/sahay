@@ -138,6 +138,20 @@ function humanise(code: string): string {
     case 'patient_phone_taken':
       return 'That phone number is already set up under another account.'
 
+    // ---- billing (api/payments/routes.py)
+    case 'billing_unconfigured':
+      return 'Payments are not switched on for this deployment yet.'
+    case 'unknown_plan':
+      return 'That plan does not exist.'
+    case 'checkout_busy':
+      return 'Too many payments in flight right now. Try again in a few minutes.'
+    case 'bad_utr':
+      return 'A UPI reference number is 12 digits. Check the number in your payment app.'
+    case 'order_not_found':
+      return 'We could not find that payment.'
+    case 'utr_already_used':
+      return 'That UPI reference has already been used for another payment.'
+
     default:
       return 'Something went wrong at our end.'
   }

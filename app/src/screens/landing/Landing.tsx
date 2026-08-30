@@ -330,7 +330,19 @@ function ForFamilies() {
 
 /* ---------------------------------------------------------------- pricing */
 
-const TIERS = [
+/**
+ * `plan` is the billing plan a tier buys, and `null` for the trial — a free trial is a
+ * sign-up, not a payment, so it is the one tier that does not go to checkout.
+ */
+const TIERS: {
+  name: string
+  price: string
+  unit: string
+  includes: string[]
+  cta: string
+  featured: boolean
+  plan: 'care' | 'care_plus' | null
+}[] = [
   {
     name: 'Trial',
     price: 'Free',
@@ -338,6 +350,7 @@ const TIERS = [
     includes: ['1 dose slot a day', 'Inbound line'],
     cta: 'Start free',
     featured: false,
+    plan: null,
   },
   {
     name: 'Care',
@@ -351,6 +364,7 @@ const TIERS = [
     ],
     cta: 'Choose Care',
     featured: true,
+    plan: 'care',
   },
   {
     name: 'Care+',
@@ -359,6 +373,7 @@ const TIERS = [
     includes: ['Unlimited dose slots', 'Priority-medicine alerts', 'Read-only handoff links'],
     cta: 'Choose Care+',
     featured: false,
+    plan: 'care_plus',
   },
 ]
 
@@ -395,7 +410,7 @@ function Pricing() {
             </ul>
             <Button
               variant={t.featured ? 'accent' : 'outline'}
-              href="/signup"
+              href={t.plan ? `/checkout?plan=${t.plan}` : '/signup'}
               className="mt-auto w-full"
             >
               {t.cta}
@@ -403,9 +418,13 @@ function Pricing() {
           </Card>
         ))}
       </div>
+      {/* Said "UPI checkout is not connected yet" until 30 Aug 2026, when a real
+          payment cleared end to end (KVX-UFUS). The line came down then and not
+          when the code merged — the sentence was about money moving, not about a
+          branch landing. */}
       <p className="text-xs text-muted-strong">
-        Paid plans start after the trial. UPI checkout is not connected yet &mdash; choosing a
-        plan takes you to sign-up.
+        Paid plans start after the trial. Checkout is UPI &mdash; pay from any app on your
+        phone, no card and no account with us.
       </p>
     </Section>
   )

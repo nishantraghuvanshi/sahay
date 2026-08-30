@@ -158,7 +158,9 @@ export const EMPTY_DRAFT: SetupDraft = {
   consents: {},
 }
 
-const KEY = 'kinvox.setup.draft.v1'
+/** Exported so the dev seed can undo itself without duplicating the string. */
+export const DRAFT_KEY = 'kinvox.setup.draft.v1'
+const KEY = DRAFT_KEY
 
 /**
  * The signup fields, deliberately excluded from localStorage.
@@ -267,6 +269,25 @@ export function toE164(input: string): string | null {
   else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
   // Indian mobiles are 10 digits and start with 6–9.
   return /^[6-9]\d{9}$/.test(digits) ? `+91${digits}` : null
+}
+
+/**
+ * What a phone field should hold as someone types into it.
+ *
+ * Digits only, and never more than a country code plus a number. A field that
+ * already held `+919812345678` and was typed into produced `+91+919876543210` —
+ * fourteen digits, silently invalid, with the CTA staying dead and no way to see
+ * why. Dropping the punctuation on the way in makes that unrepresentable, and
+ * `toE164` still accepts a pasted `+91 98765 43210` because it reads digits too.
+ */
+export function normalizePhoneInput(v: string): string {
+  let digits = v.replace(/\D/g, '')
+  // Shed country/trunk prefixes only while they are demonstrably surplus, so a
+  // genuine 10-digit number beginning 91 is never mistaken for a prefix.
+  while (digits.length > 10 && (digits.startsWith('91') || digits.startsWith('0'))) {
+    digits = digits.startsWith('91') ? digits.slice(2) : digits.slice(1)
+  }
+  return digits.slice(0, 10)
 }
 
 export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())

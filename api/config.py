@@ -105,6 +105,32 @@ class Settings(BaseSettings):
     dev_otp_bypass_emails: str = ""
     dev_otp_bypass_code: str = "424242"
 
+    # ------------------------------------------------------------- billing
+    # The VPA money is collected into. Empty by default and empty is a real
+    # state, not a misconfiguration: `/app/billing/plans` reports
+    # `configured: false` and the checkout screen says payments are not switched
+    # on here, rather than rendering a QR code that points nowhere.
+    #
+    # There is no gateway secret to sit beside this, because there is no
+    # gateway — see api/schema.sql `payments`.
+    upi_payee_vpa: str = ""
+    # What the buyer's UPI app shows them they are paying. Their own bank
+    # ultimately decides the name it displays against the VPA, so this is a hint
+    # and not a guarantee.
+    upi_payee_name: str = "Kinvox"
+    # How long an unpaid order holds its reconciliation amount before the suffix
+    # is released to the next buyer.
+    payment_window_min: int = 30
+
+    # Grant the month the moment the buyer types a UTR, with nobody checking the
+    # bank. This is a demo switch and it is dangerous in exactly one way: the
+    # server cannot tell a real 12-digit reference from twelve digits somebody
+    # made up, so with this on, anyone signed in can type any number and get a
+    # paid month. Default off, and any payment it confirms is stamped
+    # `confirmed_by = 'auto — unverified claim'` so a row granted on trust can
+    # never be mistaken later for one a person matched against a bank statement.
+    billing_autoconfirm: bool = False
+
     @field_validator("otp_pepper")
     @classmethod
     def _pepper_is_real(cls, v: str) -> str:
@@ -154,6 +180,10 @@ class Settings(BaseSettings):
     @property
     def email_configured(self) -> bool:
         return self.smtp_configured or bool(self.resend_api_key and self.resend_from)
+
+    @property
+    def billing_configured(self) -> bool:
+        return bool(self.upi_payee_vpa.strip())
 
 
 @lru_cache

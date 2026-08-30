@@ -122,6 +122,13 @@ try:
 
     app.include_router(auth_router)
     app.include_router(caregiver_router)
+
+    # Billing rides in the same try: it takes the same CaregiverDep, so if the
+    # auth modules failed to import there is no session to scope a payment to
+    # and mounting it alone would only produce a checkout that 500s.
+    from api.payments.routes import router as billing_router
+
+    app.include_router(billing_router)
 except Exception as exc:  # pragma: no cover - surfaced at boot, not hidden
     # Loud rather than silent: without this the app's login screen 404s and the
     # only clue is an absent route.

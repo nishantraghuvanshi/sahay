@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useSetupDraft } from './store'
+import { normalizePhoneInput, useSetupDraft } from './store'
 
 const KEY = 'kinvox.setup.draft.v1'
 
@@ -70,5 +70,25 @@ describe('the signup fields', () => {
     act(() => result.current.reset())
 
     expect(result.current.draft.phone).toBe('')
+  })
+})
+
+describe('a phone field', () => {
+  it('keeps only digits, so a leftover +91 cannot double up', () => {
+    // The exact sequence that produced a permanently invalid number: a field
+    // already holding +91… typed into with a full 10-digit mobile.
+    expect(normalizePhoneInput('+91+919876543210')).toBe('9876543210')
+  })
+
+  it('accepts a pasted number in any of the shapes people write one', () => {
+    expect(normalizePhoneInput('+91 98765 43210')).toBe('9876543210')
+    expect(normalizePhoneInput('098765-43210')).toBe('9876543210')
+    expect(normalizePhoneInput('9876543210')).toBe('9876543210')
+    // Starts with 91 but is only ten digits — a real mobile, not a prefix.
+    expect(normalizePhoneInput('9188776655')).toBe('9188776655')
+  })
+
+  it('will not grow past a country code plus a number', () => {
+    expect(normalizePhoneInput('9'.repeat(30))).toHaveLength(10)
   })
 })
