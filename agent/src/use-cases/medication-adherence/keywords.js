@@ -30,6 +30,20 @@ const DENIED_KEYWORDS = [
  * Includes the emergency-relevant terms (breathing, chest, fainting, falls)
  * that the original four-stem list missed — those are the presentations
  * where a delayed response actually costs something.
+ *
+ * The English stems below cover the same emergency categories the
+ * report_outcome tool enumerates (see tools.js): chest pain, difficulty
+ * breathing, severe dizziness, fainting, bleeding, a fall, sudden weakness,
+ * slurred speech, severe pain, confusion. The product is Hinglish
+ * code-switching, so a caller reporting an emergency in English must
+ * escalate exactly like one reporting it in Hindi.
+ *
+ * Multi-word phrases (e.g. "chest pain" rather than bare "chest"/"pain")
+ * are used wherever a bare word would sit next to a common English
+ * negator — isNegated() below only checks the SINGLE word immediately
+ * before a match, so "no chest pain" only negates correctly if "chest
+ * pain" is matched as one unit; matching bare "pain" would see "chest",
+ * not "no", as the preceding word and fail to suppress it.
  */
 const SYMPTOM_KEYWORDS = [
   // Romanized
@@ -38,6 +52,12 @@ const SYMPTOM_KEYWORDS = [
   // Devanagari
   'दर्द', 'बुखार', 'उल्टी', 'चक्कर',
   'साँस', 'सांस', 'सीने', 'बेहोश', 'कमज़ोरी', 'कमजोरी', 'गिर गया', 'गिर गयी',
+  // English
+  'chest pain', 'difficulty breathing', 'trouble breathing',
+  "can't breathe", 'cant breathe', 'cannot breathe', 'shortness of breath',
+  'dizzy', 'dizziness', 'faint', 'bleeding', 'blood', 'fell', 'fall',
+  'weak', 'slurred', 'slurring', 'confused', 'confusion',
+  'severe pain', 'a lot of pain',
 ];
 
 /**
@@ -59,6 +79,24 @@ const DISTRESS_KEYWORDS = [
   'जीने का मन नहीं', 'खुद को नुकसान', 'आत्महत्या',
   'दवाई बंद करना चाहता हूँ', 'दवाई बंद करना चाहती हूँ',
   'इलाज बंद करना चाहता हूँ', 'इलाज बंद करना चाहती हूँ',
+
+  // English. This list was Hindi plus one narrow Hinglish transliteration, so
+  // "I want to end my life" and even "mujhe marna hai" both derived NO_ANSWER —
+  // a suicidal caller classified as nobody having answered the phone. A false
+  // positive costs a caregiver one unnecessary call; a false negative costs the
+  // thing this system exists to prevent.
+  'want to die', 'wanna die', 'end my life', 'end it all', 'kill myself',
+  'hurt myself', 'harm myself', 'no reason to live', "don't want to live",
+  'dont want to live', 'do not want to live', 'not worth living',
+  'give up on treatment', 'giving up on treatment', 'stop the treatment',
+  'stop taking everything', 'stop all my medicines', 'stop my medicines',
+
+  // Wider Hinglish — the same intents in the forms people actually say,
+  // including the short imperative ones the original list missed.
+  'marna hai', 'mar jaunga', 'mar jaungi', 'mar jana chahta',
+  'jeene ka mann nahi', 'jeena nahi chahta hoon', 'jeena nahi chahti hoon',
+  'zinda nahi rehna', 'khatam kar dena chahta', 'khud ko khatam',
+  'dawai band kar dunga', 'dawai band kar dungi', 'ilaj band kar dunga',
 ];
 
 /**
