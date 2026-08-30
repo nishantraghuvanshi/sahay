@@ -297,6 +297,8 @@ class TestVerdictParityAgainstTheSharedFixture:
                 message = str(exc_info.value)
                 for pattern in expect.get("message_matches", []):
                     assert re.search(pattern, message), f"{pattern!r} not in {message!r}"
+                for pattern in expect.get("message_not_matches", []):
+                    assert not re.search(pattern, message), f"{pattern!r} must NOT be in {message!r}"
             else:
                 result = schema_version.check_and_migrate(
                     con, SCHEMA_SQL, str(tmp_path / "case.db")
@@ -331,3 +333,64 @@ class TestVerdictParityAgainstTheSharedFixture:
                 assert table in present, f"expected table {table}"
         finally:
             con.close()
+
+
+RECOVERY = VERDICT_FIXTURE["recovery_instruction"]
+
+
+class TestTheRefusalNamesARealRouteBackOut:
+    """Finding 6. The incomplete-migration refusal repeats on every open by
+    design; before this it said "rebuild the database" and named no command,
+    leaving an operator with a database that refuses forever and no way back.
+    """
+
+    @staticmethod
+    def _refusal_for(db_label, tmp_path):
+        con = _open(tmp_path / "recovery.db")
+        try:
+            # The incomplete-migration shape: medications missing patient_id
+            # (NOT NULL, no DEFAULT) and start_date (DEFAULT (date('now')),
+            # never ALTER-addable), on a table that already has rows.
+            con.executescript(
+                "CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);"
+                "CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);"
+                "INSERT INTO medications (id, name) VALUES ('m1', 'Metformin');"
+            )
+            with pytest.raises(schema_version.IncompatibleDatabaseError) as exc_info:
+                schema_version.check_and_migrate(con, SCHEMA_SQL, db_label)
+            return str(exc_info.value)
+        finally:
+            con.close()
+
+    def test_carries_the_wording_both_runtimes_share(self, tmp_path):
+        message = self._refusal_for("/data/voxikin.db", tmp_path)
+        for pattern in RECOVERY["shared_matches"]:
+            assert re.search(pattern, message), f"{pattern!r} not in {message!r}"
+
+    def test_names_the_command_that_actually_recreates_the_schema_on_this_runtime(self, tmp_path):
+        # api/main.py calls db.init() on every startup, which reaches
+        # check_and_migrate's `created` branch on an absent file and execs
+        # api/schema.sql whole — so `uvicorn api.main:app` genuinely rebuilds.
+        # There is no seed/reset CLI to point at instead; see
+        # _recovery_instruction.
+        message = self._refusal_for("/data/voxikin.db", tmp_path)
+        assert re.search(RECOVERY["per_runtime"]["python"], message)
+
+    def test_names_the_actual_path_so_an_operator_can_paste_the_command(self, tmp_path):
+        message = self._refusal_for("/data/voxikin.db", tmp_path)
+        assert 'mv "/data/voxikin.db" "/data/voxikin.db.superseded"' in message
+
+    def test_the_primary_instruction_is_never_destructive(self, tmp_path):
+        # A refused database may be the only copy of a patient's medication
+        # schedule, and no refusal in this module modified its rows. Move
+        # aside, never delete.
+        message = self._refusal_for("/data/voxikin.db", tmp_path)
+        for forbidden in RECOVERY["forbidden"]:
+            assert forbidden not in message, f"destructive instruction {forbidden!r}"
+
+    def test_a_credential_bearing_label_is_redacted_in_the_message_and_the_command(self, tmp_path):
+        spec = RECOVERY["label_is_redacted"]
+        message = self._refusal_for(spec["db_label"], tmp_path)
+        assert spec["expected_in_message"] in message, "label not redacted"
+        for forbidden in spec["forbidden_in_message"]:
+            assert forbidden not in message, f"{forbidden!r} leaked into the refusal"

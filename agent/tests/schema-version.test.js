@@ -379,6 +379,9 @@ describe('verdict parity — the shared fixture both runtimes read', () => {
           for (const pattern of c.expect.message_matches || []) {
             assert.match(error.message, new RegExp(pattern));
           }
+          for (const pattern of c.expect.message_not_matches || []) {
+            assert.doesNotMatch(error.message, new RegExp(pattern));
+          }
         } else {
           const result = checkAndMigrate(db, SCHEMA_SQL, dbPath);
           assert.strictEqual(result.verdict, c.expect.verdict);
@@ -421,4 +424,72 @@ describe('verdict parity — the shared fixture both runtimes read', () => {
       }
     });
   }
+});
+
+describe('the refusal names a real route back out (finding 6)', () => {
+  const RECOVERY = VERDICT_FIXTURE.recovery_instruction;
+
+  function refusalFor(dbLabel) {
+    const dbPath = tmpDbPath('sahay-schema-recovery-');
+    const db = new DatabaseSync(dbPath);
+    try {
+      // The incomplete-migration shape: medications missing patient_id (NOT
+      // NULL, no DEFAULT) and start_date (DEFAULT (date('now')), never
+      // ALTER-addable), on a table that already has rows.
+      db.exec(`
+        CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);
+        CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);
+        INSERT INTO medications (id, name) VALUES ('m1', 'Metformin');
+      `);
+      checkAndMigrate(db, SCHEMA_SQL, dbLabel);
+      assert.fail('expected a refusal');
+    } catch (e) {
+      if (!(e instanceof IncompatibleDatabaseError)) throw e;
+      return e.message;
+    } finally {
+      db.close();
+    }
+  }
+
+  test('carries the wording both runtimes share', () => {
+    const message = refusalFor('/data/voiceagent.db');
+    for (const pattern of RECOVERY.shared_matches) {
+      assert.match(message, new RegExp(pattern));
+    }
+  });
+
+  test('names the command that actually recreates the schema on THIS runtime', () => {
+    // server.js reaches checkAndMigrate's `created` branch through
+    // SqliteRepository on every boot, and that branch execs api/schema.sql
+    // whole — so `npm start` against an absent file genuinely rebuilds. There
+    // is no `npm run db:reset` to point at instead; see _recoveryInstruction.
+    assert.match(refusalFor('/data/voiceagent.db'), new RegExp(RECOVERY.per_runtime.node));
+  });
+
+  test('names the actual path, so an operator can paste the command', () => {
+    const message = refusalFor('/data/voiceagent.db');
+    assert.ok(
+      message.includes('mv "/data/voiceagent.db" "/data/voiceagent.db.superseded"'),
+      `the command is not runnable as written: ${message}`
+    );
+  });
+
+  test('the primary instruction is never destructive', () => {
+    // A refused database may be the only copy of a patient's medication
+    // schedule, and no refusal in this module modified its rows. Move aside,
+    // never delete.
+    const message = refusalFor('/data/voiceagent.db');
+    for (const forbidden of RECOVERY.forbidden) {
+      assert.ok(!message.includes(forbidden), `destructive instruction ${forbidden}: ${message}`);
+    }
+  });
+
+  test('a credential-bearing label is redacted, in the message AND in the command', () => {
+    const { db_label, expected_in_message, forbidden_in_message } = RECOVERY.label_is_redacted;
+    const message = refusalFor(db_label);
+    assert.ok(message.includes(expected_in_message), `label not redacted: ${message}`);
+    for (const forbidden of forbidden_in_message) {
+      assert.ok(!message.includes(forbidden), `${forbidden} leaked into the refusal: ${message}`);
+    }
+  });
 });

@@ -22,10 +22,49 @@
 
 const fs = require('fs');
 const path = require('path');
+const { redactCredentials } = require('../../utils/db-path');
 
 const SCHEMA_PATH = path.join(__dirname, '..', '..', '..', '..', 'api', 'schema.sql');
 
 class IncompatibleDatabaseError extends Error {}
+
+/**
+ * The route back out of a refusal, named as an actual command.
+ *
+ * A refused database refuses on EVERY subsequent open, by design — that is
+ * what stops an incomplete migration becoming permanent and invisible. Before
+ * this, the messages said to "rebuild the database" and named nothing, so an
+ * operator hitting it at 3am had a database that refuses forever and no
+ * stated way back.
+ *
+ * There is no single supported rebuild command in this repo to point at:
+ * scripts/seed.py is still a stub, api/db.py::init(reset=True) has no CLI
+ * entry point, and agent/scripts/seed-medications.js only materialises rows —
+ * it never recreates a schema. What IS true, and is what this names, is that
+ * checkAndMigrate takes its `created` branch on an absent or empty file and
+ * executes api/schema.sql whole, and server.js reaches that through
+ * SqliteRepository on every boot.
+ *
+ * MOVE ASIDE, never delete. A refused database may be the only copy of a
+ * patient's medication schedule, and none of these refusals modified its
+ * rows. Refusing is recoverable; destroying is not.
+ *
+ * The label is rendered through redactCredentials because it is a configured
+ * path, and a configured path has been a connection string carrying a
+ * password more than once here. In the normal case it is an ordinary path and
+ * comes back byte-identical, so the command below is literally runnable; in
+ * the pathological case the operator gets `<redacted>` and cannot paste it,
+ * which is the correct trade.
+ */
+function _recoveryInstruction(dbLabel) {
+  const safe = redactCredentials(dbLabel);
+  return (
+    `Recover without losing data: move the current file aside, then start the server, ` +
+    `which creates a fresh schema at that path — mv "${safe}" "${safe}.superseded" && npm start ` +
+    `(from agent/). Keep the old file rather than deleting it: it may be the only copy of a ` +
+    `medication schedule, and this refusal left its rows untouched.`
+  );
+}
 
 function readSchemaSql(schemaPath = SCHEMA_PATH) {
   return fs.readFileSync(schemaPath, 'utf8');
@@ -298,16 +337,18 @@ function checkAndMigrate(db, schemaSql, dbLabel) {
 
   if (problems.length > 0) {
     throw new IncompatibleDatabaseError(
-      `Refusing to open ${dbLabel}: incompatible schema (found user_version=${foundVersion}, ` +
-        `required=${targetVersion}). ${problems.join('; ')}. Rebuild the database — ` +
-        `ALTER TABLE cannot fix this — rather than opening it as-is.`
+      `Refusing to open ${redactCredentials(dbLabel)}: incompatible schema (found ` +
+        `user_version=${foundVersion}, required=${targetVersion}). ${problems.join('; ')}. ` +
+        `ALTER TABLE cannot fix this. ${_recoveryInstruction(dbLabel)}`
     );
   }
 
   if (foundVersion > targetVersion) {
     throw new IncompatibleDatabaseError(
-      `Refusing to open ${dbLabel}: found user_version=${foundVersion}, but this code only ` +
-        `understands schema versions up to ${targetVersion}. Upgrade before opening this database.`
+      `Refusing to open ${redactCredentials(dbLabel)}: found user_version=${foundVersion}, but ` +
+        `this code only understands schema versions up to ${targetVersion}. The remedy here is ` +
+        `to upgrade this code, NOT to rebuild — the database is newer than the code, and its ` +
+        `rows are fine. Deploy a build that understands version ${foundVersion}.`
     );
   }
 
@@ -381,14 +422,14 @@ function checkAndMigrate(db, schemaSql, dbLabel) {
   // every open rather than once, not a stored "incomplete" flag.
   if (skipped.length > 0 || skippedIndexes.length > 0) {
     throw new IncompatibleDatabaseError(
-      `Refusing to certify ${dbLabel} as migrated to version ${targetVersion} ` +
-        `(found user_version=${foundVersion}): the migration could not complete safely. ` +
-        `${skipped.length} column(s) could not be added — ${skipped.join(', ') || 'none'} — ` +
-        `${skippedIndexes.length} index statement(s) could not run as a result. ` +
-        `SQLite cannot ALTER TABLE ADD COLUMN a NOT NULL column with no DEFAULT, or any ` +
-        `column whose DEFAULT is not a constant, onto a table that already has rows. ` +
-        `user_version was left unchanged so this refusal repeats on every open until the ` +
-        `database is rebuilt — do not treat this as transient.`
+      `Refusing to certify ${redactCredentials(dbLabel)} as migrated to version ` +
+        `${targetVersion} (found user_version=${foundVersion}): the migration could not ` +
+        `complete safely. ${skipped.length} column(s) could not be added — ` +
+        `${skipped.join(', ') || 'none'} — ${skippedIndexes.length} index statement(s) could ` +
+        `not run as a result. SQLite cannot ALTER TABLE ADD COLUMN a NOT NULL column with no ` +
+        `DEFAULT, or any column whose DEFAULT is not a constant, onto a table that already has ` +
+        `rows. user_version was left unchanged so this refusal repeats on every open — do not ` +
+        `treat this as transient. ${_recoveryInstruction(dbLabel)}`
     );
   }
 

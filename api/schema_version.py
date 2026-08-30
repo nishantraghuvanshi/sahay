@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 import sqlite3
 
+from api.db_path import redact_credentials
+
 SCHEMA_VERSION_RE = re.compile(r"SCHEMA_VERSION\s*=\s*(\d+)")
 RENAMES_RE = re.compile(r"RENAMES:\s*(.+)")
 _TABLE_RE = re.compile(r"CREATE TABLE IF NOT EXISTS (\w+)\s*\(([\s\S]*?)\n\);")
@@ -29,6 +31,44 @@ _COL_RE = re.compile(r"^(\w+)\s+([\s\S]+)$")
 
 class IncompatibleDatabaseError(Exception):
     """Raised when an existing database cannot be safely opened."""
+
+
+def _recovery_instruction(db_label: str) -> str:
+    """The route back out of a refusal, named as an actual command.
+
+    A refused database refuses on EVERY subsequent open, by design — that is
+    what stops an incomplete migration becoming permanent and invisible.
+    Before this, the messages said to "rebuild the database" and named
+    nothing, so an operator hitting it at 3am had a database that refuses
+    forever and no stated way back.
+
+    There is no single supported rebuild command in this repo to point at:
+    scripts/seed.py is still a stub, init(reset=True) in api/db.py has no CLI
+    entry point, and agent/scripts/seed-medications.js only materialises rows
+    — it never recreates a schema. What IS true, and is what this names, is
+    that check_and_migrate takes its `created` branch on an absent or empty
+    file and executes api/schema.sql whole, and api/main.py reaches that
+    through db.init() on every startup.
+
+    MOVE ASIDE, never delete. A refused database may be the only copy of a
+    patient's medication schedule, and none of these refusals modified its
+    rows. Refusing is recoverable; destroying is not.
+
+    The label is rendered through redact_credentials because it is a
+    configured path, and a configured path has been a connection string
+    carrying a password more than once here. In the normal case it is an
+    ordinary path and comes back byte-identical, so the command below is
+    literally runnable; in the pathological case the operator gets
+    `<redacted>` and cannot paste it, which is the correct trade.
+    """
+    safe = redact_credentials(db_label)
+    return (
+        "Recover without losing data: move the current file aside, then start the "
+        "service, which creates a fresh schema at that path — "
+        f'mv "{safe}" "{safe}.superseded" && uvicorn api.main:app. '
+        "Keep the old file rather than deleting it: it may be the only copy of a "
+        "medication schedule, and this refusal left its rows untouched."
+    )
 
 
 def parse_schema_version(schema_sql: str) -> int:
@@ -274,18 +314,20 @@ def check_and_migrate(con: sqlite3.Connection, schema_sql: str, db_label: str) -
 
     if problems:
         raise IncompatibleDatabaseError(
-            f"Refusing to open {db_label}: incompatible schema (found "
-            f"user_version={found_version}, required={target_version}). "
+            f"Refusing to open {redact_credentials(db_label)}: incompatible schema "
+            f"(found user_version={found_version}, required={target_version}). "
             + "; ".join(problems)
-            + ". Rebuild the database — ALTER TABLE cannot fix this — rather than "
-            "opening it as-is."
+            + ". ALTER TABLE cannot fix this. "
+            + _recovery_instruction(db_label)
         )
 
     if found_version > target_version:
         raise IncompatibleDatabaseError(
-            f"Refusing to open {db_label}: found user_version={found_version}, but "
-            f"this code only understands schema versions up to {target_version}. "
-            "Upgrade before opening this database."
+            f"Refusing to open {redact_credentials(db_label)}: found "
+            f"user_version={found_version}, but this code only understands schema "
+            f"versions up to {target_version}. The remedy here is to upgrade this "
+            "code, NOT to rebuild — the database is newer than the code, and its "
+            f"rows are fine. Deploy a build that understands version {found_version}."
         )
 
     if found_version == target_version:
@@ -358,15 +400,15 @@ def check_and_migrate(con: sqlite3.Connection, schema_sql: str, db_label: str) -
     # stored "incomplete" flag.
     if skipped or skipped_indexes:
         raise IncompatibleDatabaseError(
-            f"Refusing to certify {db_label} as migrated to version {target_version} "
-            f"(found user_version={found_version}): the migration could not complete "
-            f"safely. {len(skipped)} column(s) could not be added — "
-            f"{', '.join(skipped) or 'none'} — {len(skipped_indexes)} index statement(s) "
-            "could not run as a result. SQLite cannot ALTER TABLE ADD COLUMN a NOT NULL "
-            "column with no DEFAULT, or any column whose DEFAULT is not a constant, onto "
-            "a table that already has rows. user_version was left unchanged so this "
-            "refusal repeats on every open until the database is rebuilt — do not treat "
-            "this as transient."
+            f"Refusing to certify {redact_credentials(db_label)} as migrated to "
+            f"version {target_version} (found user_version={found_version}): the "
+            f"migration could not complete safely. {len(skipped)} column(s) could not "
+            f"be added — {', '.join(skipped) or 'none'} — {len(skipped_indexes)} index "
+            "statement(s) could not run as a result. SQLite cannot ALTER TABLE ADD "
+            "COLUMN a NOT NULL column with no DEFAULT, or any column whose DEFAULT is "
+            "not a constant, onto a table that already has rows. user_version was left "
+            "unchanged so this refusal repeats on every open — do not treat this as "
+            "transient. " + _recovery_instruction(db_label)
         )
 
     con.execute(f"PRAGMA user_version = {target_version}")

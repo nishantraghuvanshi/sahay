@@ -84,7 +84,10 @@
         "message_matches": [
           "medications\\.patient_id",
           "medications\\.dose",
-          "index statement\\(s\\) could not run"
+          "index statement\\(s\\) could not run",
+          "Recover without losing data: move the current file aside",
+          "\\.superseded",
+          "Keep the old file rather than deleting it"
         ]
       },
       "note": "user_version must NOT be stamped: stamping it is what made an incomplete migration permanent and invisible on every later open."
@@ -98,7 +101,10 @@
         "verdict": "incompatible",
         "user_version_after": 0,
         "message_matches": [
-          "patients\\.id is INTEGER, schema requires TEXT"
+          "patients\\.id is INTEGER, schema requires TEXT",
+          "Recover without losing data: move the current file aside",
+          "\\.superseded",
+          "Keep the old file rather than deleting it"
         ],
         "columns_exactly": {
           "patients": [
@@ -118,7 +124,10 @@
         "verdict": "incompatible",
         "user_version_after": 0,
         "message_matches": [
-          "patients\\.id is \\(untyped\\), schema requires TEXT"
+          "patients\\.id is \\(untyped\\), schema requires TEXT",
+          "Recover without losing data: move the current file aside",
+          "\\.superseded",
+          "Keep the old file rather than deleting it"
         ]
       }
     },
@@ -131,7 +140,10 @@
         "verdict": "incompatible",
         "user_version_after": 0,
         "message_matches": [
-          "medications\\.times"
+          "medications\\.times",
+          "Recover without losing data: move the current file aside",
+          "\\.superseded",
+          "Keep the old file rather than deleting it"
         ],
         "columns_absent": {
           "medications": [
@@ -149,9 +161,65 @@
       "expect": {
         "verdict": "incompatible",
         "message_matches": [
-          "only understands schema versions up to"
+          "only understands schema versions up to",
+          "remedy here is to upgrade this code"
+        ],
+        "message_not_matches": [
+          "Recover without losing data: move the current file aside",
+          "\\.superseded",
+          "Keep the old file rather than deleting it"
         ]
       }
     }
-  ]
+  ],
+  "recovery_instruction": {
+    "_why": [
+      "Finding 6: an incomplete migration refuses on every subsequent open, by",
+      "design. The message said to 'rebuild the database' and named no command, so",
+      "an operator hitting it at 3am had a database that refuses forever and no",
+      "stated route back.",
+      "",
+      "There is no single supported rebuild command in this repo: scripts/seed.py is",
+      "a stub, api/db.py::init(reset=True) has no CLI entry point, and",
+      "agent/scripts/seed-medications.js only materialises rows. What is true, and",
+      "what the message names, is that check_and_migrate takes its 'created' branch",
+      "on an absent or empty file and runs api/schema.sql whole.",
+      "",
+      "shared_matches   wording both runtimes must carry.",
+      "per_runtime      the start command differs, so each suite asserts its own.",
+      "forbidden        the primary instruction must never be destructive. A refused",
+      "                 database may be the only copy of a medication schedule, and",
+      "                 no refusal modified its rows: refusing is recoverable,",
+      "                 destroying is not.",
+      "label_is_redacted  the message names a configured path, and a configured path",
+      "                 has been a connection string carrying a password more than",
+      "                 once here. It goes through the same redactor as finding 1."
+    ],
+    "shared_matches": [
+      "Recover without losing data: move the current file aside",
+      "\\.superseded",
+      "Keep the old file rather than deleting it"
+    ],
+    "per_runtime": {
+      "node": "npm start",
+      "python": "uvicorn api\\.main:app"
+    },
+    "forbidden": [
+      "rm -rf",
+      "rm -f",
+      "DROP TABLE",
+      "DELETE FROM",
+      "unlink",
+      "--force"
+    ],
+    "label_is_redacted": {
+      "db_label": "postgresql://kinvox:SECRETPW@localhost:5432/kinvox",
+      "expected_in_message": "postgresql://<redacted>",
+      "forbidden_in_message": [
+        "SECRETPW",
+        "kinvox:",
+        "@"
+      ]
+    }
+  }
 }
