@@ -28,6 +28,23 @@ const DEFAULT_TURN_EAGERNESS = 'normal';
 // that setting one does not drop the other from the turn object.
 const DEFAULT_TURN_TIMEOUT = 7;
 
+// What ElevenLabs is asked to pull out of the transcript once the call ends.
+// Spells out the promise-versus-taken distinction because that is the mistake
+// the agent's own report_outcome intermittently makes — "मैं ले लूँगी" filed as
+// CONFIRMED — and a second reader that repeats it is no backstop at all.
+const DOSE_OUTCOME_EXTRACTION = [
+  'The outcome of this dose call, as exactly one of:',
+  'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE.',
+  'CONFIRMED only if the patient said they have ALREADY taken this dose.',
+  'A promise or an intention — "I will take it now", "I will take it after food" —',
+  'is DENIED, not CONFIRMED, however willing they sounded.',
+  'DENIED if they have not taken it yet. UNCLEAR if they answered but their',
+  'meaning could not be established. ESCALATED_SYMPTOM if they reported a medical',
+  'emergency, ESCALATED_DISTRESS if they expressed hopelessness or a wish to stop',
+  'treatment. INCOMPLETE if the conversation broke down or the patient was never',
+  'reached. If you cannot tell, answer UNCLEAR rather than guessing.',
+].join(' ');
+
 /**
  * ElevenLabs' own system tools.
  *
@@ -606,18 +623,32 @@ class ElevenLabsTransportAdapter extends TransportPort {
       // That is the worst shape this class of bug can take, and it would have
       // surfaced the moment someone registered the workspace webhook and
       // concluded the feature was finished.
-      ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
-        ? {
-            platform_settings: {
+      platform_settings: {
+        // Extracted from the transcript after the call, independently of any
+        // tool the agent did or did not invoke mid-conversation. deriveOutcome
+        // reads it as tier 2, below a real report_outcome and above keyword
+        // matching — which is what stops a call the agent forgot to report
+        // being recorded NO_ANSWER when it plainly established something.
+        //
+        // Dict shape, established by probing the live API; the
+        // analysis_items.data_collection variant in the schema returns a 500.
+        data_collection: {
+          dose_outcome: {
+            type: 'string',
+            description: DOSE_OUTCOME_EXTRACTION,
+          },
+        },
+        ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
+          ? {
               workspace_overrides: {
                 webhooks: {
                   post_call_webhook_id: process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID,
                   events: ['transcript'],
                 },
               },
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     };
   }
 

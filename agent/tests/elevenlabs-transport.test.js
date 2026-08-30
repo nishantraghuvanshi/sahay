@@ -261,10 +261,10 @@ describe('buildAssistantConfig — post-call webhook registration', () => {
       // platform_settings at the top level too. Nesting it was silently
       // accepted with a 200, because conversation_config allows additional
       // properties, so the webhook id went nowhere and nothing said so.
-      assert.deepStrictEqual(cfg.platform_settings, {
-        workspace_overrides: {
-          webhooks: { post_call_webhook_id: 'webhook_abc123', events: ['transcript'] },
-        },
+      // Asserts the webhook block specifically, not the whole of
+      // platform_settings — data_collection lives alongside it now.
+      assert.deepStrictEqual(cfg.platform_settings.workspace_overrides, {
+        webhooks: { post_call_webhook_id: 'webhook_abc123', events: ['transcript'] },
       });
       assert.strictEqual(
         cfg.conversation_config.platform_settings,
@@ -734,5 +734,49 @@ describe('templating exclusions are by NAME, not by empty default', () => {
     for (const key of ['context_line', 'fields_summary', 'missing_field', 'alert_delivered']) {
       assert.strictEqual(key in p, false, `${key} must not become a dynamic variable`);
     }
+  });
+});
+
+describe('data_collection — a backstop when report_outcome is not called', () => {
+  // The agent does not always invoke report_outcome before ending a call. When
+  // it does not, deriveOutcome's tier 2 needs something real to read, or the
+  // call falls to keyword matching and then to the watchdog and is recorded
+  // NO_ANSWER for a conversation that plainly established something.
+  //
+  // ElevenLabs extracts this field from the transcript after the call, so it
+  // does not depend on the model remembering a tool mid-conversation.
+  //
+  // Shape established by probing the live API: a dict at
+  // platform_settings.data_collection. The analysis_items.data_collection
+  // variant in the schema 500s.
+  test('declares dose_outcome for extraction', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    const field = cfg.platform_settings.data_collection.dose_outcome;
+    assert.ok(field, 'dose_outcome must be declared');
+    assert.strictEqual(field.type, 'string');
+    for (const label of ['CONFIRMED', 'DENIED', 'UNCLEAR', 'ESCALATED_SYMPTOM']) {
+      assert.match(field.description, new RegExp(label));
+    }
+  });
+
+  test('tells the extractor that a promise is not a taken dose', () => {
+    // The other intermittent defect: "मैं ले लूँगी" recorded as CONFIRMED.
+    // The extractor is a second reader of the same transcript and must not
+    // repeat the mistake the tool call sometimes makes.
+    const a = new ElevenLabsTransportAdapter({});
+    const d = a.buildAssistantConfig(STRATEGY, {}, 'https://x')
+      .platform_settings.data_collection.dose_outcome.description;
+    assert.match(d, /already/i);
+    assert.match(d, /promise|intend|will take/i);
+  });
+
+  test('platform_settings is present even without a post-call webhook id', () => {
+    // It used to appear only when ELEVENLABS_POST_CALL_WEBHOOK_ID was set, so
+    // declaring the field would have depended on an unrelated env var.
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.ok(cfg.platform_settings.data_collection);
+    assert.strictEqual(cfg.platform_settings.workspace_overrides, undefined);
   });
 });

@@ -342,3 +342,75 @@ describe('D5 — "ate" must not be read as "took the medicine"', () => {
     assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
   });
 });
+
+describe('D6 — ElevenLabs analysis is a real second opinion, not an inert tier', () => {
+  // deriveOutcome has four tiers. Tier 2 (analysis) only ever read Vapi's
+  // `structuredData`, a field ElevenLabs never sends, so on that transport a
+  // call whose agent forgot to call report_outcome fell straight past it to
+  // keyword matching or the watchdog. That is the "ends without filing an
+  // outcome" failure, and it is intermittent precisely because it depends on
+  // the model remembering a tool call.
+  //
+  // ElevenLabs extracts `data_collection_results` at end of call from the
+  // transcript, independently of any tool the agent did or did not invoke. It
+  // is configured on the agent by buildAssistantConfig.
+  const analysis = (value) => ({
+    data_collection_results: { dose_outcome: { value, rationale: 'from the transcript' } },
+  });
+
+  test('reads the outcome ElevenLabs extracted when no tool call was made', () => {
+    const result = deriveOutcome({ analysis: analysis('DENIED'), transcript: 'user: हाँ' });
+    assert.strictEqual(result.label, OUTCOMES.DENIED);
+    assert.strictEqual(result.source, 'analysis');
+  });
+
+  test('beats keyword matching, which is the tier below it', () => {
+    // The transcript says "हाँ" — keyword matching alone would call it CONFIRMED.
+    const result = deriveOutcome({
+      analysis: analysis('UNCLEAR'),
+      transcript: 'agent: क्या आपने ले लिया है?\nuser: हाँ',
+    });
+    assert.strictEqual(result.label, OUTCOMES.UNCLEAR);
+  });
+
+  test('a real report_outcome still wins over it', () => {
+    const result = deriveOutcome({
+      toolCalls: [{ name: 'report_outcome', arguments: { outcome: 'CONFIRMED', reason: 'said so' } }],
+      analysis: analysis('DENIED'),
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+    assert.strictEqual(result.source, 'tool_call');
+  });
+
+  test('normalises a legacy label the same way a tool call would', () => {
+    const result = deriveOutcome({
+      analysis: {
+        data_collection_results: {
+          dose_outcome: { value: 'ESCALATED', rationale: 'clarify_loop_exceeded' },
+        },
+      },
+    });
+    // ESCALATED + a clarify reason must not page a caregiver — defect D1.
+    assert.strictEqual(result.label, OUTCOMES.INCOMPLETE);
+  });
+
+  test('an absent or unusable extraction falls through rather than inventing one', () => {
+    for (const a of [
+      {},
+      { data_collection_results: {} },
+      { data_collection_results: { dose_outcome: { value: null } } },
+      { data_collection_results: { dose_outcome: { value: '' } } },
+    ]) {
+      const result = deriveOutcome({ analysis: a, endedReason: 'customer-ended-call' });
+      assert.strictEqual(result.source, 'watchdog', JSON.stringify(a));
+    }
+  });
+
+  test("Vapi's structuredData still works, so the other transport is unaffected", () => {
+    const result = deriveOutcome({
+      analysis: { structuredData: { outcome: 'DENIED', reason: 'not yet' } },
+    });
+    assert.strictEqual(result.label, OUTCOMES.DENIED);
+    assert.strictEqual(result.source, 'analysis');
+  });
+});

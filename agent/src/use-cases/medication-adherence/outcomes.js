@@ -165,9 +165,26 @@ function checkToolCalls(toolCalls) {
   );
 }
 
-/** @private */
+/**
+ * Tier 2: the orchestrator's own end-of-call reading of the transcript.
+ *
+ * Two shapes, because two orchestrators. Vapi returns `structuredData`;
+ * ElevenLabs returns `data_collection_results`, a map of fields it extracted
+ * from the transcript after the call. Only the Vapi shape was read here, which
+ * left this tier inert on the ElevenLabs path — a call whose agent forgot to
+ * invoke report_outcome fell past analysis to keyword matching or the watchdog.
+ * That is the intermittent "ended without filing an outcome" defect: extraction
+ * does not depend on the model remembering anything mid-call, so it is exactly
+ * the backstop this tier is meant to be.
+ *
+ * The field is configured on the agent by the ElevenLabs adapter's
+ * buildAssistantConfig.
+ *
+ * @private
+ */
 function checkAnalysis(analysis) {
   if (!analysis) return null;
+
   if (analysis.structuredData?.outcome) {
     const reason = analysis.structuredData.reason || analysis.summary || 'vapi_analysis';
     return {
@@ -176,6 +193,20 @@ function checkAnalysis(analysis) {
       reason,
     };
   }
+
+  const extracted = analysis.data_collection_results?.dose_outcome;
+  if (extracted && extracted.value) {
+    const reason = extracted.rationale || analysis.transcript_summary || 'analysis_extracted';
+    return {
+      // Normalised like a tool call, so a legacy ESCALATED carrying a
+      // clarify-loop reason still lands on INCOMPLETE and cannot page a
+      // caregiver for a conversation that merely broke down (defect D1).
+      label: normaliseLabel(extracted.value, reason),
+      source: 'analysis',
+      reason,
+    };
+  }
+
   return null;
 }
 
