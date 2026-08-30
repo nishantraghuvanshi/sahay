@@ -23,7 +23,7 @@ SCHEMA = ROOT / "schema.sql"
 # app from mock to live is a base-URL change and not a debugging session.
 FIXTURE = ROOT.parent / "scripts" / "mock-api.json"
 
-DB_PATH = Path(os.getenv("KINVOX_DB", ROOT / "kinvox.db"))
+DB_PATH = Path(os.getenv("VOXIKIN_DB", ROOT / "voxikin.db"))
 
 # The fixture is written against this date; every timestamp in it is shifted by
 # whole days onto today, so "yesterday" stays yesterday however long the file sits
@@ -313,9 +313,9 @@ def seed_enabled() -> bool:
     forgets, and "there is a fake patient in the health record" is not a state to
     leave switched on by default.
 
-    Set KINVOX_SEED=1 for the demo and the fixtures the tests build against.
+    Set VOXIKIN_SEED=1 for the demo and the fixtures the tests build against.
     """
-    return os.getenv("KINVOX_SEED", "").strip().lower() in {"1", "true", "yes"}
+    return os.getenv("VOXIKIN_SEED", "").strip().lower() in {"1", "true", "yes"}
 
 
 def init(reset: bool = False) -> None:
@@ -333,7 +333,7 @@ def init(reset: bool = False) -> None:
         added = _migrate(con)
         if added:
             import logging
-            logging.getLogger("kinvox.api").info("migrated: added %s", ", ".join(added))
+            logging.getLogger("voxikin.api").info("migrated: added %s", ", ".join(added))
         already = con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0]
         if not already and seed_enabled():
             _seed(con)

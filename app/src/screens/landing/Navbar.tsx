@@ -14,8 +14,8 @@ export default function Navbar() {
   return (
     <header className={`navbar${scrolled ? ' navbar--scrolled' : ''}`}>
       <div className="navbar__inner">
-        <a className="logo" href="#top" aria-label="Kinvox home">
-          <span>Kinvox</span>
+        <a className="logo" href="#top" aria-label="Voxikin home">
+          <span>Voxikin</span>
         </a>
         <nav className="navbar__links" aria-label="Primary">
           <a href="#how-it-works">How it works</a>

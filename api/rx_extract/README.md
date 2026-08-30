@@ -1,6 +1,6 @@
 # `rx_extract` — prescription reading
 
-Kinvox's prescription-extraction module. A photograph of an Indian prescription goes
+Voxikin's prescription-extraction module. A photograph of an Indian prescription goes
 in; a structured, reviewable medicine schedule comes out, via a single vision-model
 call. No OCR stage.
 

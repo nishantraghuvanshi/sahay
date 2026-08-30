@@ -12,7 +12,7 @@ export const DEV_CAREGIVER: Caregiver = {
   id: 'dev-caregiver',
   name: 'Dev Caregiver',
   phone_e164: '+919876543210',
-  email: 'dev@kinvox.local',
+  email: 'dev@voxikin.local',
   relationship: 'Daughter',
   phone_verified: true,
   email_verified: true,
@@ -23,7 +23,7 @@ export const DEV_DRAFT: SetupDraft = {
   phone: '+919876543210',
   phoneVerified: true,
   phoneOtpSent: true,
-  email: 'dev@kinvox.local',
+  email: 'dev@voxikin.local',
   emailVerified: true,
   emailOtpSent: true,
 
@@ -42,7 +42,7 @@ export const DEV_DRAFT: SetupDraft = {
   escalation: [{ name: 'Rahul Sharma', relationship: 'Son', after: '15 min' }],
 }
 
-const SEEDED = 'kinvox.setup.devSeeded'
+const SEEDED = 'voxikin.setup.devSeeded'
 
 /** Seed once per browser so edits made while testing are not clobbered on every reload. */
 export function seedDevDraftOnce(patch: (next: Partial<SetupDraft>) => void) {

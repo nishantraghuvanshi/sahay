@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from api import db
 from api.auth.deps import CaregiverDep, SettingsDep
 
-log = logging.getLogger("kinvox.caregiver")
+log = logging.getLogger("voxikin.caregiver")
 
 router = APIRouter(prefix="/app", tags=["caregiver app"])
 

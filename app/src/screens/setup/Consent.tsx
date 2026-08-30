@@ -22,7 +22,7 @@ const CONSENTS = [
   {
     id: 'informed',
     text: (name: string) =>
-      `I have told ${name} that Kinvox will call, and they are happy to receive these calls.`,
+      `I have told ${name} that Voxikin will call, and they are happy to receive these calls.`,
   },
   {
     id: 'recording',
@@ -31,7 +31,7 @@ const CONSENTS = [
   {
     id: 'no_advice',
     text: () =>
-      'I understand Kinvox never gives medical advice — it captures what is said and tells me.',
+      'I understand Voxikin never gives medical advice — it captures what is said and tells me.',
   },
 ] as const
 

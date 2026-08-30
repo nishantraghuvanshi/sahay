@@ -159,7 +159,7 @@ export const EMPTY_DRAFT: SetupDraft = {
 }
 
 /** Exported so the dev seed can undo itself without duplicating the string. */
-export const DRAFT_KEY = 'kinvox.setup.draft.v1'
+export const DRAFT_KEY = 'voxikin.setup.draft.v1'
 const KEY = DRAFT_KEY
 
 /**
@@ -219,7 +219,7 @@ function read(): SetupDraft {
 }
 
 /** Cross-component sync without a state library: one storage event, one custom event. */
-const CHANGED = 'kinvox:draft'
+const CHANGED = 'voxikin:draft'
 
 export function useSetupDraft() {
   const [draft, setDraft] = useState<SetupDraft>(read)

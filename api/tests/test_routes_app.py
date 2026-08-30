@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ.setdefault("OTP_PEPPER", "a-long-enough-test-pepper-value")
 # The fixture household is what these tests assert against, so seeding is on here
 # even though it is off by default everywhere else (api/db.py::seed_enabled).
-os.environ["KINVOX_SEED"] = "1"
+os.environ["VOXIKIN_SEED"] = "1"
 
 from api import db, main as api_main, routes_app  # noqa: E402
 from api.config import get_settings  # noqa: E402
@@ -780,7 +780,7 @@ def test_seeding_is_off_unless_it_is_asked_for(tmp_path, monkeypatch):
     """The seed is a fabricated family. Harmless while the app read a client-side
     mock; a fake patient in a real health record once it reads the API."""
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "unseeded.db")
-    monkeypatch.delenv("KINVOX_SEED", raising=False)
+    monkeypatch.delenv("VOXIKIN_SEED", raising=False)
     db.init(reset=True)
     con = db.connect()
     try:

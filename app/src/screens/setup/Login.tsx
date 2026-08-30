@@ -20,7 +20,7 @@ import { SESSION_KEY } from '../../auth/SessionProvider'
  * The previous card layout is preserved verbatim at the bottom of this file.
  */
 
-/* No testimonials. Kinvox has no users yet, so there are none to quote —
+/* No testimonials. Voxikin has no users yet, so there are none to quote —
    PRODUCT.md: "No real testimonials, pricing proof, or live-user data — do not
    fabricate any." The hero panel renders without them. */
 
@@ -113,7 +113,7 @@ export default function Login() {
 //           lg:bg-paper lg:p-8 lg:shadow-[var(--shadow-card)]
 //         "
 //       >
-//         <Link to="/" aria-label="Kinvox home" className="self-start">
+//         <Link to="/" aria-label="Voxikin home" className="self-start">
 //           <Wordmark size={26} />
 //         </Link>
 //
@@ -132,7 +132,7 @@ export default function Login() {
 //       <p className="hidden pt-6 text-sm text-muted-strong lg:block">
 //         New here?{' '}
 //         <Link to="/" className="font-semibold text-ink underline">
-//           See how Kinvox works
+//           See how Voxikin works
 //         </Link>
 //       </p>
 //     </main>

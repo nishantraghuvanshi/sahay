@@ -4,7 +4,7 @@ import type { ExtractedMedicine, ExtractedSchedule } from '../api/extract'
 
 /** Write a draft straight into localStorage, as the earlier setup steps would have. */
 export function seedDraft(patch: Partial<SetupDraft>): void {
-  localStorage.setItem('kinvox.setup.draft.v1', JSON.stringify({ ...EMPTY_DRAFT, ...patch }))
+  localStorage.setItem('voxikin.setup.draft.v1', JSON.stringify({ ...EMPTY_DRAFT, ...patch }))
 }
 
 export function stageFile(name = 'rx.png'): File {

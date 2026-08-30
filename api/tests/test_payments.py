@@ -20,14 +20,14 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 os.environ.setdefault("OTP_PEPPER", "a-long-enough-test-pepper-value")
-os.environ["KINVOX_SEED"] = "1"
+os.environ["VOXIKIN_SEED"] = "1"
 
 from api import db, main as api_main  # noqa: E402
 from api.config import get_settings  # noqa: E402
 from api.payments import plans, upi  # noqa: E402
 
 SEEDED_CAREGIVER_PHONE = "+919812345678"
-TEST_VPA = "kinvox@upi"
+TEST_VPA = "voxikin@upi"
 
 
 def _sign_in(client: TestClient, caregiver_id: str) -> None:
@@ -87,7 +87,7 @@ def client(tmp_path, monkeypatch):
     """A deployment that can take money, signed in as the seeded caregiver."""
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
     monkeypatch.setenv("UPI_PAYEE_VPA", TEST_VPA)
-    monkeypatch.setenv("UPI_PAYEE_NAME", "Kinvox")
+    monkeypatch.setenv("UPI_PAYEE_NAME", "Voxikin")
     # Pinned, like the VPA above and for the same reason: every env-backed
     # setting these tests depend on has to be stated here, or the suite quietly
     # starts asserting against whatever the developer has in `.env`.

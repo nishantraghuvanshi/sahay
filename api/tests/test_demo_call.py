@@ -14,7 +14,7 @@ import tempfile
 import httpx
 import pytest
 
-os.environ.setdefault("KINVOX_DB", tempfile.mktemp(suffix=".db"))
+os.environ.setdefault("VOXIKIN_DB", tempfile.mktemp(suffix=".db"))
 os.environ.setdefault("OTP_PEPPER", "a-long-enough-test-pepper-value")
 os.environ.setdefault("DEV_OTP_BYPASS_CODE", "123456")
 os.environ.setdefault("DEV_OTP_BYPASS_NUMBERS", "+919999900001")
@@ -103,7 +103,7 @@ class _StubAgent:
 @pytest.fixture(autouse=True)
 def _fresh_db(monkeypatch):
     path = tempfile.mktemp(suffix=".db")
-    monkeypatch.setenv("KINVOX_DB", path)
+    monkeypatch.setenv("VOXIKIN_DB", path)
     monkeypatch.setattr(db, "DB_PATH", __import__("pathlib").Path(path))
     db.init()
     yield

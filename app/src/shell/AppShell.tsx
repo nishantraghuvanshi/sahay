@@ -175,7 +175,7 @@ function TopBar() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-6 xl:h-16 xl:gap-4 xl:px-8 2xl:h-20 2xl:px-10">
       <span className="font-display text-lg font-semibold tracking-tight xl:text-xl 2xl:text-2xl">
-        Kinvox
+        Voxikin
       </span>
       <span className="text-xs text-muted-strong xl:text-sm">the care line, at a glance</span>
     </header>

@@ -1,4 +1,4 @@
-# Kinvox
+# Voxikin
 
 **One AI voice line that calls an ageing parent on schedule to manage medicines, and
 picks up when they call in — where the inbound call already knows everything the
@@ -67,8 +67,8 @@ Postgres 16+ is required — the schema uses `TEXT[]`, `JSONB` and partial index
 cp .env.example .env      # fill in — never commit this file
 
 # database
-createdb kinvox
-psql -d postgres -c "CREATE ROLE kinvox LOGIN PASSWORD 'kinvox'"
+createdb voxikin
+psql -d postgres -c "CREATE ROLE voxikin LOGIN PASSWORD 'voxikin'"
 psql "$DATABASE_URL" -f api/schema.sql      # idempotent, doubles as the migration
 
 python3 -m venv .venv && .venv/bin/pip install -r api/requirements.txt

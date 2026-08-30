@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="footer">
       <div className="footer__inner">
         <div className="footer__brand">
-          <span className="footer__logo">Kinvox</span>
+          <span className="footer__logo">Voxikin</span>
           <p>Care that stays on track.</p>
         </div>
         <nav className="footer__links" aria-label="Footer">
@@ -16,7 +16,7 @@ export default function Footer() {
         </nav>
       </div>
       <p className="footer__note">
-        © {new Date().getFullYear()} Kinvox. Your data is safe and never shared.
+        © {new Date().getFullYear()} Voxikin. Your data is safe and never shared.
       </p>
     </footer>
   )

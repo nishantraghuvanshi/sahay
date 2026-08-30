@@ -2,7 +2,7 @@
 
 NPCI's `upi://pay` URI is the whole integration. Every UPI app on the buyer's
 phone — BHIM, GPay, PhonePe, Paytm — handles it, so this works without any of
-them knowing Kinvox exists.
+them knowing Voxikin exists.
 
 Deliberately NOT sent: `tr` (transaction reference) and `mc` (merchant category).
 Those are merchant-mode parameters, and several apps reject a personal VPA that
@@ -40,7 +40,7 @@ def intent_url(*, vpa: str, payee_name: str, amount_paise: int, ref: str) -> str
         ("pn", payee_name),
         ("am", rupees(amount_paise)),
         ("cu", "INR"),
-        ("tn", f"Kinvox {ref}"),
+        ("tn", f"Voxikin {ref}"),
     ]
     query = "&".join(f"{k}={quote(str(v), safe='')}" for k, v in params)
     return f"upi://pay?{query}"

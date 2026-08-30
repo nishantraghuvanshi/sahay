@@ -5,7 +5,7 @@ const crypto = require('crypto');
 /**
  * ElevenLabs signs every webhook delivery. This verifies that signature.
  *
- * The scheme is theirs, not ours, and it is NOT the `X-Kinvox-Token` header we
+ * The scheme is theirs, not ours, and it is NOT the `X-Voxikin-Token` header we
  * attach to our own tool declarations — we control those requests, we do not
  * control this one:
  *

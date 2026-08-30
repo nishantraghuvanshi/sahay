@@ -54,7 +54,7 @@ strategy prompt would destroy something that exists and works, for a comparison 
 might not be kept.
 
 Instead: `POST /v1/convai/agents/{id}/duplicate` once, as a one-off setup step, into a
-Kinvox-managed agent. Its id goes in `ELEVENLABS_AGENT_ID` — the placeholder that has
+Voxikin-managed agent. Its id goes in `ELEVENLABS_AGENT_ID` — the placeholder that has
 been sitting empty in `.env.example`. Every subsequent PATCH targets only the copy, so
 the original stays exactly as it is and can be diffed against ours.
 

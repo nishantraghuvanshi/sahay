@@ -187,7 +187,7 @@ escalate(P1, "rule: chest complaint with age over 40")
 The message names **both** people and carries the rule text:
 
 ```
-Kinvox alert — Sharma-ji
+Voxikin alert — Sharma-ji
 Reported chest tightness, onset 20 minutes ago. Responsive, breathing normal.
 Priority P1 — rule: chest complaint with age over 40
 Reported at 02:14

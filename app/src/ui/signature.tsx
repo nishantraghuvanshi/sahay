@@ -6,7 +6,7 @@ import type { Severity } from '../api/types'
  * Signature components — the pieces that give the product's own ideas a form.
  *
  * The atoms in ./index.tsx are the wireframe's vocabulary. These are not in the
- * wireframes: they exist because the three things Kinvox is actually for — what she
+ * wireframes: they exist because the three things Voxikin is actually for — what she
  * said, the rule that fired, and the fields it already knew — were all rendering as
  * grey body text indistinguishable from a settings label.
  *
@@ -17,7 +17,7 @@ import type { Severity } from '../api/types'
 
 /* ------------------------------------------------------------------ wordmark */
 
-/** "Kinvox" with the i-dot lifted onto the hairline that runs under the word. */
+/** "Voxikin" with the i-dot lifted onto the hairline that runs under the word. */
 /**
  * The rule and the accent dot are sized in `em`, not pixels, so the whole mark
  * scales from one font-size — which is what lets a caller size it with a
@@ -31,7 +31,7 @@ export function Wordmark({ className, size }: { className?: string; size?: numbe
       className={clsx('relative inline-block pb-[0.33em] leading-none', className)}
       style={{ fontFamily: 'var(--font-display)', ...(size ? { fontSize: size } : null) }}
     >
-      <span className="tracking-[-0.01em]">Kinvox</span>
+      <span className="tracking-[-0.01em]">Voxikin</span>
       <span className="absolute inset-x-0 bottom-0 h-px bg-current" />
       <span className="absolute bottom-[-0.1em] left-[0.38em] size-[0.2em] rounded-full bg-accent" />
     </span>

@@ -3,7 +3,7 @@
 
    Everything here is scoped under `.vx-landing`. The source stylesheet declared
    its tokens on `:root` and restyled `body`, `a` and `img` globally — dropped in
-   next to the app, that would have overwritten the Kinvox ramp (both define
+   next to the app, that would have overwritten the Voxikin ramp (both define
    `--line` and `--ease-out`) for every signed-in screen. Scoping the tokens to
    the wrapper keeps the marketing page's warmer, sienna-accented language to the
    one route that wants it, and leaves Tailwind's theme untouched everywhere else.

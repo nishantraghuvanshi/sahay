@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # ---------------------------------------------------------------- core
     # No longer a connection string: this API runs on SQLite and db.py reads
-    # KINVOX_DB for the file path. Kept, with a default, because it arrived with
+    # VOXIKIN_DB for the file path. Kept, with a default, because it arrived with
     # the auth lane and a required field with no default makes every settings
     # load fail at import — including for the routes that never touch it.
     database_url: str = ""
@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     # What the buyer's UPI app shows them they are paying. Their own bank
     # ultimately decides the name it displays against the VPA, so this is a hint
     # and not a guarantee.
-    upi_payee_name: str = "Kinvox"
+    upi_payee_name: str = "Voxikin"
     # How long an unpaid order holds its reconciliation amount before the suffix
     # is released to the next buyer.
     payment_window_min: int = 30

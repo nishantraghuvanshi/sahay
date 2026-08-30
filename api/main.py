@@ -36,7 +36,7 @@ from api.routes_app import router as app_router
 
 load_dotenv()
 
-log = logging.getLogger("kinvox.api")
+log = logging.getLogger("voxikin.api")
 
 # Matches the caregiver app's own limit in app/src/screens/setup/Prescription.tsx.
 MAX_UPLOAD_BYTES = 10 * 1_048_576
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
         await db.close_pool()
 
 
-app = FastAPI(title="Kinvox Care API", lifespan=lifespan)
+app = FastAPI(title="Voxikin Care API", lifespan=lifespan)
 
 # Caregiver-app reads and the onboarding write.
 app.include_router(app_router)

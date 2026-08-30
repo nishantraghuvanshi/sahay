@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizePhoneInput, useSetupDraft } from './store'
 
-const KEY = 'kinvox.setup.draft.v1'
+const KEY = 'voxikin.setup.draft.v1'
 
 const stored = () => JSON.parse(localStorage.getItem(KEY) ?? '{}')
 

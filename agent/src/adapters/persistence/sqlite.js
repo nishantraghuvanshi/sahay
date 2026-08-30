@@ -78,13 +78,13 @@ class SqliteRepository extends OutcomeRepositoryPort {
   constructor(opts = {}) {
     super();
     // One database for the product, not one per lane. It used to be
-    // ./data/voiceagent.db while the caregiver app wrote api/kinvox.db, and the two
+    // ./data/voiceagent.db while the caregiver app wrote api/voxikin.db, and the two
     // never met: a dose moved on the calendar did not change which call was placed.
-    // KINVOX_DB is the same variable the Python API reads, so both land on one file.
+    // VOXIKIN_DB is the same variable the Python API reads, so both land on one file.
     this.dbPath =
       opts.dbPath ||
-      process.env.KINVOX_DB ||
-      require('path').join(__dirname, '..', '..', '..', '..', 'api', 'kinvox.db');
+      process.env.VOXIKIN_DB ||
+      require('path').join(__dirname, '..', '..', '..', '..', 'api', 'voxikin.db');
 
     // Ensure the data directory exists
     const path = require('path');

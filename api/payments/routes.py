@@ -23,7 +23,7 @@ from api import db
 from api.auth.deps import CaregiverDep, SettingsDep
 from api.payments import plans, service, upi
 
-log = logging.getLogger("kinvox.payments")
+log = logging.getLogger("voxikin.payments")
 
 router = APIRouter(prefix="/app/billing", tags=["billing"])
 
@@ -81,7 +81,7 @@ async def checkout(body: CheckoutBody, caregiver: CaregiverDep, settings: Settin
             caregiver_id=caregiver.id,
             plan=body.plan,
             vpa=settings.upi_payee_vpa.strip(),
-            payee_name=settings.upi_payee_name.strip() or "Kinvox",
+            payee_name=settings.upi_payee_name.strip() or "Voxikin",
             window_min=settings.payment_window_min,
         )
 

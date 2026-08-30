@@ -101,15 +101,15 @@ describe('buildAssistantConfig', () => {
     assert.deepStrictEqual(outcome.api_schema.request_body_schema.required.sort(), ['outcome', 'reason']);
   });
 
-  test('declares kinvox_call_id bound to the dynamic variable, on every tool', () => {
+  test('declares voxikin_call_id bound to the dynamic variable, on every tool', () => {
     // Without this, the webhook has no idea which call a tool call belongs
     // to — ElevenLabs' documented dynamic variables carry no conversation id.
     const a = new ElevenLabsTransportAdapter({});
     const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     for (const t of tools) {
-      const prop = t.api_schema.request_body_schema.properties.kinvox_call_id;
+      const prop = t.api_schema.request_body_schema.properties.voxikin_call_id;
       assert.strictEqual(prop.type, 'string');
-      assert.strictEqual(prop.dynamic_variable, 'kinvox_call_id');
+      assert.strictEqual(prop.dynamic_variable, 'voxikin_call_id');
       // A live PATCH 400'd when this property carried dynamic_variable
       // alongside is_system_provided/constant_value/is_omitted — the API
       // accepts only one of that mutually-exclusive set per property.
@@ -122,7 +122,7 @@ describe('buildAssistantConfig', () => {
 
   test('every tool property sets at most one of description/dynamic_variable/is_system_provided/constant_value/is_omitted', () => {
     // The API rejects a property that sets more than one of these five keys.
-    // Pinned generically, not just for kinvox_call_id, so the next property
+    // Pinned generically, not just for voxikin_call_id, so the next property
     // anyone adds to any tool cannot silently reintroduce the same 400.
     const MUTUALLY_EXCLUSIVE = ['description', 'dynamic_variable', 'is_system_provided', 'constant_value', 'is_omitted'];
     const a = new ElevenLabsTransportAdapter({});
@@ -146,7 +146,7 @@ describe('buildAssistantConfig', () => {
       const a = new ElevenLabsTransportAdapter({});
       const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
       for (const t of tools) {
-        assert.strictEqual(t.api_schema.request_headers['X-Kinvox-Token'], 'test-secret');
+        assert.strictEqual(t.api_schema.request_headers['X-Voxikin-Token'], 'test-secret');
       }
     } finally {
       process.env.ELEVENLABS_WEBHOOK_SECRET = originalSecret;
@@ -322,7 +322,7 @@ describe('createCall', () => {
       await a.createCall('agent_x', '+919000000042', { patient_name: 'Kamala', meal_slot: 'morning' });
     } finally { restore(); }
 
-    // kinvox_call_id rides alongside the caller's own variables — it isn't
+    // voxikin_call_id rides alongside the caller's own variables — it isn't
     // one of them, so it's asserted separately below rather than folded
     // into one deepStrictEqual against the whole object.
     const dynamicVariables = cap.body.conversation_initiation_client_data.dynamic_variables;
@@ -330,7 +330,7 @@ describe('createCall', () => {
     assert.strictEqual(dynamicVariables.meal_slot, 'morning');
   });
 
-  test('createCall mints a kinvox_call_id and puts it in dynamic_variables', async () => {
+  test('createCall mints a voxikin_call_id and puts it in dynamic_variables', async () => {
     // ElevenLabs' documented dynamic variables (system__call_duration_secs,
     // system__time) carry no conversation id, so the tool webhook has no
     // other way to know which call it belongs to without this.
@@ -343,12 +343,12 @@ describe('createCall', () => {
       await a.createCall('agent_x', '+919000000042', {});
     } finally { restore(); }
 
-    const { kinvox_call_id: callId } = cap.body.conversation_initiation_client_data.dynamic_variables;
+    const { voxikin_call_id: callId } = cap.body.conversation_initiation_client_data.dynamic_variables;
     assert.strictEqual(typeof callId, 'string');
     assert.match(callId, /^[0-9a-f-]{36}$/);
   });
 
-  test('createCall returns the kinvox_call_id it sent, so a caller can correlate', async () => {
+  test('createCall returns the voxikin_call_id it sent, so a caller can correlate', async () => {
     process.env.ELEVENLABS_API_KEY = 'test-key';
     const cap = {};
     const restore = stubFetch(cap);
@@ -359,8 +359,8 @@ describe('createCall', () => {
       result = await a.createCall('agent_x', '+919000000042', {});
     } finally { restore(); }
 
-    const sentId = cap.body.conversation_initiation_client_data.dynamic_variables.kinvox_call_id;
-    assert.strictEqual(result.kinvox_call_id, sentId);
+    const sentId = cap.body.conversation_initiation_client_data.dynamic_variables.voxikin_call_id;
+    assert.strictEqual(result.voxikin_call_id, sentId);
     // The API's own response fields (conversation_id, callSid) still pass through.
     assert.strictEqual(result.conversation_id, 'conv_1');
   });
