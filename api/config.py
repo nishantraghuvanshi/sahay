@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     # load fail at import — including for the routes that never touch it.
     database_url: str = ""
     care_api_token: str = ""  # agent↔API shared secret (TRD §15); unused by auth
+
+    # ------------------------------------------------------- demo call
+    # The voice agent's own HTTP service. The API never speaks to ElevenLabs
+    # directly: the agent owns that integration, the prompt, and the caregiver's
+    # dose schedule, so a demo that bypassed it would be demonstrating something
+    # other than what the phone call runs.
+    agent_base_url: str = "http://localhost:3001"
+    # Sent as x-api-key when the agent has API_KEY set. Empty in local dev,
+    # where the agent's own auth middleware is disabled.
+    agent_api_key: str = ""
+    demo_call_timeout_s: float = 120.0
     public_base_url: str = "http://localhost:8000"
     app_origin: str = "http://localhost:5173"
 

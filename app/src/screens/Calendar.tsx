@@ -15,6 +15,7 @@ import {
   Tag,
 } from '../ui'
 import { useCareRecord, useDoseHistory } from '../api/hooks'
+import DemoCallPanel from './DemoCallPanel'
 import { slotsForDay } from '../lib/schedule'
 import type { UpcomingDose } from '../lib/schedule'
 import type { DoseStatus } from '../api/types'
@@ -462,6 +463,9 @@ export default function Calendar() {
           Upload new prescription
         </Link>
       </div>
+
+      {/* Optional, and last: a caregiver reads the week first. */}
+      <DemoCallPanel />
     </section>
   )
 }

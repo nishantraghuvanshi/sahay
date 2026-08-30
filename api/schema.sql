@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS caregivers (
   -- beside it, which dies after five.
   failed_logins     INTEGER NOT NULL DEFAULT 0,
   locked_until      TEXT,
+  -- The optional demo call, which each caregiver may take once. A timestamp
+  -- rather than a boolean so "when did they try this" is answerable later, and
+  -- so clearing it to re-enable a demo is an obvious one-line UPDATE.
+  demo_call_used_at TEXT,
   created_at        TEXT NOT NULL
 );
 

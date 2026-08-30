@@ -266,6 +266,7 @@ _ADDED_COLUMNS["caregivers"] = {
     "password_set_at": "TEXT",
     "failed_logins": "INTEGER NOT NULL DEFAULT 0",
     "locked_until": "TEXT",
+    "demo_call_used_at": "TEXT",
 }
 
 _ADDED_COLUMNS["calls"] = {"alert_sent_at": "TEXT", "alert_channel": "TEXT"}

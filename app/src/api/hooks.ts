@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { API_BASE, LIVE_POLL_MS } from '../config'
-import { ApiError, api } from './client'
+import { ApiError, api, authApi } from './client'
 import { mock } from './mock'
 import type {
   CallSession,
@@ -116,3 +116,44 @@ export const useHandoff = (token: string | undefined) =>
     enabled: Boolean(token),
     retry: false,
   })
+
+/* ------------------------------------------------------------- demo call */
+
+export type DemoTurn =
+  | { role: 'agent' | 'user'; message: string }
+  | { role: 'tool'; tool: string; args: Record<string, unknown> }
+
+export type DemoCall = {
+  ok: true
+  persona: string
+  persona_label: string
+  turns: DemoTurn[]
+  outcome: { label: string; reason: string | null } | null
+  variables: { parent_name: string; drug_name: string; next_call_line: string; food_line: string }
+  notes: { no_audio: boolean; tools_mocked: boolean; nothing_recorded: boolean }
+}
+
+export type DemoCallStatus = { available: boolean; used_at: string | null; ready: boolean }
+
+export type DemoCallRefused = { ok: false; error: string; used_at?: string }
+
+/**
+ * Whether this caregiver still has their one demo call, and whether onboarding
+ * has gone far enough for a demo to have anything to say.
+ *
+ * Live only. There is no honest mock for this: the whole point is hearing the
+ * real agent, and a fixture transcript would be a demo of a demo.
+ */
+export async function getDemoCallStatus(): Promise<DemoCallStatus> {
+  // authApi, not api: this route is behind the session cookie, and API_BASE may
+  // be pointing at /mock — where a demo call has no meaning.
+  return authApi.get<DemoCallStatus>('/app/demo-call')
+}
+
+/**
+ * Run the demo. Returns the conversation as text — nobody's phone rings, and
+ * nothing it "decides" is recorded against the parent's record.
+ */
+export async function postDemoCall(persona: string): Promise<DemoCall | DemoCallRefused> {
+  return authApi.postSlow<DemoCall | DemoCallRefused>('/app/demo-call', { persona })
+}

@@ -39,6 +39,8 @@ const { getActiveUseCase } = require('./use-cases/registry');
 const {
   buildScheduleVariables,
 } = require('./use-cases/medication-adherence/scheduling/call-variables');
+const { runDemoCall, PERSONAS } = require('./use-cases/medication-adherence/demo-call');
+const logger = require('./utils/logger');
 const { utcToLocalParts } = require('./utils/time');
 
 // --- Bootstrap ---
@@ -248,6 +250,49 @@ function localHHMM(timeZone = 'Asia/Kolkata') {
 }
 
 // Initiate an outbound call
+// A demo dose call: the real agent, the caregiver's real prescription, and
+// nobody's phone rings. Returns the conversation as text.
+//
+// Separate from POST /api/call on purpose. That one dials a human being; this
+// one cannot, and the two must not be a flag apart from each other — a demo
+// that could ring a patient by accident is not a demo.
+app.get('/api/demo-call/personas', (req, res) => {
+  res.json({
+    personas: Object.entries(PERSONAS).map(([key, p]) => ({ key, label: p.label })),
+  });
+});
+
+app.post('/api/demo-call', async (req, res) => {
+  const { phone, name, drug, caregiver, persona } = req.body || {};
+
+  if (!name) return res.status(400).json({ error: 'Parent name is required' });
+  if (!drug) return res.status(400).json({ error: 'Drug name is required' });
+
+  try {
+    const result = await runDemoCall({
+      repository,
+      phone,
+      parentName: name,
+      drugName: drug,
+      caregiverName: caregiver,
+      persona: persona || 'forgot',
+    });
+    logger.log('demo_call_completed', {
+      persona: result.persona,
+      turns: result.turns.length,
+      outcome: result.outcome ? result.outcome.label : null,
+    });
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    const known = { unknown_persona: 400, not_configured: 503, upstream_failed: 502 };
+    const status = known[err.code] || 500;
+    logger.log('demo_call_failed', { code: err.code || 'unknown', status });
+    // err.message is safe here — this route is behind apiKeyAuth and the
+    // messages are about our own configuration, not a caller's input.
+    return res.status(status).json({ ok: false, error: err.code || 'demo_failed', detail: err.message });
+  }
+});
+
 app.post('/api/call', async (req, res) => {
   const { phone, name, drug, language, caregiver, slot } = req.body;
 

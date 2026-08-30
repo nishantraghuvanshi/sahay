@@ -12,14 +12,19 @@ Lane B.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
+
+import httpx
 from datetime import UTC, datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from api import db
-from api.auth.deps import CaregiverDep
+from api.auth.deps import CaregiverDep, SettingsDep
+
+log = logging.getLogger("kinvox.caregiver")
 
 router = APIRouter(prefix="/app", tags=["caregiver app"])
 
@@ -152,3 +157,126 @@ async def onboarding(body: OnboardingBody, caregiver: CaregiverDep):
             )
 
     return {"ok": True, "patient_id": str(patient_id)}
+
+
+# ------------------------------------------------------------------ demo call
+
+
+class DemoCallBody(BaseModel):
+    persona: str = "forgot"
+
+
+@router.get("/demo-call")
+async def demo_call_status(caregiver: CaregiverDep):
+    """Whether this caregiver still has their one demo call.
+
+    A GET so the button can render its real state on load instead of finding
+    out by being pressed.
+    """
+    async with db.connection() as conn:
+        used_at = await conn.fetchval(
+            "SELECT demo_call_used_at FROM caregivers WHERE id = $1", caregiver.id
+        )
+        patient = await conn.fetchrow(
+            "SELECT name, phone_e164 FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            caregiver.id,
+        )
+    return {
+        "ok": True,
+        "available": used_at is None,
+        "used_at": used_at,
+        # No patient means onboarding is not finished, and a demo would have no
+        # name or medicine to speak.
+        "ready": patient is not None,
+    }
+
+
+@router.post("/demo-call")
+async def demo_call(body: DemoCallBody, caregiver: CaregiverDep, settings: SettingsDep):
+    """Run one demo dose call and return the transcript.
+
+    Nobody's phone rings. The agent runs the real prompt against a scripted
+    patient through ElevenLabs' simulate-conversation endpoint and hands back
+    text — which is the point: a caregiver can read exactly how this thing
+    talks to their parent before it ever does.
+
+    Deliberately cannot affect anything. Tool calls are mocked upstream, so the
+    demo cannot mark a dose taken, cannot raise a family alert, and writes no
+    call record. The only thing it changes is that this caregiver has now used
+    their one demo.
+
+    The API does not talk to ElevenLabs itself. The agent owns that integration,
+    the prompt and the dose schedule; a demo that went around it would be
+    demonstrating something other than what actually calls the patient.
+    """
+    async with db.transaction() as conn:
+        used_at = await conn.fetchval(
+            "SELECT demo_call_used_at FROM caregivers WHERE id = $1", caregiver.id
+        )
+        if used_at is not None:
+            return {"ok": False, "error": "demo_already_used", "used_at": used_at}
+
+        patient = await conn.fetchrow(
+            "SELECT name, phone_e164, drug_name FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            caregiver.id,
+        )
+        if patient is None:
+            return {"ok": False, "error": "onboarding_incomplete"}
+
+        med = await conn.fetchval(
+            "SELECT name FROM medications WHERE patient_id = "
+            "(SELECT id FROM patients WHERE caregiver_id = $1 LIMIT 1) "
+            "AND excluded = 0 AND stopped_at IS NULL LIMIT 1",
+            caregiver.id,
+        )
+
+        # Claimed BEFORE the call, inside the transaction. Claiming afterwards
+        # would let two clicks in flight at once both pass the check and spend
+        # two demos, and would also hand a free retry to anyone whose demo
+        # happened to fail — which is the same hole from the other side.
+        await conn.execute(
+            "UPDATE caregivers SET demo_call_used_at = $2 WHERE id = $1",
+            caregiver.id,
+            _now_iso(),
+        )
+
+    drug = med or patient["drug_name"] or "your medicine"
+    try:
+        async with httpx.AsyncClient(timeout=settings.demo_call_timeout_s) as client:
+            headers = {"x-api-key": settings.agent_api_key} if settings.agent_api_key else {}
+            resp = await client.post(
+                f"{settings.agent_base_url.rstrip('/')}/api/demo-call",
+                headers=headers,
+                json={
+                    "phone": patient["phone_e164"],
+                    "name": patient["name"] or "आपके",
+                    "drug": drug,
+                    "caregiver": caregiver.name,
+                    "persona": body.persona,
+                },
+            )
+    except httpx.HTTPError as exc:
+        await _release_demo(caregiver.id)
+        log.warning("demo call could not reach the agent: %s", exc)
+        return {"ok": False, "error": "agent_unreachable"}
+
+    if resp.status_code != 200:
+        # The agent refused or broke. Give the demo back rather than charging
+        # a caregiver their single attempt for our outage.
+        await _release_demo(caregiver.id)
+        log.warning("demo call rejected by agent: %s %s", resp.status_code, resp.text[:200])
+        return {"ok": False, "error": "demo_failed", "status": resp.status_code}
+
+    return {"ok": True, **resp.json()}
+
+
+async def _release_demo(caregiver_id: str) -> None:
+    """Hand the demo back after a failure that was ours, not the caregiver's."""
+    async with db.transaction() as conn:
+        await conn.execute(
+            "UPDATE caregivers SET demo_call_used_at = NULL WHERE id = $1", caregiver_id
+        )
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
