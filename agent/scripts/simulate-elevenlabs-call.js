@@ -159,6 +159,19 @@ async function runScenario(key, scenario, args, credentials) {
 
   if (leaked.size) problems.push(`spoke unfilled placeholders: ${[...leaked].join(', ')}`);
 
+  // Square-bracket expressive tags ([happy], [sad], [slow]) appear all over
+  // simulated transcripts and in NONE of the three real calls — checked
+  // directly. eleven_v3_conversational runs with expressive_mode on, and a
+  // real call's TTS consumes the tag as delivery instead of speaking it;
+  // a simulation has no TTS, so the tag survives into the text.
+  //
+  // A warning, not a failure. Suppressing them via the prompt was tried and
+  // both failed (the model does not control them) and would have thrown away
+  // the expressiveness. Worth watching only in case one ever reaches a real
+  // transcript, which would mean it was spoken aloud.
+  const tags = [...new Set(spoken.match(/\[[a-zA-Z_ ]{2,20}\]/g) || [])];
+  if (tags.length) warnings.push(`expressive tags in text: ${tags.join(', ')} (simulation-only)`);
+
   // Did the template actually receive the per-call facts? Only the two the
   // opener always speaks are asserted; caregiver_name legitimately may not come
   // up unless the call escalates.

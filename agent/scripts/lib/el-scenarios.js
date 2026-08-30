@@ -97,6 +97,31 @@ const SCENARIOS = {
       'not be accepted on the first answer, and must not be pressed a third time.',
   },
 
+  refuses_with_reason: {
+    label: 'Plain refusal — has a reason if asked',
+    first_message: 'हाँ बोलो',
+    prompt:
+      'You are Kamala, 71, in Pune. You have not taken the medicine and you ' +
+      'will NOT take it. Say so plainly. You are not upset or hopeless — just ' +
+      'decided. If, and only if, they ask you WHY, tell them the tablet upsets ' +
+      'your stomach: "इससे मेरा पेट खराब हो जाता है". Do not volunteer that ' +
+      'reason unprompted. Answer briefly in Hindi.',
+    expect: ['DENIED'],
+    forbid: ['CONFIRMED', 'ESCALATED_SYMPTOM', 'ESCALATED_DISTRESS'],
+    mustSay: [
+      {
+        // The reason is what makes the record actionable: "ran out of tablets"
+        // and "it upsets my stomach" need completely different help from the
+        // family. A DENIED with no reason tells them nothing they can act on.
+        pattern: /(क्यों|वजह|कारण)/,
+        why: 'never asked why the dose was refused',
+      },
+    ],
+    note:
+      'A settled refusal, not distress. The agent must ask once why and carry ' +
+      'the answer into report_outcome, without arguing or asking twice.',
+  },
+
   // ── Escalation: must fire ───────────────────────────────────────────
   chest_pain: {
     label: 'Medical emergency — chest pain',
