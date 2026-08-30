@@ -96,6 +96,15 @@ function handlePlaygroundConnection(ws, deps) {
               language: message.language || 'hi',
               phone: message.phone || null,
               direction: message.direction === 'outbound' ? 'outbound' : 'inbound',
+              // Per-call testing overrides from the UI. Absent means "use the
+              // configured default", which is why squadMode is passed through
+              // as undefined rather than coerced to false.
+              squadMode: typeof message.squadMode === 'boolean' ? message.squadMode : undefined,
+              foodRule: message.foodRule || undefined,
+              forceMode: message.forceMode || null,
+              onSquadTransition: ({ member, label }) => {
+                send({ type: 'squad-transition', member, label });
+              },
               onTranscript: (text, isFinal) => {
                 send({ type: 'transcript', text, isFinal });
               },

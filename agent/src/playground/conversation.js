@@ -57,6 +57,15 @@ class PlaygroundConversation {
     this.phone = deps.phone || null;
     this.direction = deps.direction === 'outbound' ? 'outbound' : 'inbound';
 
+    // Per-call testing overrides, set from the playground UI so the graph can
+    // be exercised without editing .env or the database between calls.
+    // Deliberately NOT exposed: DISABLE_GUARDRAILS. assertSafeToServe refuses
+    // to boot with it set, and a UI checkbox would route around that guard —
+    // an unguarded agent is one misclick away, and it looks identical.
+    this.squadModeOverride = deps.squadMode;      // true | false | undefined
+    this.foodRuleOverride = deps.foodRule;        // 'after' | 'before' | 'none' | undefined
+    this.forceMode = deps.forceMode || null;      // 'outbound' | 'inbound' | 'resume' | null
+
     // Callbacks
     this.onTranscript = deps.onTranscript || (() => {});
     this.onAgentResponse = deps.onAgentResponse || (() => {});
@@ -64,6 +73,7 @@ class PlaygroundConversation {
     this.onOutcome = deps.onOutcome || (() => {});
     this.onStateChange = deps.onStateChange || (() => {});
     this.onModeResolved = deps.onModeResolved || (() => {});
+    this.onSquadTransition = deps.onSquadTransition || (() => {});
     this.onError = deps.onError || (() => {});
 
     // Conversation state
@@ -163,7 +173,12 @@ class PlaygroundConversation {
       // first message both depend on the resolved mode and variables.
       const resolution = await this.transport.openSession({ phone: this.phone, direction: this.direction });
       this.sessionId = resolution.sessionId;
-      this.mode = resolution.mode;
+      // A forced mode makes 'resume' testable without having to drop a call
+      // and start another inside the resume window.
+      this.mode = this.forceMode || resolution.mode;
+      if (this.forceMode && this.forceMode !== resolution.mode) {
+        logger.log('playground_mode_forced', { resolved: resolution.mode, forced: this.forceMode });
+      }
       this.onModeResolved(this.mode);
 
       // 2. Initialize STT adapter
@@ -185,17 +200,25 @@ class PlaygroundConversation {
       // one place this design can actually be heard is not quietly running a
       // different agent. Opt-in: the single-prompt path stays the default
       // until the graph has been listened to.
+      const squadDefault = String(process.env.SQUAD_MODE || '').toLowerCase() === 'true';
       this.squadEnabled =
-        String(process.env.SQUAD_MODE || '').toLowerCase() === 'true'
+        (this.squadModeOverride === undefined ? squadDefault : Boolean(this.squadModeOverride))
         && typeof this.langStrategy.buildSquadMembers === 'function';
 
       if (this.squadEnabled) {
-        this.squadMembers = this.langStrategy.buildSquadMembers(variables);
+        // The override lets all three graphs be walked without editing
+        // medications.food_rule between calls. 'none' is a real choice, not
+        // an absence, so it is passed through rather than falling back.
+        const squadVariables = this.foodRuleOverride
+          ? { ...variables, food_rule: this.foodRuleOverride === 'none' ? null : this.foodRuleOverride }
+          : variables;
+        this.squadMembers = this.langStrategy.buildSquadMembers(squadVariables);
         this.currentMember = this.squadMembers.find((m) => m.first);
         logger.log('squad_mode_enabled', {
           members: this.squadMembers.length,
           entry: this.currentMember.key,
-          foodRule: variables.food_rule ?? null,
+          foodRule: this.foodRuleOverride ?? variables.food_rule ?? null,
+          overridden: Boolean(this.foodRuleOverride),
         });
       }
 

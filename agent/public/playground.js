@@ -64,6 +64,10 @@
   const statusText = document.getElementById('statusText');
   const modeBadge = document.getElementById('modeBadge');
   const transcriptEl = document.getElementById('transcript');
+  const squadToggle = document.getElementById('squadToggle');
+  const foodRuleSelect = document.getElementById('foodRuleSelect');
+  const forceModeSelect = document.getElementById('forceModeSelect');
+  const stateBadge = document.getElementById('stateBadge');
   const errorBox = document.getElementById('errorBox');
   const outcomeBox = document.getElementById('outcomeBox');
 
@@ -232,6 +236,12 @@
         break;
       case 'agent_response':
         appendMessage('agent', message.text);
+        break;
+      case 'squad-transition':
+        // Live view of the state machine. Without this the graph is invisible
+        // while testing, and a wrong transition looks like a bad answer.
+        showState(message.label || message.member);
+        if (message.member === 'emergency') stateBadge.classList.add('emergency');
         break;
       case 'audio':
         handleIncomingAudio(message.data);
@@ -821,7 +831,21 @@
       await startMicrophone();
 
       // 4. Tell the server to start the conversation.
-      sendJSON({ type: 'start', language, phone, direction });
+      sendJSON({
+        type: 'start',
+        language,
+        phone,
+        direction,
+        // Read at Start, not live: these decide how the call is BUILT, so
+        // changing them mid-call would describe a call that isn't running.
+        squadMode: squadToggle.checked,
+        foodRule: foodRuleSelect.value || undefined,
+        forceMode: forceModeSelect.value || undefined,
+      });
+
+      // Lock the testing controls for the duration — see above.
+      setTestingControlsDisabled(true);
+      showState(squadToggle.checked ? 'starting…' : null);
 
       // 4. Update UI state. (The button was already disabled on entry.)
       isRunning = true;
@@ -869,7 +893,27 @@
   /**
    * Reset the UI to its idle state (used on error / disconnect).
    */
+  /** Show (or hide) the current squad member. */
+  function showState(label) {
+    if (!label) {
+      stateBadge.hidden = true;
+      stateBadge.textContent = '';
+      stateBadge.classList.remove('emergency');
+      return;
+    }
+    stateBadge.hidden = false;
+    stateBadge.textContent = label;
+  }
+
+  function setTestingControlsDisabled(disabled) {
+    squadToggle.disabled = disabled;
+    foodRuleSelect.disabled = disabled;
+    forceModeSelect.disabled = disabled;
+  }
+
   function resetUI() {
+    setTestingControlsDisabled(false);
+    showState(null);
     isRunning = false;
     stopMicrophone();
     cancelTTS();

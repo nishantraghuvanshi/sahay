@@ -153,6 +153,13 @@
       color: #8e8e93;
       text-align: center;
     }
+    .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+    .toggle input { cursor: pointer; }
+    .state-badge {
+      display: inline-block; padding: 4px 10px; border-radius: 12px;
+      background: #eef2ff; color: #3730a3; font-size: 13px; font-weight: 600;
+    }
+    .state-badge.emergency { background: #fee2e2; color: #991b1b; }
   </style>
 </head>
 <body>
@@ -172,6 +179,31 @@
         <option value="hi">हिन्दी (Hindi)</option>
         <option value="en">English</option>
       </select>
+    </div>
+
+    <!-- Testing controls. These change how THIS call is built, so they are
+         read at Start and are disabled while a call is running. -->
+    <div class="config-bar">
+      <label class="toggle" title="Run the multi-state member graph instead of one system prompt">
+        <input type="checkbox" id="squadToggle" />
+        Multi-state
+      </label>
+
+      <select id="foodRuleSelect" title="Override the prescription's food rule to walk a different graph">
+        <option value="">Food rule: from prescription</option>
+        <option value="after">Food rule: after food</option>
+        <option value="before">Food rule: before food</option>
+        <option value="none">Food rule: none (generic)</option>
+      </select>
+
+      <select id="forceModeSelect" title="Force the prompt mode instead of resolving it from session state">
+        <option value="">Mode: auto (resolve)</option>
+        <option value="outbound">Mode: outbound</option>
+        <option value="inbound">Mode: inbound</option>
+        <option value="resume">Mode: resume</option>
+      </select>
+
+      <span id="stateBadge" class="state-badge" hidden></span>
     </div>
 
     <div class="controls">
