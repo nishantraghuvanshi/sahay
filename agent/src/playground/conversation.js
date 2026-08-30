@@ -30,6 +30,7 @@ const { TurnLatency } = require('../utils/latency');
 const { TurnManager, STATE } = require('./turn-manager');
 const { SentenceBuffer } = require('../utils/sentence-buffer');
 const { buildInboundVariables } = require('../use-cases/medication-adherence/inbound-context');
+const { chooseDestination } = require('../core/squad/router');
 
 class PlaygroundConversation {
   /**
@@ -169,7 +170,28 @@ class PlaygroundConversation {
       // 3. Build system prompt and first message from the resolved mode and
       // variables — exactly as the Vapi adapter's buildAssistantConfig does.
       const variables = buildInboundVariables(resolution, this.language);
-      const systemPrompt = this.langStrategy.buildSystemPrompt(variables, this.mode);
+
+      // Squad mode runs the SAME member graph the phone path builds, so the
+      // one place this design can actually be heard is not quietly running a
+      // different agent. Opt-in: the single-prompt path stays the default
+      // until the graph has been listened to.
+      this.squadEnabled =
+        String(process.env.SQUAD_MODE || '').toLowerCase() === 'true'
+        && typeof this.langStrategy.buildSquadMembers === 'function';
+
+      if (this.squadEnabled) {
+        this.squadMembers = this.langStrategy.buildSquadMembers(variables);
+        this.currentMember = this.squadMembers.find((m) => m.first);
+        logger.log('squad_mode_enabled', {
+          members: this.squadMembers.length,
+          entry: this.currentMember.key,
+          foodRule: variables.food_rule ?? null,
+        });
+      }
+
+      const systemPrompt = this.squadEnabled
+        ? this.currentMember.systemPrompt
+        : this.langStrategy.buildSystemPrompt(variables, this.mode);
       const firstMessage = this.langStrategy.buildFirstMessage(variables, this.mode);
 
       // 4. Initialize conversation history
@@ -332,6 +354,10 @@ class PlaygroundConversation {
       // 4. Flush any remaining text in the buffer
       sentenceBuffer.flush();
 
+      // 4b. Decide whether this turn moved the call to a new state. Runs after
+      // the audio is out, so routing never delays what the patient hears.
+      await this._routeSquad(llmAdapter, llmConfig);
+
       // 5. Build assistant message for history
       const assistantMessage = {
         role: 'assistant',
@@ -446,6 +472,48 @@ class PlaygroundConversation {
    * @param {Object} args - { role, content, toolCalls }
    * @private
    */
+  /**
+   * Move to the next squad member if this turn satisfied a destination.
+   *
+   * Swapping messages[0] is the whole mechanism: the conversation history is
+   * kept intact so the new member can see what was already said, but the goal
+   * it is working toward changes. That mirrors what a Vapi handoff does — the
+   * transcript follows the caller between members.
+   *
+   * Never throws. A routing failure leaves the call on its current member,
+   * which is a working conversation, just a less specific one.
+   *
+   * @private
+   */
+  async _routeSquad(llmAdapter, llmConfig) {
+    if (!this.squadEnabled || !this.currentMember) return;
+
+    const next = await chooseDestination({
+      llmAdapter,
+      llmConfig,
+      env: process.env,
+      member: this.currentMember,
+      messages: this.messages,
+      logger,
+    });
+    if (!next) return;
+
+    const target = this.squadMembers.find((m) => m.key === next);
+    if (!target) {
+      // buildSquadMembers already rejects dangling destinations, so this means
+      // the router invented a key. Stay rather than crash a live call.
+      logger.error('squad_route_unknown_member', new Error(`no member "${next}"`));
+      return;
+    }
+
+    logger.log('squad_transition', { from: this.currentMember.key, to: target.key });
+    this.currentMember = target;
+    this.messages[0] = { role: 'system', content: target.systemPrompt };
+    if (typeof this.onSquadTransition === 'function') {
+      this.onSquadTransition({ member: target.key, label: target.label });
+    }
+  }
+
   async _recordTurn({ role, content, toolCalls }) {
     try {
       await this.transport.recordTurn({ sessionId: this.sessionId, role, content, toolCalls });
