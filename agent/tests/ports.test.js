@@ -55,6 +55,26 @@ describe('TransportPort', () => {
     const port = new TransportPort();
     await assert.rejects(() => port.createCall('', '', {}), /not implemented/);
   });
+
+  test('requiredSecrets throws not-implemented — no silent "needs nothing" default', () => {
+    const port = new TransportPort();
+    assert.throws(() => port.requiredSecrets(), /not implemented/);
+  });
+
+  test('every registered transport adapter implements requiredSecrets()', () => {
+    const { TRANSPORT_ADAPTERS } = require('../src/adapters/transport/registry');
+    for (const [name, AdapterClass] of Object.entries(TRANSPORT_ADAPTERS)) {
+      const adapter = new AdapterClass({}, {});
+      assert.doesNotThrow(
+        () => adapter.requiredSecrets(),
+        `${name} transport must override requiredSecrets()`
+      );
+      assert.ok(
+        Array.isArray(adapter.requiredSecrets()),
+        `${name} transport's requiredSecrets() must return an array`
+      );
+    }
+  });
 });
 
 describe('OutcomeRepositoryPort', () => {

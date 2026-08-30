@@ -61,6 +61,25 @@ class TransportPort {
   async createCall(assistantId, phoneNumber, variables) {
     throw new Error('TransportPort.createCall() not implemented');
   }
+
+  /**
+   * The env vars this transport needs set before it is safe to serve traffic
+   * over it — e.g. the shared secret that authenticates its webhooks.
+   * Consulted by core/safety-guard.js so the boot guard checks whichever
+   * transport is actually active instead of hardcoding one orchestrator's
+   * variable name.
+   *
+   * Deliberately no default that returns []: a transport that needs no
+   * secret (the playground — no phone, no vendor webhook) must say so
+   * explicitly by overriding this. Throwing here means a new transport
+   * that forgets to implement it fails loud at boot instead of silently
+   * requiring nothing.
+   *
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    throw new Error('TransportPort.requiredSecrets() not implemented');
+  }
 }
 
 module.exports = TransportPort;

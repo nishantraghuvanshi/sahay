@@ -195,6 +195,21 @@ class PlaygroundTransportAdapter extends TransportPort {
   async createCall() {
     throw new Error('PlaygroundTransportAdapter.createCall() is not applicable — the playground never dials out.');
   }
+
+  /**
+   * @see TransportPort#requiredSecrets
+   *
+   * The playground is a browser session, not a phone call — there is no
+   * vendor webhook to authenticate and no orchestrator to share a secret
+   * with, so it needs none. Explicit empty array rather than inheriting a
+   * default, per TransportPort's contract: a transport that needs no secret
+   * says so on purpose.
+   *
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    return [];
+  }
 }
 
 /**

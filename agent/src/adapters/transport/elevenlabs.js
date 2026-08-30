@@ -892,6 +892,29 @@ class ElevenLabsTransportAdapter extends TransportPort {
     // this dispatch with the tool calls and post-call webhook that follow.
     return { ...body, voxikin_call_id: voxikinCallId };
   }
+
+  /**
+   * @see TransportPort#requiredSecrets
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    return [
+      {
+        name: 'ELEVENLABS_WEBHOOK_SECRET',
+        why: 'sent back to us as X-Voxikin-Token on every server-tool call ' +
+          '(report_outcome, log_observation, ...) and verified before that ' +
+          'call is trusted — unset, every tool call 401s, including the one ' +
+          'that files ESCALATED_SYMPTOM, so a chest-pain report never reaches ' +
+          'a caregiver.',
+      },
+      {
+        name: 'ELEVENLABS_POST_CALL_SECRET',
+        why: 'verifies the HMAC signature on the post-call webhook — unset, a ' +
+          'forged post-call payload can write a fabricated transcript and ' +
+          'outcome for a call that never happened.',
+      },
+    ];
+  }
 }
 
 module.exports = ElevenLabsTransportAdapter;

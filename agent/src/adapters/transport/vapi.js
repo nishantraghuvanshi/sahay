@@ -1103,6 +1103,23 @@ class VapiTransportAdapter extends TransportPort {
       callId: call.id,
     });
   }
+
+  /**
+   * @see TransportPort#requiredSecrets
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    return [
+      {
+        name: 'VAPI_SECRET',
+        why: '/webhook, /llm/chat/completions, /api/tts/:provider and the /api/stt ' +
+          'WebSocket accept anyone without it — a forged webhook can write fake ' +
+          'call rows, and the bridged endpoints are a free paid-vendor-call ' +
+          'amplifier. Set it and configure the same value on the Vapi ' +
+          'assistant/phone number.',
+      },
+    ];
+  }
 }
 
 module.exports = VapiTransportAdapter;

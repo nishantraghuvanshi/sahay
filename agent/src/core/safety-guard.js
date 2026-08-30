@@ -11,18 +11,28 @@
  *     composed system prompt, leaving an agent with no emergency sequence, no
  *     anti-diagnosis rule, and nothing forbidding a claim that help was
  *     dispatched.
- *   - `VAPI_SECRET` (core/middleware/auth.js's vapiSecretAuth) guards /webhook,
- *     /llm/chat/completions, /api/tts/:provider and the /api/stt WebSocket —
- *     the four endpoints Vapi must reach without an operator API key. Unset,
- *     they are open to the internet: a forged webhook writes fake rows into
- *     `calls`, and the STT/LLM bridges are a paid-vendor-call amplifier for
- *     anyone who finds the URL.
+ *   - The active transport's own secret(s) — VAPI_SECRET for Vapi,
+ *     ELEVENLABS_WEBHOOK_SECRET and ELEVENLABS_POST_CALL_SECRET for
+ *     ElevenLabs — guard its webhooks and bridged endpoints. Unset, they are
+ *     open to the internet: a forged webhook writes fake rows into `calls`,
+ *     bridged endpoints are a paid-vendor-call amplifier for anyone who finds
+ *     the URL, and for ElevenLabs specifically every server-tool call 401s —
+ *     including the one that files ESCALATED_SYMPTOM, so a chest-pain report
+ *     never reaches a caregiver. This guard asks the resolved transport via
+ *     `TransportPort#requiredSecrets()` rather than naming one vendor, so it
+ *     checks whichever transport is actually configured active.
  *
- * All three are useful locally and catastrophic in production, and none
- * announces itself: auth-off logs nothing, a guardrail-free prompt is still
- * valid, still fluent, still answers the phone, and an unauthenticated webhook
- * looks identical to Vapi's own traffic. An audit found the first two set that
- * way in a working .env at the same time.
+ *   - `ALERT_OPERATOR_CONTACT` (use-cases/medication-adherence/plugins/
+ *     escalation-alert.js) is where ESCALATED_SYMPTOM/ESCALATED_DISTRESS
+ *     alerts go. .env.example already says unset means escalations are
+ *     "logged loudly but NOBODY is notified" — the same defect class as the
+ *     checks above: the call is recorded, the family just never hears it.
+ *
+ * All are useful locally and catastrophic in production, and none announces
+ * itself: auth-off logs nothing, a guardrail-free prompt is still valid,
+ * still fluent, still answers the phone, and an unauthenticated webhook
+ * looks identical to real transport traffic. An audit found the first two
+ * set that way in a working .env at the same time.
  *
  * So the check happens at boot, where it costs one restart instead of one
  * caller. This mirrors assertPersistenceSatisfied() — the only other guard in
@@ -57,10 +67,20 @@ function isOn(value) {
  * Throw unless it is safe to serve traffic.
  *
  * @param {Object} [env] - Environment to read; defaults to process.env
+ * @param {Object} transport - The resolved active TransportPort. Required:
+ *   this is the whole point of the check — it must ask the transport that
+ *   will actually serve traffic which secrets it needs, not assume one.
  * @throws {Error} Listing every unmet condition and the variable that fixes it
  */
-function assertSafeToServe(env = process.env) {
+function assertSafeToServe(env = process.env, transport) {
   if (isOn(env[OPT_OUT])) return;
+
+  if (!transport || typeof transport.requiredSecrets !== 'function') {
+    throw new Error(
+      'assertSafeToServe() needs the resolved active transport to know which ' +
+        'secret(s) guard it — pass it as the second argument.'
+    );
+  }
 
   const failures = [];
 
@@ -71,14 +91,10 @@ function assertSafeToServe(env = process.env) {
     );
   }
 
-  if (!env.VAPI_SECRET) {
-    failures.push(
-      'VAPI_SECRET is not set, so /webhook, /llm/chat/completions, /api/tts/:provider ' +
-        'and the /api/stt WebSocket accept anyone — a forged webhook can write fake ' +
-        'call rows, and the bridged endpoints are a free paid-vendor-call amplifier. ' +
-        'Set VAPI_SECRET to a shared secret and configure it on the Vapi assistant/phone ' +
-        'number as well.'
-    );
+  for (const secret of transport.requiredSecrets()) {
+    if (!env[secret.name]) {
+      failures.push(`${secret.name} is not set — ${secret.why} Set ${secret.name}.`);
+    }
   }
 
   if (isOn(env.DISABLE_GUARDRAILS)) {
@@ -86,6 +102,14 @@ function assertSafeToServe(env = process.env) {
       'DISABLE_GUARDRAILS is set, so the composed prompt carries no medical-emergency ' +
         'sequence, no distress sequence, and no rule against claiming help was dispatched. ' +
         'Unset it, or set it to false.'
+    );
+  }
+
+  if (!env.ALERT_OPERATOR_CONTACT) {
+    failures.push(
+      'ALERT_OPERATOR_CONTACT is not set, so ESCALATED_SYMPTOM/ESCALATED_DISTRESS ' +
+        'alerts are logged loudly but nobody is notified — the call is recorded and the ' +
+        'family never hears about it. Set ALERT_OPERATOR_CONTACT to the operator chat id.'
     );
   }
 

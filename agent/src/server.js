@@ -83,11 +83,6 @@ const repository = useSqlite
 //     without persistence (inbound context, resume-after-drop).
 assertPersistenceSatisfied(useCase, repository);
 
-// 4c. Refuse to serve traffic with authentication or the prompt guardrails
-//     switched off. Both default to off when unconfigured and neither is
-//     visible at runtime, so the check belongs here rather than in a log line.
-assertSafeToServe(process.env);
-
 // 5. Set up plugin registry (after the repository — plugins depend on it)
 const plugins = new PluginRegistry();
 for (const PluginClass of useCase.plugins) {
@@ -112,6 +107,17 @@ const transport = transportRegistry.getActiveTransport();
 // always instantiated alongside whichever transport is active, never itself
 // "active.transport" (see registry.js).
 const playgroundTransport = transportRegistry.getTransport('playground');
+
+// 8c. Refuse to serve traffic with authentication, the active transport's
+//     own secret(s), operator alerting, or the prompt guardrails switched
+//     off. All default to off when unconfigured and none is visible at
+//     runtime, so the check belongs here rather than in a log line. Must
+//     run after the transport is resolved (step 8) — it asks the transport
+//     which secret(s) guard it rather than hardcoding one vendor. Nothing
+//     between here and transport.start()/listen() below serves traffic, so
+//     moving it this far down still fails closed before any request can
+//     reach a route.
+assertSafeToServe(process.env, transport);
 
 // --- Server ---
 
