@@ -150,6 +150,17 @@ transport.start(server, engine, {
   strategy,
   repository,
   webhookUrl: process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`,
+}).catch((err) => {
+  // A transport that cannot finish starting must not take the server with it.
+  // The routes it registered synchronously are already live, and the other
+  // transports are unaffected. Loud, because the thing this most often means is
+  // a stale tunnel — and silence is exactly the failure re-patching exists to end.
+  console.log(JSON.stringify({
+    event: 'transport_start_failed',
+    transport: providersConfig.active.transport,
+    error: err.message,
+    timestamp: new Date().toISOString(),
+  }));
 });
 
 // Wires the patient-picker route and stashes the repository/strategy the
@@ -166,7 +177,16 @@ transport.start(server, engine, {
 // TTS is bridged, and would break the phone path.
 app.use('/api/playground', apiKeyAuth);
 
-playgroundTransport.start(server, engine, { app, repository, strategy });
+playgroundTransport.start(server, engine, { app, repository, strategy }).catch((err) => {
+  // Same reasoning as the primary transport's start() above: a failed start
+  // must not take the whole server down with it.
+  console.log(JSON.stringify({
+    event: 'transport_start_failed',
+    transport: 'playground',
+    error: err.message,
+    timestamp: new Date().toISOString(),
+  }));
+});
 
 // --- Playground WebSocket endpoint ---
 playgroundWss.on('connection', (ws, req) => {

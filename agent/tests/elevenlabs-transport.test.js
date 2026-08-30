@@ -197,4 +197,16 @@ describe('boot-time agent patch', () => {
     } finally { globalThis.fetch = real; }
     assert.strictEqual(called, false);
   });
+
+  test('a failed patch rejects with the status, so the caller can decide', async () => {
+    process.env.ELEVENLABS_API_KEY = 'test-key'
+    const real = globalThis.fetch
+    globalThis.fetch = async () => ({ ok: false, status: 422, text: async () => 'bad config' })
+    try {
+      const a = new ElevenLabsTransportAdapter({})
+      await assert.rejects(() => a._patchAgent('agent_x', {}), /422/)
+    } finally {
+      globalThis.fetch = real
+    }
+  })
 });
