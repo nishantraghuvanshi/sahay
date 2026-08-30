@@ -6,6 +6,7 @@ const assert = require('node:assert');
 const TransportRegistry = require('../src/adapters/transport/registry');
 const TransportPort = require('../src/core/ports/transport');
 const ProviderRegistry = require('../src/adapters/providers/registry');
+const VapiTransportAdapter = require('../src/adapters/transport/vapi');
 
 /**
  * Transport registry tests.
@@ -57,5 +58,21 @@ describe('TransportRegistry', () => {
   test('getTransportConfig returns the active transport config block', () => {
     const reg = new TransportRegistry(new ProviderRegistry());
     assert.ok(reg.getTransportConfig(), 'active transport should have a config block');
+  });
+
+  test('TRANSPORT env var overrides active.transport from the YAML', () => {
+    const previous = process.env.TRANSPORT;
+    process.env.TRANSPORT = 'vapi';
+    try {
+      const reg = new TransportRegistry(new ProviderRegistry());
+      assert.strictEqual(reg.getActiveTransportName(), 'vapi');
+      assert.ok(reg.getActiveTransport() instanceof VapiTransportAdapter);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TRANSPORT;
+      } else {
+        process.env.TRANSPORT = previous;
+      }
+    }
   });
 });

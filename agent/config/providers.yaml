@@ -1,7 +1,9 @@
 # Provider Configuration
 # =====================
 # Swap the orchestrator or any STT/TTS/LLM provider by changing "active" below.
-# No code changes needed — the server reads this file at startup.
+# No code changes needed — the server reads this file at startup. The active
+# transport can also be overridden per-run without editing this file — see
+# the TRANSPORT env var in src/core/config/loader.js.
 #
 # Every provider declares an `integration`, because these are two different
 # architectures and not two providers:
@@ -29,7 +31,7 @@
 # To add a transport (orchestrator), see src/adapters/transport/registry.js.
 
 active:
-  transport: vapi
+  transport: elevenlabs
   stt: sarvam       # bridge  — Indic-specialised, audio via our server
   llm: sarvam       # bridge  — Hindi-native; OpenAI project can only reach gpt-5-nano
   tts: elevenlabs   # native  — Vapi calls ElevenLabs directly
