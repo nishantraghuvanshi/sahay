@@ -39,14 +39,41 @@ Which keys you need is decided by `config/providers.yaml` under `active:`. Today
 
 ```yaml
 active:
-  transport: vapi
-  stt: sarvam       # bridge  — audio flows through this server
-  llm: openai       # bridge  — tokens flow through this server
-  tts: elevenlabs   # native  — Vapi calls ElevenLabs directly
+  transport: elevenlabs   # the default; set TRANSPORT=vapi to override per run
+  stt: sarvam             # bridge  — audio flows through this server
+  llm: sarvam             # bridge  — tokens flow through this server
+  tts: elevenlabs         # native
 ```
 
 **bridge** means the key lives in `.env`, because this server makes the call.
-**native** means Vapi makes the call, so the key lives in the Vapi dashboard.
+**native** means the orchestrator makes the call itself.
+
+On the ElevenLabs transport the STT and LLM rows above do not apply to the phone
+path at all: ElevenLabs runs its own speech recognition and its own model, and
+this server is reached only through webhook tools. That is the deliberate trade
+recorded in the design doc — it compares whole stacks rather than two voice
+layers over a shared brain. The rows still govern `/playground`.
+
+### The ElevenLabs transport
+
+| Variable | Where | Notes |
+|---|---|---|
+| `ELEVENLABS_API_KEY` | elevenlabs.io → profile → API Key | **Workspace-scoped.** A key from a different workspace sees zero agents and zero phone numbers, and every agent PATCH 404s. Check the workspace before debugging anything else |
+| `ELEVENLABS_AGENT_ID` | `npm run setup-elevenlabs` prints it | Duplicates the source agent into a Kinvox-owned copy. Never modify `agent_4901m0kzym5pfm7b7y9aprndv6qp` — it is the prior product's and is kept for comparison |
+| `ELEVENLABS_WEBHOOK_SECRET` | `openssl rand -hex 32` | OURS. Sent as `X-Kinvox-Token` on the tool and conversation-init webhooks. Required: those routes fail closed, and `report_outcome` can raise a family alert |
+| `ELEVENLABS_POST_CALL_SECRET` | shown once when the workspace webhook is created | THEIRS (`wsec_…`). ElevenLabs signs each post-call delivery; without this every one is rejected |
+| `WEBHOOK_URL` | your ngrok/public origin | Must be public HTTPS. The agent re-patches its tool URLs from this on every boot |
+
+The agent is configured entirely from code on boot — prompt, tools, voice, turn
+settings, the analysis field and both webhooks. Editing it in the ElevenLabs
+dashboard is pointless: the next `npm start` overwrites it.
+
+**A hard-won caution.** This API answers a wrong request shape with `200 OK` and
+silence far more often than with an error. Four contracts in the original design
+were accepted and ignored: `platform_settings` nested inside
+`conversation_config`, `built_in_tools` sent beside `tools`, a webhook response
+overriding a field that was never enabled, and `execution_mode: 'sync'`. Probe
+the live API before trusting the schema, and check the value came back on a GET.
 
 | Variable | Where to get it | Notes |
 |---|---|---|
