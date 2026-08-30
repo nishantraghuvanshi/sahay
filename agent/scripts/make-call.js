@@ -3,8 +3,9 @@
 /**
  * Make Outbound Call
  *
- * Triggers an outbound call via Vapi. The agent calls the specified phone
- * number and runs the medication adherence conversation flow.
+ * Triggers an outbound call through whichever orchestrator active.transport
+ * selects in config/providers.yaml. The agent calls the specified phone number
+ * and runs the medication adherence conversation flow.
  *
  * Usage:
  *   node scripts/make-call.js --phone=+91XXXXXXXXXX --name=रोहन --drug=Crocin
@@ -16,17 +17,24 @@
  *   --name    Parent's name (default: DEFAULT_PARENT_NAME from .env)
  *   --drug    Medication name (default: DEFAULT_DRUG_NAME from .env)
  *   --language  Language code: hi or en (default: hi)
+ *   --caregiver Caregiver name spoken in the escalation line
+ *               (default: DEFAULT_CAREGIVER_NAME from .env)
  *
- * Prerequisites:
- *   - VAPI_ASSISTANT_ID set in .env (from create-assistant.js)
- *   - VAPI_PRIVATE_KEY set in .env
+ * Prerequisites depend on active.transport:
+ *   vapi        VAPI_ASSISTANT_ID (from create-assistant.js), VAPI_PRIVATE_KEY
+ *   elevenlabs  ELEVENLABS_AGENT_ID (from `npm run setup-elevenlabs`),
+ *               ELEVENLABS_API_KEY, and transport.elevenlabs.phone_number_id
  */
 
+const path = require('path');
 require('dotenv').config();
+// The repo-root .env carries ELEVENLABS_API_KEY, exactly as server.js loads it.
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const SqliteRepository = require('../src/adapters/persistence/sqlite');
 const ConsoleRepository = require('../src/adapters/persistence/console');
-const VapiTransportAdapter = require('../src/adapters/transport/vapi');
+const ProviderRegistry = require('../src/adapters/providers/registry');
+const TransportRegistry = require('../src/adapters/transport/registry');
 
 /**
  * Same repository selection as server.js: SQLite when DB_PATH/DATABASE_URL
@@ -64,16 +72,27 @@ async function main() {
     process.exit(1);
   }
 
-  const assistantId = process.env.VAPI_ASSISTANT_ID;
-  if (!assistantId) {
-    console.error('Error: VAPI_ASSISTANT_ID not set in .env');
-    console.error('Run `node scripts/create-assistant.js` first.');
+  // Go through the registry rather than constructing a Vapi adapter directly.
+  // Hardcoding Vapi here meant this script ignored active.transport entirely,
+  // so it could not place a call through whichever orchestrator the product
+  // was actually configured to use.
+  const transportRegistry = new TransportRegistry(new ProviderRegistry());
+  const transport = transportRegistry.getActiveTransport();
+
+  let assistantId;
+  try {
+    assistantId = transport.getAssistantId();
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
     process.exit(1);
   }
 
   const variables = {
     parent_name: args.name || process.env.DEFAULT_PARENT_NAME || 'रोहन',
     drug_name: args.drug || process.env.DEFAULT_DRUG_NAME || 'Crocin',
+    // Templated into the escalation reassurance line. Left out, it is spoken
+    // as a literal "{{caregiver_name}}" or rejected outright by ElevenLabs.
+    caregiver_name: args.caregiver || process.env.DEFAULT_CAREGIVER_NAME || 'आपके परिवार',
     language: args.language || 'hi',
   };
 
@@ -81,12 +100,12 @@ async function main() {
   console.log(`  Phone: ${phone}`);
   console.log(`  Parent: ${variables.parent_name}`);
   console.log(`  Drug: ${variables.drug_name}`);
+  console.log(`  Caregiver: ${variables.caregiver_name}`);
   console.log(`  Language: ${variables.language}`);
   console.log(`  Assistant ID: ${assistantId}`);
   console.log('');
 
   const repository = buildRepository();
-  const transport = new VapiTransportAdapter(null);
   transport.repository = repository;
 
   let call;

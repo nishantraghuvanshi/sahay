@@ -432,11 +432,28 @@ class ElevenLabsTransportAdapter extends TransportPort {
         v === '' || CONTROL_FLOW_KEYS.has(k) ? v : `{{${k}}}`,
       ])
     );
+    // Defaults ElevenLabs substitutes for any variable a caller omits.
+    //
+    // Only the keys that were actually turned into `{{key}}` above get one:
+    // a default for a control-flow key would be meaningless, and one for an
+    // empty-string key would flip the empty-check branch it gates.
+    //
+    // This is the belt to createCall's braces. Without it, a caller that
+    // forgets caregiver_name leaves "{{caregiver_name}}" sitting in the
+    // escalation reassurance line — the single sentence whose purpose is an
+    // honest claim about contacting the patient's family.
+    const templated = Object.fromEntries(
+      Object.entries(defaults).filter(([k]) => placeholders[k] === `{{${k}}}`)
+    );
+
     return {
       conversation_config: {
         agent: {
           language: 'hi',
           first_message: strategy.buildFirstMessage(placeholders),
+          ...(Object.keys(templated).length
+            ? { dynamic_variables: { dynamic_variable_placeholders: templated } }
+            : {}),
           prompt: {
             prompt: strategy.buildSystemPrompt(placeholders),
             llm: 'gemini-2.5-flash',
@@ -483,6 +500,24 @@ class ElevenLabsTransportAdapter extends TransportPort {
    * and to_number), not from the prose docs, which describe only the dashboard
    * flow.
    */
+  /**
+   * @see TransportPort#getAssistantId
+   * @returns {string} the Kinvox-owned ElevenLabs agent id
+   */
+  getAssistantId() {
+    // this.agentId is captured at start(); the env var is the fallback for
+    // callers (scripts) that never started a transport.
+    const id = this.agentId || process.env.ELEVENLABS_AGENT_ID;
+    if (!id) {
+      throw new Error(
+        'Missing env var: ELEVENLABS_AGENT_ID. Run `npm run setup-elevenlabs` ' +
+          'to duplicate the source agent into a Kinvox-owned copy, and record ' +
+          'the id it prints.'
+      );
+    }
+    return id;
+  }
+
   async createCall(assistantId, phoneNumber, variables = {}) {
     if (!this.phoneNumberId) {
       throw new Error(

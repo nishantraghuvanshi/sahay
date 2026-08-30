@@ -33,6 +33,25 @@ class TransportPort {
   }
 
   /**
+   * The orchestrator-side id an outbound call should be placed against.
+   *
+   * Each orchestrator names this differently — Vapi has an assistant id from
+   * VAPI_ASSISTANT_ID, ElevenLabs an agent id from ELEVENLABS_AGENT_ID — and
+   * only the adapter knows which. Callers that resolved it themselves ended up
+   * hardcoded to one transport: POST /api/call read VAPI_ASSISTANT_ID
+   * unconditionally, so with the ElevenLabs transport active it either failed
+   * for a missing Vapi variable or handed a Vapi id to ElevenLabs.
+   *
+   * Throws rather than returning null when unconfigured, naming the variable
+   * and the script that populates it.
+   *
+   * @returns {string}
+   */
+  getAssistantId() {
+    throw new Error('TransportPort.getAssistantId() not implemented');
+  }
+
+  /**
    * Dispatch an outbound call.
    * @param {string} assistantId - Orchestrator assistant ID
    * @param {string} phoneNumber - E.164 phone number

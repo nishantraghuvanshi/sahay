@@ -694,6 +694,21 @@ class VapiTransportAdapter extends TransportPort {
    * @param {Object} variables - Per-call variables
    * @returns {Object} Call object
    */
+  /**
+   * @see TransportPort#getAssistantId
+   * @returns {string} the Vapi assistant id
+   */
+  getAssistantId() {
+    const id = process.env.VAPI_ASSISTANT_ID;
+    if (!id) {
+      throw new Error(
+        'Missing env var: VAPI_ASSISTANT_ID. Run `node scripts/create-assistant.js` ' +
+          'and record the id it prints.'
+      );
+    }
+    return id;
+  }
+
   async createCall(assistantId, phoneNumber, variables = {}) {
     const apiKey = process.env.VAPI_PRIVATE_KEY;
     if (!apiKey) throw new Error('Missing env var: VAPI_PRIVATE_KEY');

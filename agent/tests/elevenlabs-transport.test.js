@@ -422,3 +422,88 @@ describe('boot-time agent patch', () => {
     }
   })
 });
+
+describe('getAssistantId — the outbound entrypoint must not be Vapi-specific', () => {
+  // POST /api/call read VAPI_ASSISTANT_ID unconditionally, so with
+  // active.transport: elevenlabs it either 500'd for a missing Vapi env var or
+  // handed a Vapi assistant id to ElevenLabs as its agent_id. Nothing in the
+  // shipped product could place an ElevenLabs call; the one live call was
+  // dispatched out of band. Each adapter now names its own id.
+  function withEnvVar(name, value, fn) {
+    const original = process.env[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+    return Promise.resolve()
+      .then(fn)
+      .finally(() => {
+        if (original === undefined) delete process.env[name];
+        else process.env[name] = original;
+      });
+  }
+
+  test('returns the configured ElevenLabs agent id', () =>
+    withEnvVar('ELEVENLABS_AGENT_ID', 'agent_test_123', () => {
+      const a = new ElevenLabsTransportAdapter({});
+      assert.strictEqual(a.getAssistantId(), 'agent_test_123');
+    }));
+
+  test('throws naming the env var and the setup script when unset', () =>
+    withEnvVar('ELEVENLABS_AGENT_ID', undefined, () => {
+      const a = new ElevenLabsTransportAdapter({});
+      assert.throws(() => a.getAssistantId(), /ELEVENLABS_AGENT_ID/);
+      assert.throws(() => a.getAssistantId(), /setup-elevenlabs/);
+    }));
+
+  test('prefers the id captured at start() over a later env change', () =>
+    withEnvVar('ELEVENLABS_AGENT_ID', 'agent_from_env', () => {
+      const a = new ElevenLabsTransportAdapter({});
+      a.agentId = 'agent_from_start';
+      assert.strictEqual(a.getAssistantId(), 'agent_from_start');
+    }));
+});
+
+describe('dynamic_variable_placeholders — an omitted variable must not be spoken raw', () => {
+  // The prompt is a template. A caller that omits caregiver_name leaves
+  // "{{caregiver_name}}" in the escalation reassurance line — the one sentence
+  // whose whole purpose is an honest claim about contacting the family. Seeding
+  // ElevenLabs' own defaults means an omission degrades to the strategy's
+  // default rather than speaking the placeholder aloud.
+  const STRATEGY_WITH_VARS = {
+    ...STRATEGY,
+    getVariables: () => ({
+      parent_name: 'रोहन',
+      drug_name: 'Crocin',
+      caregiver_name: 'आपके परिवार',
+      context_line: '',
+      alert_delivered: false,
+      alert_delivered_true_line: 'x',
+    }),
+  };
+
+  test('seeds placeholders from the strategy defaults', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY_WITH_VARS, {}, 'https://x');
+    const placeholders = cfg.conversation_config.agent.dynamic_variables.dynamic_variable_placeholders;
+    assert.strictEqual(placeholders.caregiver_name, 'आपके परिवार');
+    assert.strictEqual(placeholders.parent_name, 'रोहन');
+    assert.strictEqual(placeholders.drug_name, 'Crocin');
+  });
+
+  test('omits the keys that were never templated', () => {
+    // Control-flow keys and empty-string defaults are not placeholders in the
+    // prompt, so a default for them would be meaningless at best and would
+    // flip an empty-check branch at worst.
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY_WITH_VARS, {}, 'https://x');
+    const placeholders = cfg.conversation_config.agent.dynamic_variables.dynamic_variable_placeholders;
+    assert.strictEqual('context_line' in placeholders, false);
+    assert.strictEqual('alert_delivered' in placeholders, false);
+    assert.strictEqual('alert_delivered_true_line' in placeholders, false);
+  });
+
+  test('is omitted entirely when the strategy exposes no variables', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.agent.dynamic_variables, undefined);
+  });
+});

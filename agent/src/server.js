@@ -236,7 +236,7 @@ app.get('/call', (req, res) => {
 
 // Initiate an outbound call
 app.post('/api/call', async (req, res) => {
-  const { phone, name, drug, language } = req.body;
+  const { phone, name, drug, language, caregiver } = req.body;
 
   // Validate
   if (!phone || !phone.startsWith('+')) {
@@ -249,17 +249,29 @@ app.post('/api/call', async (req, res) => {
     return res.status(400).json({ error: 'Drug name is required' });
   }
 
-  const assistantId = process.env.VAPI_ASSISTANT_ID;
-  if (!assistantId) {
-    return res.status(500).json({ error: 'VAPI_ASSISTANT_ID not set. Run scripts/create-assistant.js first.' });
+  // Ask the ACTIVE transport for its own id. Reading VAPI_ASSISTANT_ID here
+  // hardcoded this route to one orchestrator: with active.transport:
+  // elevenlabs it either failed for a missing Vapi variable or handed a Vapi
+  // assistant id to ElevenLabs as its agent_id.
+  let assistantId;
+  try {
+    assistantId = transport.getAssistantId();
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 
   try {
     const variables = {
       parent_name: name,
       drug_name: drug,
+      // The prompt templates {{caregiver_name}} into the escalation
+      // reassurance line. Omitted, it is either spoken as a literal
+      // placeholder or fails the call outright, so it is sent explicitly as
+      // well as defaulted on the agent (dynamic_variable_placeholders).
+      caregiver_name: caregiver || undefined,
       language: language || 'hi',
     };
+    if (!variables.caregiver_name) delete variables.caregiver_name;
 
     const call = await transport.createCall(assistantId, phone, variables);
 
