@@ -69,6 +69,12 @@ class VapiTransportAdapter extends TransportPort {
         // dies on silence-timed-out. Trust what the transport says it is sending.
         let streamChannels = 2;
 
+        // Same story as streamChannels above: the configured rate
+        // (providers.yaml) is only a fallback. null here means "nothing
+        // announced yet" — sarvam.js falls back to its own configured
+        // default rather than us guessing one.
+        let streamSampleRate = null;
+
         ws.on('message', async (data, isBinary) => {
           try {
             if (isBinary) {
@@ -81,13 +87,16 @@ class VapiTransportAdapter extends TransportPort {
                   transcriptType: isFinal ? 'final' : 'partial',
                 };
                 if (ws.readyState === 1) ws.send(JSON.stringify(response));
-              }, { channels: streamChannels });
+              }, { channels: streamChannels, sampleRate: streamSampleRate });
             } else {
               // Text frame = JSON config message
               const message = JSON.parse(data.toString());
               if (message.type === 'start') {
                 if (Number.isInteger(message.channels) && message.channels > 0) {
                   streamChannels = message.channels;
+                }
+                if (Number.isInteger(message.sampleRate) && message.sampleRate > 0) {
+                  streamSampleRate = message.sampleRate;
                 }
                 logger.log('stt_started', {
                   sampleRate: message.sampleRate,
@@ -99,11 +108,14 @@ class VapiTransportAdapter extends TransportPort {
                   message.sampleRate &&
                   message.sampleRate !== this.providerRegistry.getSTTConfig().sample_rate
                 ) {
-                  logger.log('stt_sample_rate_mismatch', {
+                  // Used to log this mismatch and then transcribe at the
+                  // configured rate anyway. streamSampleRate now carries the
+                  // announced rate through to sttAdapter.transcribe() above,
+                  // so this only needs to report that it was corrected.
+                  logger.log('stt_sample_rate_corrected', {
                     transportSays: message.sampleRate,
-                    weSendToProvider: this.providerRegistry.getSTTConfig().sample_rate,
-                    consequence:
-                      'audio will be transcribed at the wrong rate — expect empty or garbled transcripts',
+                    configuredFallback: this.providerRegistry.getSTTConfig().sample_rate,
+                    usingSampleRate: streamSampleRate,
                   });
                 }
               }

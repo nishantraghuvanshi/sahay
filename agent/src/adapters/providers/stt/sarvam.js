@@ -20,7 +20,7 @@ class SarvamSTTAdapter extends STTPort {
     this.apiKey = null;
     this.ws = null;
     this.transcriptCallback = null;
-    this.sampleRate = 16000;
+    this.sampleRate = 16000; // fallback used only when nothing is announced per-call
 
     // Reconnection state
     this._disposed = false;
@@ -29,6 +29,13 @@ class SarvamSTTAdapter extends STTPort {
     this._reconnectBaseDelayMs = 500;
     this._reconnectTimer = null;
     this._connectPromise = null;
+
+    // The sample rate the currently open/connecting socket was opened with.
+    // Per-call, not per-init — the caller (transcribe) decides this every
+    // time, the same way streamChannels is decided per-call in vapi.js, so
+    // two concurrent calls on two instances never share a rate.
+    this._activeSampleRate = null;
+    this._switchingRate = false;
   }
 
   /**
@@ -51,10 +58,13 @@ class SarvamSTTAdapter extends STTPort {
   /**
    * Connect to the Sarvam Saaras v3 streaming WebSocket.
    * Sends initial config on connect and sets up transcript listener.
+   * @param {number} sampleRate - the rate to connect at; caller resolves
+   *   this per-stream (announced rate, or the configured fallback).
    * @private
    */
-  _connectSarvam() {
+  _connectSarvam(sampleRate) {
     const WebSocket = require('ws');
+    this._activeSampleRate = sampleRate;
 
     // Endpoint and auth verified against docs.sarvam.ai (api-reference/legacy/
     // speech-to-text/transcribe/ws). The previous URL was
@@ -65,7 +75,7 @@ class SarvamSTTAdapter extends STTPort {
       model: this.config.model,
       language_code: this.config.language,
       mode: this.config.mode,
-      sample_rate: String(this.sampleRate),
+      sample_rate: String(sampleRate),
       high_vad_sensitivity: String(!!this.config.high_vad_sensitivity),
     });
     const url = `wss://api.sarvam.ai/speech-to-text/ws?${params.toString()}`;
@@ -129,8 +139,11 @@ class SarvamSTTAdapter extends STTPort {
 
     ws.on('close', () => {
       logger.log('stt_sarvam_ws_closed', {});
-      // Auto-reconnect if not intentionally disposed and we have a callback
-      if (!this._disposed && this.transcriptCallback) {
+      // Auto-reconnect if not intentionally disposed and we have a callback.
+      // Skipped mid rate-switch — _reconnectAtRate is already opening the
+      // replacement socket; this handler firing for the old socket's close
+      // would otherwise race it with a second, stale-rate reconnect.
+      if (!this._disposed && !this._switchingRate && this.transcriptCallback) {
         this._scheduleReconnect();
       }
     });
@@ -165,7 +178,7 @@ class SarvamSTTAdapter extends STTPort {
       if (this._disposed) return;
 
       try {
-        this._connectSarvam();
+        this._connectSarvam(this._activeSampleRate ?? this.sampleRate);
         await new Promise((resolve, reject) => {
           if (this.ws.readyState === 1) {
             resolve();
@@ -207,13 +220,14 @@ class SarvamSTTAdapter extends STTPort {
    *
    * Callers await the one in-flight connect instead.
    *
+   * @param {number} sampleRate - rate to connect at if a new socket is opened
    * @private
    */
-  _ensureConnected() {
+  _ensureConnected(sampleRate) {
     if (this.ws && this.ws.readyState === 1 /* OPEN */) return Promise.resolve();
     if (this._connectPromise) return this._connectPromise;
 
-    this._connectSarvam();
+    this._connectSarvam(sampleRate);
     const ws = this.ws;
 
     this._connectPromise = new Promise((resolve, reject) => {
@@ -239,6 +253,40 @@ class SarvamSTTAdapter extends STTPort {
     return this._connectPromise;
   }
 
+  /**
+   * Swap the live socket for one opened at the correct sample rate.
+   *
+   * Only needed if audio starts arriving — and a socket gets opened — before
+   * Vapi's 'start' message is read, or a stream somehow re-announces a
+   * different rate mid-call. In the common case transcribe() resolves the
+   * rate before ever connecting, so this path doesn't run.
+   *
+   * @private
+   */
+  async _reconnectAtRate(sampleRate) {
+    logger.log('stt_sample_rate_corrected', {
+      from: this._activeSampleRate,
+      to: sampleRate,
+    });
+
+    this._switchingRate = true;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    this._reconnectAttempts = 0;
+
+    const staleWs = this.ws;
+    this.ws = null;
+    if (staleWs) staleWs.close();
+
+    try {
+      await this._ensureConnected(sampleRate);
+    } finally {
+      this._switchingRate = false;
+    }
+  }
+
   async transcribe(audioChunk, onTranscript, opts = {}) {
     this.transcriptCallback = onTranscript;
 
@@ -249,8 +297,20 @@ class SarvamSTTAdapter extends STTPort {
     // this was hardcoded to 2.
     const channels = opts.channels || 1;
 
+    // Sample rate is likewise per-stream, not per-instance: Vapi announces
+    // the real rate in its 'start' message (see vapi.js), which arrives as
+    // opts.sampleRate here. this.sampleRate (from providers.yaml) is only a
+    // fallback for when nothing was announced. Resolving this from opts each
+    // call — not caching it on the adapter at init() — is what makes it safe
+    // for one adapter instance to ever be reused across streams.
+    const sampleRate = opts.sampleRate || this.sampleRate;
+
     try {
-      await this._ensureConnected();
+      if (this.ws && this.ws.readyState === 1 && this._activeSampleRate !== sampleRate) {
+        await this._reconnectAtRate(sampleRate);
+      } else {
+        await this._ensureConnected(sampleRate);
+      }
     } catch (err) {
       // Dropping one audio chunk is survivable; throwing out of here is not —
       // this runs per chunk, several times a second, mid-call.
@@ -268,10 +328,10 @@ class SarvamSTTAdapter extends STTPort {
       this.ws.send(
         JSON.stringify({
           audio: {
-            data: pcmToWav(Buffer.from(callerAudio), this.sampleRate).toString(
+            data: pcmToWav(Buffer.from(callerAudio), sampleRate).toString(
               'base64'
             ),
-            sample_rate: this.sampleRate,
+            sample_rate: sampleRate,
             encoding: 'audio/wav',
           },
         })
