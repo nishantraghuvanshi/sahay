@@ -123,6 +123,122 @@ describe('buildAssistantConfig', () => {
   });
 });
 
+describe('buildAssistantConfig — prompt interpolation uses placeholders, not demo defaults', () => {
+  const MedicationAdherenceStrategy = require('../src/use-cases/medication-adherence/strategy');
+
+  test('parent_name and drug_name become ElevenLabs placeholders in both prompt and first message', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const strategy = new MedicationAdherenceStrategy('hi');
+    const cfg = a.buildAssistantConfig(strategy, {}, 'https://x');
+    const prompt = cfg.conversation_config.agent.prompt.prompt;
+    const firstMessage = cfg.conversation_config.agent.first_message;
+
+    assert.ok(prompt.includes('{{parent_name}}'), 'prompt should contain {{parent_name}}');
+    assert.ok(prompt.includes('{{drug_name}}'), 'prompt should contain {{drug_name}}');
+    assert.ok(firstMessage.includes('{{parent_name}}'), 'first_message should contain {{parent_name}}');
+    assert.ok(firstMessage.includes('{{drug_name}}'), 'first_message should contain {{drug_name}}');
+  });
+
+  test('the demo defaults are gone from the first message, which every call would otherwise reuse verbatim', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const strategy = new MedicationAdherenceStrategy('hi');
+    const cfg = a.buildAssistantConfig(strategy, {}, 'https://x');
+    const firstMessage = cfg.conversation_config.agent.first_message;
+
+    assert.ok(!firstMessage.includes('रोहन'), 'first_message must not contain the demo parent name');
+    assert.ok(!firstMessage.includes('Crocin'), 'first_message must not contain the demo drug name');
+  });
+
+  test('the demo patient name is gone from the system prompt too', () => {
+    // "Crocin" is deliberately NOT checked against the full system prompt:
+    // shared_rules cites it as a fixed style example ('Drug names and proper
+    // nouns stay in English (e.g., "Crocin", "Paracetamol")'), independent of
+    // the drug_name variable — that literal string is expected to remain
+    // regardless of this fix, so asserting its absence would be a false test.
+    const a = new ElevenLabsTransportAdapter({});
+    const strategy = new MedicationAdherenceStrategy('hi');
+    const cfg = a.buildAssistantConfig(strategy, {}, 'https://x');
+    const prompt = cfg.conversation_config.agent.prompt.prompt;
+
+    assert.ok(!prompt.includes('रोहन'), 'prompt must not contain the demo parent name');
+  });
+
+  test('an empty-string default (context_line) is kept empty, not turned into a placeholder', () => {
+    let captured;
+    const strategy = {
+      getVariables: () => ({ parent_name: 'रोहन', context_line: '', fields_summary: '' }),
+      buildFirstMessage: (vars) => { captured = vars; return 'ignored'; },
+      buildSystemPrompt: () => 'ignored',
+      getTools: () => [],
+    };
+    const a = new ElevenLabsTransportAdapter({});
+    a.buildAssistantConfig(strategy, {}, 'https://x');
+
+    assert.strictEqual(captured.parent_name, '{{parent_name}}');
+    assert.strictEqual(captured.context_line, '');
+    assert.strictEqual(captured.fields_summary, '');
+  });
+
+  test('control-flow keys (alert_delivered and its two line templates) keep their default rather than becoming a text placeholder', () => {
+    // alert_delivered gates a ternary in _resolveAlertDeliveredLine, not text
+    // substitution — a non-empty placeholder string would be truthy and
+    // always pick the "already told your family" line, a false guardrail
+    // claim. The two *_line keys are only ever read BY that resolution, never
+    // substituted into the prompt via their own {key} tag, so placeholder-
+    // ifying them would bake a raw "{{alert_delivered_false_line}}" string
+    // into spoken guardrail text instead.
+    let captured;
+    const strategy = {
+      getVariables: () => ({
+        alert_delivered: false,
+        alert_delivered_true_line: 'true line text',
+        alert_delivered_false_line: 'false line text',
+      }),
+      buildFirstMessage: () => 'ignored',
+      buildSystemPrompt: (vars) => { captured = vars; return 'ignored'; },
+      getTools: () => [],
+    };
+    const a = new ElevenLabsTransportAdapter({});
+    a.buildAssistantConfig(strategy, {}, 'https://x');
+
+    assert.strictEqual(captured.alert_delivered, false);
+    assert.strictEqual(captured.alert_delivered_true_line, 'true line text');
+    assert.strictEqual(captured.alert_delivered_false_line, 'false line text');
+  });
+});
+
+describe('buildAssistantConfig — post-call webhook registration', () => {
+  function withEnv(name, value, fn) {
+    const original = process.env[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+    return Promise.resolve()
+      .then(fn)
+      .finally(() => {
+        if (original === undefined) delete process.env[name];
+        else process.env[name] = original;
+      });
+  }
+
+  test('platform_settings carries the webhook id and events when the env var is set', () =>
+    withEnv('ELEVENLABS_POST_CALL_WEBHOOK_ID', 'webhook_abc123', () => {
+      const a = new ElevenLabsTransportAdapter({});
+      const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+      assert.deepStrictEqual(cfg.conversation_config.platform_settings, {
+        workspace_overrides: {
+          webhooks: { post_call_webhook_id: 'webhook_abc123', events: ['transcript'] },
+        },
+      });
+    }));
+
+  test('platform_settings is omitted entirely when the env var is not set, rather than sent with a null id', () =>
+    withEnv('ELEVENLABS_POST_CALL_WEBHOOK_ID', undefined, () => {
+      const a = new ElevenLabsTransportAdapter({});
+      const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+      assert.strictEqual('platform_settings' in cfg.conversation_config, false);
+    }));
+});
+
 describe('createCall', () => {
   const PHONE_ID = 'phnum_2001m0m0dch2fvhv1jar36bfzd5p';
 

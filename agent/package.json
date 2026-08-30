@@ -13,7 +13,8 @@
     "make-call": "node scripts/make-call.js",
     "simulate": "node scripts/run-simulation.js",
     "generate-tools": "node scripts/generate-tools.js",
-    "setup-elevenlabs": "node scripts/setup-elevenlabs-agent.js"
+    "setup-elevenlabs": "node scripts/setup-elevenlabs-agent.js",
+    "setup-elevenlabs-webhook": "node scripts/setup-elevenlabs-webhook.js"
   },
   "dependencies": {
     "express": "^4.19.0",

@@ -324,14 +324,51 @@ class ElevenLabsTransportAdapter extends TransportPort {
    * this is how that does not happen again.
    */
   buildAssistantConfig(strategy, providers, webhookUrl) {
-    const variables = typeof strategy.getVariables === 'function' ? strategy.getVariables() : {};
+    // Interpolate placeholders, not values. strategy.getVariables() returns the
+    // config's demo defaults, so passing them here froze one script — a real call
+    // greeted the patient by the sample name and asked about the sample medicine.
+    // Substituting `{{key}}` for each key turns the strategy's output into an
+    // ElevenLabs template that dynamic_variables fills per call.
+    //
+    // Not every default is safe to placeholder-ify, though — found by reading
+    // strategy.js's own use of these variables, not by assuming every key is
+    // plain text:
+    //   - Keys whose default is "" (context_line, fields_summary, missing_field)
+    //     gate an empty-vs-non-empty branch in buildFirstMessage/buildSystemPrompt
+    //     ("is there a context line at all"). A non-empty `{{context_line}}`
+    //     placeholder would flip that branch on every call and leave a literal,
+    //     unfilled placeholder sitting in text meant to be spoken.
+    //   - `alert_delivered` isn't text at all: _resolveAlertDeliveredLine reads
+    //     it as `vars.alert_delivered ? trueLine : falseLine`. Any non-empty
+    //     string — including a `{{alert_delivered}}` placeholder — is truthy,
+    //     so it would always pick the "already told your family" line even
+    //     though no such delivery has happened, which is exactly the false
+    //     claim the guardrail exists to prevent.
+    //   - `alert_delivered_true_line` / `alert_delivered_false_line` are never
+    //     substituted into the prompt via their own `{key}` tag — they are only
+    //     read BY _resolveAlertDeliveredLine and folded into `alert_delivered_line`,
+    //     which is what's actually spoken. Placeholder-ifying them would bake a
+    //     raw `{{alert_delivered_false_line}}` string into the guardrail text,
+    //     with no per-call dynamic_variable able to reach it.
+    const CONTROL_FLOW_KEYS = new Set([
+      'alert_delivered',
+      'alert_delivered_true_line',
+      'alert_delivered_false_line',
+    ]);
+    const defaults = typeof strategy.getVariables === 'function' ? strategy.getVariables() : {};
+    const placeholders = Object.fromEntries(
+      Object.entries(defaults).map(([k, v]) => [
+        k,
+        v === '' || CONTROL_FLOW_KEYS.has(k) ? v : `{{${k}}}`,
+      ])
+    );
     return {
       conversation_config: {
         agent: {
           language: 'hi',
-          first_message: strategy.buildFirstMessage(variables),
+          first_message: strategy.buildFirstMessage(placeholders),
           prompt: {
-            prompt: strategy.buildSystemPrompt(variables),
+            prompt: strategy.buildSystemPrompt(placeholders),
             llm: 'gemini-2.5-flash',
             tools: strategy.getTools().map((t) => this._toolDeclaration(t, webhookUrl)),
           },
@@ -340,6 +377,18 @@ class ElevenLabsTransportAdapter extends TransportPort {
           voice_id: 'QTKSa2Iyv0yoxvXY2V8a',
           model_id: 'eleven_v3_conversational',
         },
+        ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
+          ? {
+              platform_settings: {
+                workspace_overrides: {
+                  webhooks: {
+                    post_call_webhook_id: process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID,
+                    events: ['transcript'],
+                  },
+                },
+              },
+            }
+          : {}),
       },
     };
   }
