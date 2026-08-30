@@ -653,3 +653,36 @@ describe('thinking_budget — the agent should answer, not deliberate', () => {
     assert.strictEqual(cfg.conversation_config.agent.prompt.enable_reasoning_summary, false);
   });
 });
+
+describe('turn config — how long the agent waits before replying', () => {
+  // Measured across two real calls, turn-taking silence ran 160-1280ms and is
+  // now the largest component of perceived latency, the LLM having dropped to
+  // ~500-850ms. It is a genuine trade: waiting less means occasionally cutting
+  // off a slow speaker, and this product calls elderly people.
+  test('sends the configured eagerness', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { turn_eagerness: 'eager' } },
+    });
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.turn.turn_eagerness, 'eager');
+  });
+
+  test('defaults to normal rather than silently rushing an elderly caller', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.turn.turn_eagerness, 'normal');
+  });
+
+  test('rejects a value the API does not accept, rather than sending it', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { turn_eagerness: 'instant' } },
+    });
+    assert.throws(() => a.buildAssistantConfig(STRATEGY, {}, 'https://x'), /turn_eagerness/);
+  });
+
+  test('carries turn_timeout alongside it, so setting one does not drop the other', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(typeof cfg.conversation_config.turn.turn_timeout, 'number');
+  });
+});

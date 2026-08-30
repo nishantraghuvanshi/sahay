@@ -81,6 +81,25 @@ transport:
     # re-run the battery, because that is the only way to tell.
     thinking_budget: 0
 
+    # How long the agent waits before deciding the caller has stopped talking.
+    # patient | normal | eager.
+    #
+    # After thinking was turned off, this became the largest remaining piece of
+    # perceived latency: measured across two real calls it ran 160-1280ms,
+    # against ~500-850ms for the LLM and ~200ms for TTS.
+    #
+    # 'eager' is a real trade, not a free win. This product calls people in
+    # their seventies who pause mid-sentence to find a word, and the
+    # elderly-friendly rules in the prompt say plainly: "If the user is silent,
+    # wait. Do not rush them." Cutting someone off is a worse failure than a
+    # one-second pause. If callers start getting interrupted, put this back to
+    # 'normal' — that is the fix, not a prompt change.
+    turn_eagerness: "eager"
+
+    # Seconds to wait for a reply before re-engaging. Sent alongside eagerness
+    # so that setting one does not drop the other from the turn object.
+    turn_timeout: 7
+
 # ── STT (Speech-to-Text) ──────────────────────────────────────────
 
 stt:

@@ -128,7 +128,11 @@ shared_rules: |
     does not change the outcome, call end_call instead of saying it again.
 
   CLOSURE PROTOCOL:
-  1. Speak your closing sentence (based on outcome).
+  1. SPEAK your closing sentence, as an ordinary spoken turn, BEFORE you call
+     any tool. This step is not optional and must never be skipped or merged
+     into a tool call. Ending the call without it means the caller is talking
+     and then simply cut off mid-conversation, with no goodbye — which to an
+     elderly person sounds like the line dropped or like they were hung up on.
   2. Call report_outcome with the correct outcome and a brief reason.
   3. Call end_call.
   4. Say NOTHING after calling end_call. Do NOT pass your closing sentence to

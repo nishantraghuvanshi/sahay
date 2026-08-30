@@ -18,6 +18,16 @@ const DEFAULT_LLM = 'gemini-2.5-flash';
 // default, which the agent was paying for on every single turn.
 const DEFAULT_THINKING_BUDGET = 0;
 
+// How long the agent waits before deciding the caller has finished speaking.
+// 'normal' is the shipped default; 'eager' trades interruption risk for
+// latency, which matters because this product calls people who pause mid
+// sentence. Enum confirmed against the API schema, not guessed.
+const TURN_EAGERNESS = ['patient', 'normal', 'eager'];
+const DEFAULT_TURN_EAGERNESS = 'normal';
+// Seconds to wait for a reply before re-engaging. Sent alongside eagerness so
+// that setting one does not drop the other from the turn object.
+const DEFAULT_TURN_TIMEOUT = 7;
+
 /**
  * ElevenLabs' own system tools.
  *
@@ -98,6 +108,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
     // ?? not ||, so an explicit 0 survives.
     this.thinkingBudget =
       providersConfig?.transport?.elevenlabs?.thinking_budget ?? DEFAULT_THINKING_BUDGET;
+    this.turnEagerness =
+      providersConfig?.transport?.elevenlabs?.turn_eagerness || DEFAULT_TURN_EAGERNESS;
+    this.turnTimeout =
+      providersConfig?.transport?.elevenlabs?.turn_timeout ?? DEFAULT_TURN_TIMEOUT;
   }
 
   get apiKey() {
@@ -119,6 +133,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
     this.llm = config.providersConfig?.transport?.elevenlabs?.llm || this.llm;
     this.thinkingBudget =
       config.providersConfig?.transport?.elevenlabs?.thinking_budget ?? this.thinkingBudget;
+    this.turnEagerness =
+      config.providersConfig?.transport?.elevenlabs?.turn_eagerness || this.turnEagerness;
+    this.turnTimeout =
+      config.providersConfig?.transport?.elevenlabs?.turn_timeout ?? this.turnTimeout;
 
     const KNOWN_TOOLS = new Set(['report_outcome', 'capture_field']);
 
@@ -520,6 +538,15 @@ class ElevenLabsTransportAdapter extends TransportPort {
       Object.entries(defaults).filter(([k]) => placeholders[k] === `{{${k}}}`)
     );
 
+    const eagerness = this.turnEagerness || DEFAULT_TURN_EAGERNESS;
+    if (!TURN_EAGERNESS.includes(eagerness)) {
+      // Fail here rather than let the API reject the whole boot patch, which
+      // would leave the agent on whatever config it happened to have.
+      throw new Error(
+        `Invalid turn_eagerness "${eagerness}". Expected one of: ${TURN_EAGERNESS.join(', ')}`
+      );
+    }
+
     return {
       conversation_config: {
         agent: {
@@ -541,6 +568,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
               ...SYSTEM_TOOLS,
             ],
           },
+        },
+        turn: {
+          turn_eagerness: eagerness,
+          turn_timeout: this.turnTimeout ?? DEFAULT_TURN_TIMEOUT,
         },
         tts: {
           voice_id: 'QTKSa2Iyv0yoxvXY2V8a',
