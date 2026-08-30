@@ -197,30 +197,21 @@ export default function Meet() {
         <div ref={transcriptEnd} />
       </Card>
 
-      <div className="flex flex-col gap-2 pt-1 sm:flex-row-reverse sm:items-center">
+      {/* One button, not two. Both went to the same place and ran the same
+          `stop()` — a separate "Skip for now" link only asked the caregiver to
+          choose between two identical outcomes. The label carries the permission
+          instead: skipping is a real path, because the agent server is a separate
+          process and may simply not be up. */}
+      <div className="pt-1">
         <Button
-          className="sm:flex-1"
+          className="w-full"
           onClick={() => {
             stop()
             navigate('/setup/parent')
           }}
         >
-          {heard ? 'Set up my parent' : 'Continue'}
+          {heard ? 'Set up my parent' : 'Continue, skip for now'}
         </Button>
-        {/* Skipping is a real path, not a dead end for the impatient: the agent
-            server is a separate process and may simply not be up. */}
-        {!heard && (
-          <button
-            type="button"
-            onClick={() => {
-              stop()
-              navigate('/setup/parent')
-            }}
-            className="min-h-[44px] text-sm font-semibold text-muted-strong underline"
-          >
-            Skip for now
-          </button>
-        )}
       </div>
     </main>
   )
