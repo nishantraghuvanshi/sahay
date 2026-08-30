@@ -447,19 +447,31 @@ class ElevenLabsTransportAdapter extends TransportPort {
           voice_id: 'QTKSa2Iyv0yoxvXY2V8a',
           model_id: 'eleven_v3_conversational',
         },
-        ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
-          ? {
-              platform_settings: {
-                workspace_overrides: {
-                  webhooks: {
-                    post_call_webhook_id: process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID,
-                    events: ['transcript'],
-                  },
+      },
+      // A SIBLING of conversation_config, not a child of it.
+      //
+      // The PATCH body declares conversation_config and platform_settings as
+      // separate top-level properties, and a live GET returns platform_settings
+      // at the top level. Nested inside conversation_config it was still
+      // accepted with a 200 — that object allows additional properties — so the
+      // webhook id was silently discarded and the agent kept
+      // post_call_webhook_id: null. Nothing failed; it simply never worked.
+      //
+      // That is the worst shape this class of bug can take, and it would have
+      // surfaced the moment someone registered the workspace webhook and
+      // concluded the feature was finished.
+      ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
+        ? {
+            platform_settings: {
+              workspace_overrides: {
+                webhooks: {
+                  post_call_webhook_id: process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID,
+                  events: ['transcript'],
                 },
               },
-            }
-          : {}),
-      },
+            },
+          }
+        : {}),
     };
   }
 

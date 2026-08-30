@@ -250,11 +250,22 @@ describe('buildAssistantConfig — post-call webhook registration', () => {
     withEnv('ELEVENLABS_POST_CALL_WEBHOOK_ID', 'webhook_abc123', () => {
       const a = new ElevenLabsTransportAdapter({});
       const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
-      assert.deepStrictEqual(cfg.conversation_config.platform_settings, {
+      // TOP-LEVEL, a sibling of conversation_config — not nested inside it.
+      // The PATCH body schema lists conversation_config and platform_settings
+      // as separate top-level properties, and a live GET returns
+      // platform_settings at the top level too. Nesting it was silently
+      // accepted with a 200, because conversation_config allows additional
+      // properties, so the webhook id went nowhere and nothing said so.
+      assert.deepStrictEqual(cfg.platform_settings, {
         workspace_overrides: {
           webhooks: { post_call_webhook_id: 'webhook_abc123', events: ['transcript'] },
         },
       });
+      assert.strictEqual(
+        cfg.conversation_config.platform_settings,
+        undefined,
+        'platform_settings must not also be nested inside conversation_config'
+      );
     }));
 
   test('platform_settings is omitted entirely when the env var is not set, rather than sent with a null id', () =>
