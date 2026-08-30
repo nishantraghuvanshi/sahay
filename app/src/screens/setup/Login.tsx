@@ -1,21 +1,28 @@
 import type React from 'react'
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { SignInPage } from '@/components/ui/sign-in'
 import { ApiError } from '../../api/client'
 import { auth } from '../../auth/api'
 import { SESSION_KEY } from '../../auth/SessionProvider'
+import { useAuthRedirect, useHandoffState } from '../../auth/redirect'
 
 /**
  * Signing in — a returning caregiver, phone or email plus password.
  *
- * The form is now the split-screen `components/ui/sign-in` block: the fields on
- * the left and the hero on the right (desktop only, so a
- * phone still gets one clean column). The auth itself is unchanged — the same
- * single `POST /auth/login`, the same deep-link-aware landing, the same
- * deliberately vague `invalid_credentials` for every kind of failure, so the
- * form cannot be used to discover who has an account.
+ * The form is the split-screen `components/ui/sign-in` block: the fields on the
+ * left and the hero on the right (desktop only, so a phone still gets one clean
+ * column). The auth itself is one `POST /auth/login` and a deep-link-aware
+ * landing.
+ *
+ * What this page will not do is tell a first-time caregiver their password is
+ * wrong. They have no password — that is the whole of their problem, and the
+ * only useful thing to say is "you need an account first", followed by taking
+ * them there with the number they just typed already in the field. `no_account`
+ * and `signup_incomplete` are separate codes from the server for exactly this;
+ * see the note on `/auth/check` in api/auth/routes.py for why auth stopped being
+ * blind here.
  *
  * The previous card layout is preserved verbatim at the bottom of this file.
  */
@@ -26,15 +33,16 @@ import { SESSION_KEY } from '../../auth/SessionProvider'
 
 export default function Login() {
   const navigate = useNavigate()
-  const location = useLocation()
   const queryClient = useQueryClient()
+  const { identifier: prefill, from } = useHandoffState()
+  const { redirect, arm } = useAuthRedirect()
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const onSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (busy) return
+    if (busy || redirect) return
 
     const form = new FormData(event.currentTarget)
     const identifier = String(form.get('identifier') ?? '').trim()
@@ -49,9 +57,30 @@ export default function Login() {
     try {
       const res = await auth.login(identifier, password)
       queryClient.setQueryData(SESSION_KEY, res.caregiver)
-      const from = (location.state as { from?: string } | null)?.from
       navigate(from ?? '/home', { replace: true })
     } catch (err) {
+      const code = err instanceof ApiError ? err.code : ''
+
+      // Not a credentials problem — a wrong-page problem. Both of these are
+      // resolved on /signup and neither is resolvable here, so say so and go.
+      if (code === 'no_account') {
+        arm({
+          to: '/signup',
+          identifier,
+          message: 'No account yet for that phone or email. Taking you to sign up…',
+        })
+        return
+      }
+      if (code === 'signup_incomplete') {
+        arm({
+          to: '/signup',
+          identifier,
+          message:
+            'That signup was never finished, so there is no password yet. Taking you back to finish it…',
+        })
+        return
+      }
+
       setError(err instanceof ApiError ? err.message : 'Could not sign in. Try again.')
     } finally {
       setBusy(false)
@@ -67,10 +96,13 @@ export default function Login() {
       identifierType="text"
       identifierLabel="Phone or email"
       identifierPlaceholder="+91 98765 43210"
+      identifierDefaultValue={prefill ?? ''}
       submitLabel="Sign in"
       busyLabel="Signing in…"
-      busy={busy}
-      error={error}
+      /* While the redirect timer runs the form is inert: the answer is on the
+         next page and a second submit would only start a second hop. */
+      busy={busy || redirect !== null}
+      error={redirect ? redirect.message : error}
       onSignIn={(e) => void onSignIn(e)}
       /* No Google OAuth on the API yet — offering the button would be a dead end. */
       showGoogle={false}
@@ -78,7 +110,7 @@ export default function Login() {
       showResetPassword={false}
       createAccountPrompt="First time here?"
       createAccountLabel="Create an account"
-      onCreateAccount={() => navigate('/signup')}
+      onCreateAccount={() => navigate('/signup', { state: { from } })}
     />
   )
 }
