@@ -191,3 +191,96 @@ describe('OUTCOMES enum shape', () => {
     assert.strictEqual(OUTCOMES.ESCALATED, undefined);
   });
 });
+
+describe('D4 — an escalation is never masked by an earlier benign report', () => {
+  // Found by running the ElevenLabs scenario battery. The agent is instructed
+  // to call report_outcome "EXACTLY ONCE per call", and it does not: in the
+  // chest-pain scenario it reported CONFIRMED, then ESCALATED_SYMPTOM once the
+  // patient mentioned chest heaviness, then ESCALATED_DISTRESS.
+  //
+  // checkToolCalls returned on the FIRST report_outcome, so the persisted
+  // outcome was CONFIRMED and no family alert would ever have fired — for a
+  // patient reporting chest pain and fear. The transport made it visible, but
+  // the defect is in shared derivation code and applies to Vapi too.
+  //
+  // First-wins is kept for every other case, deliberately: it is the existing
+  // behaviour and the agent's first call is normally its considered answer.
+  // Only an escalation overrides, because only an escalation has a cost when
+  // it is missed.
+  const call = (outcome, reason) => ({
+    name: 'report_outcome',
+    arguments: { outcome, reason },
+  });
+
+  test('a later ESCALATED_SYMPTOM overrides an earlier CONFIRMED', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('CONFIRMED', 'user confirmed'), call('ESCALATED_SYMPTOM', 'chest pain')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+    assert.strictEqual(result.reason, 'chest pain');
+  });
+
+  test('a later ESCALATED_DISTRESS overrides an earlier CONFIRMED', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('CONFIRMED', 'user confirmed'), call('ESCALATED_DISTRESS', 'wants to stop')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_DISTRESS);
+  });
+
+  test('the real three-call sequence from the battery escalates', () => {
+    const result = deriveOutcome({
+      toolCalls: [
+        call('CONFIRMED', 'user confirmed taking medicine'),
+        call('ESCALATED_SYMPTOM', 'user reported chest pain and fear'),
+        call('ESCALATED_DISTRESS', 'user expressed fear/distress'),
+      ],
+    });
+    // The medical emergency outranks the distress that followed it.
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+  });
+
+  test('ESCALATED_SYMPTOM outranks ESCALATED_DISTRESS regardless of order', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('ESCALATED_DISTRESS', 'low mood'), call('ESCALATED_SYMPTOM', 'fainted')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+  });
+
+  test('a clarify-loop INCOMPLETE does NOT get promoted into an escalation', () => {
+    // normaliseLabel turns legacy ESCALATED + clarify reason into INCOMPLETE.
+    // The override must run on the NORMALISED label, or a broken conversation
+    // would page a caregiver — which is exactly defect D1.
+    const result = deriveOutcome({
+      toolCalls: [
+        call('CONFIRMED', 'user confirmed'),
+        call('ESCALATED', 'clarify_loop_exceeded'),
+      ],
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('with no escalation present, the first report still wins', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('DENIED', 'not yet'), call('CONFIRMED', 'took it after all')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.DENIED);
+    assert.strictEqual(result.source, 'tool_call');
+  });
+
+  test('a single report is unaffected', () => {
+    const result = deriveOutcome({ toolCalls: [call('CONFIRMED', 'user confirmed')] });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('malformed entries between reports are skipped, not fatal', () => {
+    const result = deriveOutcome({
+      toolCalls: [
+        call('CONFIRMED', 'user confirmed'),
+        { name: 'report_outcome', arguments: 'not json at all' },
+        { name: 'capture_field', arguments: { field: 'x', value: 'y' } },
+        call('ESCALATED_SYMPTOM', 'breathlessness'),
+      ],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+  });
+});

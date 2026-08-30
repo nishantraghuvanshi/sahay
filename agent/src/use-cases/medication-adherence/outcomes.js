@@ -113,6 +113,7 @@ function normaliseLabel(label, reason) {
 function checkToolCalls(toolCalls) {
   if (!toolCalls || !Array.isArray(toolCalls) || toolCalls.length === 0) return null;
 
+  const reported = [];
   for (const call of toolCalls) {
     const name = call.name || call.function?.name;
     if (name !== 'report_outcome') continue;
@@ -124,13 +125,37 @@ function checkToolCalls(toolCalls) {
     if (!args || !args.outcome) continue;
 
     const reason = args.reason || 'llm_reported';
-    return {
+    reported.push({
       label: normaliseLabel(args.outcome, reason),
       source: 'tool_call',
       reason,
-    };
+    });
   }
-  return null;
+
+  if (reported.length === 0) return null;
+  if (reported.length === 1) return reported[0];
+
+  // The prompt says to call report_outcome EXACTLY ONCE per call. Agents do
+  // not always comply: an ElevenLabs scenario run reported CONFIRMED, then
+  // ESCALATED_SYMPTOM once the patient mentioned chest heaviness, then
+  // ESCALATED_DISTRESS. Returning the first match — which is what this did —
+  // persisted CONFIRMED and no family alert would ever have fired, for a
+  // patient reporting chest pain and fear.
+  //
+  // So an escalation anywhere in the call outranks everything before it, with
+  // the medical emergency outranking the distress. Every other case keeps
+  // first-wins: that is the existing behaviour, and the agent's first report is
+  // normally its considered answer. Only escalations override, because only a
+  // missed escalation has a human cost.
+  //
+  // The ranking runs on the NORMALISED label, not the raw one, so a legacy
+  // ESCALATED carrying a clarify-loop reason stays INCOMPLETE and cannot page
+  // a caregiver for a conversation that merely broke down (defect D1).
+  return (
+    reported.find((r) => r.label === OUTCOMES.ESCALATED_SYMPTOM) ||
+    reported.find((r) => r.label === OUTCOMES.ESCALATED_DISTRESS) ||
+    reported[0]
+  );
 }
 
 /** @private */
