@@ -11,6 +11,51 @@ const logger = require('../../utils/logger');
 const API = 'https://api.elevenlabs.io';
 
 /**
+ * ElevenLabs' own system tools.
+ *
+ * They have to be declared because a PATCH that sends `tools` REPLACES the
+ * whole list: installing our two webhook tools cleared the three the source
+ * agent carried, and nothing said so. The agent was left with a prompt that
+ * instructs `end_call` roughly ten times and no such tool in existence.
+ *
+ * The model's response to being ordered to call a tool it does not have was to
+ * SAY it — transcripts show a literal "[end_call]" spoken to the caller and
+ * repeated until the turn limit. On the first real call the agent therefore
+ * never hung up; `endedReason` was "Call ended by remote party", which is to
+ * say the human gave up and ended it themselves.
+ *
+ * They belong INSIDE `tools`, not in a sibling `built_in_tools`. Established
+ * by probing the live API, because the two fields both exist and the schema
+ * does not say which wins:
+ *   - built_in_tools sent WITHOUT tools  -> applied, existing tools preserved
+ *   - built_in_tools sent WITH tools     -> silently discarded, 200 OK
+ *   - system tools sent inside tools     -> applied, and the server derives
+ *                                           built_in_tools from them
+ * We always send `tools`, so only the third form works. The second is what we
+ * were doing, and it fails exactly the way `platform_settings` did: accepted,
+ * ignored, no error.
+ *
+ * Shapes copied from the live source agent rather than written from the
+ * schema, since the contracts this branch got wrong were all written from
+ * schemas. No transfer_* or subagent tools: there is nobody to transfer an
+ * elderly caller to, and a transfer_to_number would let the agent dial out.
+ */
+const SYSTEM_TOOLS = [
+  { system_tool_type: 'end_call' },
+  { system_tool_type: 'language_detection', only_at_conversation_start: false },
+  // Empty message deliberately: leaving a recording about someone's medication
+  // on a machine anyone in the house can play back is a privacy leak. Detect,
+  // hang up, and let the outcome record that the patient was unreachable.
+  { system_tool_type: 'voicemail_detection', voicemail_message: '' },
+].map((params) => ({
+  type: 'system',
+  name: params.system_tool_type,
+  description: '',
+  response_timeout_secs: 20,
+  params,
+}));
+
+/**
  * ElevenLabs Agents as a call orchestrator.
  *
  * Unlike the Vapi adapter, the LLM is NOT ours: ElevenLabs runs its own model,
@@ -22,13 +67,21 @@ const API = 'https://api.elevenlabs.io';
  * the number still rings, but nothing here answers it.
  */
 class ElevenLabsTransportAdapter extends TransportPort {
-  constructor(providerRegistry) {
+  /**
+   * @param {Object} providerRegistry
+   * @param {Object} [providersConfig] - the loaded providers.yaml. Supplied by
+   *   TransportRegistry so the adapter is usable without start(): scripts
+   *   resolve a transport and dial immediately, and reading phone_number_id
+   *   only inside start() made every scripted outbound call fail.
+   */
+  constructor(providerRegistry, providersConfig = null) {
     super();
     this.providerRegistry = providerRegistry;
     this.engine = null;
     this.webhookUrl = null;
-    this.agentId = null;
-    this.phoneNumberId = null;
+    this.agentId = process.env.ELEVENLABS_AGENT_ID || null;
+    this.phoneNumberId =
+      providersConfig?.transport?.elevenlabs?.phone_number_id || null;
   }
 
   get apiKey() {
@@ -43,8 +96,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
     this.strategy = config.strategy;
     this.repository = config.repository;
     this.agentId = process.env.ELEVENLABS_AGENT_ID || null;
+    // start()'s config wins when present, so a caller can override the
+    // configured number; otherwise keep what the constructor resolved.
     this.phoneNumberId =
-      config.providersConfig?.transport?.elevenlabs?.phone_number_id || null;
+      config.providersConfig?.transport?.elevenlabs?.phone_number_id || this.phoneNumberId;
 
     const KNOWN_TOOLS = new Set(['report_outcome', 'capture_field']);
 
@@ -457,7 +512,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
           prompt: {
             prompt: strategy.buildSystemPrompt(placeholders),
             llm: 'gemini-2.5-flash',
-            tools: strategy.getTools().map((t) => this._toolDeclaration(t, webhookUrl)),
+            tools: [
+              ...strategy.getTools().map((t) => this._toolDeclaration(t, webhookUrl)),
+              ...SYSTEM_TOOLS,
+            ],
           },
         },
         tts: {

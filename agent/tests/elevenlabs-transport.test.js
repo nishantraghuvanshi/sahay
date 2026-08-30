@@ -35,9 +35,14 @@ describe('buildAssistantConfig', () => {
   });
 
   test('the tool list replaces the source agent\'s, it does not merge with it', () => {
+    // Two webhook tools of ours plus the three ElevenLabs system tools. The
+    // source agent's send_guardian_alert is gone; the system tools are ours
+    // now, declared deliberately, because sending `tools` replaces the list
+    // and would otherwise delete end_call along with it.
     const a = new ElevenLabsTransportAdapter({});
     const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
-    assert.strictEqual(tools.length, 2);
+    assert.strictEqual(tools.filter((t) => t.type === 'webhook').length, 2);
+    assert.strictEqual(tools.filter((t) => t.type === 'system').length, 3);
   });
 
   test('speaks Hindi, not the English the source agent was set to', () => {
@@ -49,7 +54,7 @@ describe('buildAssistantConfig', () => {
   test('declares one webhook tool per strategy tool, pointed at our tunnel', () => {
     const a = new ElevenLabsTransportAdapter({});
     const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x.ngrok-free.dev');
-    const tools = cfg.conversation_config.agent.prompt.tools;
+    const tools = cfg.conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     const names = tools.map((t) => t.name).sort();
     assert.deepStrictEqual(names, ['capture_field', 'report_outcome']);
     for (const t of tools) {
@@ -63,7 +68,7 @@ describe('buildAssistantConfig', () => {
     // tools.json marks report_outcome async:false — two of its outcomes alert
     // the family, so the write must land before the agent moves on.
     const a = new ElevenLabsTransportAdapter({});
-    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
     assert.strictEqual(byName.report_outcome.execution_mode, 'immediate');
     assert.strictEqual(byName.capture_field.execution_mode, 'async');
@@ -73,7 +78,7 @@ describe('buildAssistantConfig', () => {
     // 'sync' was invented in the plan and rejected by a live PATCH with a 400.
     const VALID = new Set(['immediate', 'post_tool_speech', 'async']);
     const a = new ElevenLabsTransportAdapter({});
-    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     for (const t of tools) {
       assert.ok(VALID.has(t.execution_mode), `${t.name} has invalid execution_mode ${t.execution_mode}`);
     }
@@ -83,13 +88,13 @@ describe('buildAssistantConfig', () => {
     // Escalation is already an outcome of report_outcome. Two tools that both
     // alert the family is one too many, and the old one pointed at a dead host.
     const a = new ElevenLabsTransportAdapter({});
-    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     assert.ok(!tools.some((t) => t.name === 'send_guardian_alert'));
   });
 
   test('carries the tool parameter schema across, enums included', () => {
     const a = new ElevenLabsTransportAdapter({});
-    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     const outcome = tools.find((t) => t.name === 'report_outcome');
     const props = outcome.api_schema.request_body_schema.properties;
     assert.ok(props.outcome.enum.includes('ESCALATED_SYMPTOM'));
@@ -100,7 +105,7 @@ describe('buildAssistantConfig', () => {
     // Without this, the webhook has no idea which call a tool call belongs
     // to — ElevenLabs' documented dynamic variables carry no conversation id.
     const a = new ElevenLabsTransportAdapter({});
-    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     for (const t of tools) {
       const prop = t.api_schema.request_body_schema.properties.kinvox_call_id;
       assert.strictEqual(prop.type, 'string');
@@ -121,7 +126,7 @@ describe('buildAssistantConfig', () => {
     // anyone adds to any tool cannot silently reintroduce the same 400.
     const MUTUALLY_EXCLUSIVE = ['description', 'dynamic_variable', 'is_system_provided', 'constant_value', 'is_omitted'];
     const a = new ElevenLabsTransportAdapter({});
-    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     for (const t of tools) {
       const properties = t.api_schema.request_body_schema.properties;
       for (const [name, prop] of Object.entries(properties)) {
@@ -139,7 +144,7 @@ describe('buildAssistantConfig', () => {
     process.env.ELEVENLABS_WEBHOOK_SECRET = 'test-secret';
     try {
       const a = new ElevenLabsTransportAdapter({});
-      const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+      const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
       for (const t of tools) {
         assert.strictEqual(t.api_schema.request_headers['X-Kinvox-Token'], 'test-secret');
       }
@@ -394,7 +399,7 @@ describe('boot-time agent patch', () => {
 
     assert.strictEqual(cap.method, 'PATCH');
     assert.strictEqual(cap.url, 'https://api.elevenlabs.io/v1/convai/agents/agent_copy');
-    const tools = cap.body.conversation_config.agent.prompt.tools;
+    const tools = cap.body.conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     assert.ok(tools.every((t) => t.api_schema.url.startsWith('https://fresh-tunnel.ngrok-free.dev')));
   });
 
@@ -505,5 +510,79 @@ describe('dynamic_variable_placeholders — an omitted variable must not be spok
     const a = new ElevenLabsTransportAdapter({});
     const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
     assert.strictEqual(cfg.conversation_config.agent.dynamic_variables, undefined);
+  });
+});
+
+describe('system tools — the agent must be able to hang up', () => {
+  // buildAssistantConfig sent only our two webhook tools, and a PATCH carrying
+  // `tools` REPLACES the list — so the three system tools the source agent
+  // carried were cleared, silently, with a 200. Our agent had no end_call while
+  // the prompt instructs end_call roughly ten times.
+  //
+  // The model's response to being told to call a tool that does not exist was
+  // to SAY it: transcripts show a literal "[end_call]" spoken aloud and
+  // repeated until the turn cap. On the one real call the agent never hung up —
+  // endedReason was "Call ended by remote party", i.e. the human gave up. Every
+  // non-terminating loop in the scenario battery traces back to this.
+  //
+  // They go INSIDE tools, not in a sibling built_in_tools. Verified against the
+  // live API: built_in_tools sent alongside tools is discarded with a 200,
+  // while system entries inside tools are applied and the server derives
+  // built_in_tools from them.
+  function toolsOf(cfg) {
+    // Unfiltered on purpose: this describe is about the system tools that
+    // share the array with our webhook tools.
+    return cfg.conversation_config.agent.prompt.tools;
+  }
+
+  test('end_call is declared, so the agent can actually end the call', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const tools = toolsOf(a.buildAssistantConfig(STRATEGY, {}, 'https://x'));
+    const endCall = tools.find((t) => t.name === 'end_call');
+    assert.ok(endCall, 'end_call must be declared');
+    assert.strictEqual(endCall.type, 'system');
+    assert.strictEqual(endCall.params.system_tool_type, 'end_call');
+  });
+
+  test('voicemail_detection is declared, and leaves no message behind', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const vm = toolsOf(a.buildAssistantConfig(STRATEGY, {}, 'https://x'))
+      .find((t) => t.name === 'voicemail_detection');
+    assert.ok(vm);
+    assert.strictEqual(vm.params.system_tool_type, 'voicemail_detection');
+    // A recording about someone's medication, playable by anyone in the house.
+    assert.strictEqual(vm.params.voicemail_message, '');
+  });
+
+  test('language_detection is declared, for callers who answer in another language', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const ld = toolsOf(a.buildAssistantConfig(STRATEGY, {}, 'https://x'))
+      .find((t) => t.name === 'language_detection');
+    assert.ok(ld);
+    assert.strictEqual(ld.params.system_tool_type, 'language_detection');
+  });
+
+  test('declares no transfer or subagent tools — there is nobody to transfer to', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const names = toolsOf(a.buildAssistantConfig(STRATEGY, {}, 'https://x')).map((t) => t.name);
+    for (const forbidden of ['transfer_to_number', 'transfer_to_agent', 'run_subagent']) {
+      assert.strictEqual(names.includes(forbidden), false, `${forbidden} must not be declared`);
+    }
+  });
+
+  test('the webhook tools come first and are unaffected', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const tools = toolsOf(a.buildAssistantConfig(STRATEGY, {}, 'https://x'));
+    assert.deepStrictEqual(tools.slice(0, 2).map((t) => t.name), ['report_outcome', 'capture_field']);
+    assert.deepStrictEqual(
+      tools.map((t) => t.name),
+      ['report_outcome', 'capture_field', 'end_call', 'language_detection', 'voicemail_detection']
+    );
+  });
+
+  test('no sibling built_in_tools key is sent, since it would be ignored', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const prompt = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt;
+    assert.strictEqual('built_in_tools' in prompt, false);
   });
 });
