@@ -42,8 +42,67 @@ class ElevenLabsTransportAdapter extends TransportPort {
     logger.log('transport_started', { transport: 'elevenlabs', webhookUrl: this.webhookUrl });
   }
 
+  /**
+   * One ElevenLabs webhook tool from one strategy tool.
+   *
+   * The shape is taken from a live tool on the source agent, not from the prose
+   * docs, which do not specify it. `execution_mode` mirrors tools.json's `async`
+   * flag: report_outcome is synchronous because two of its outcomes alert the
+   * family, and the agent must not talk past a write that has not landed.
+   */
+  _toolDeclaration(tool, webhookUrl) {
+    const fn = tool.function || tool;
+    const params = fn.parameters || { type: 'object', properties: {}, required: [] };
+    return {
+      type: 'webhook',
+      name: fn.name,
+      description: fn.description,
+      response_timeout_secs: 10,
+      execution_mode: tool.async === true ? 'async' : 'sync',
+      api_schema: {
+        kind: 'webhook',
+        url: `${webhookUrl}/el/tools/${fn.name}`,
+        method: 'POST',
+        request_headers: {},
+        path_params_schema: {},
+        query_params_schema: null,
+        request_body_schema: {
+          type: 'object',
+          description: fn.description,
+          properties: params.properties,
+          required: params.required || [],
+        },
+      },
+    };
+  }
+
+  /**
+   * The agent patch.
+   *
+   * Generated from the active strategy every time rather than hand-maintained,
+   * so a guardrail edit lands on both transports or neither. SETUP.md records a
+   * stale config/assistant.json shipping v1 guardrails while the repo ran v4;
+   * this is how that does not happen again.
+   */
   buildAssistantConfig(strategy, providers, webhookUrl) {
-    throw new Error('not implemented yet');
+    const variables = typeof strategy.getVariables === 'function' ? strategy.getVariables() : {};
+    return {
+      conversation_config: {
+        agent: {
+          language: 'hi',
+          first_message: strategy.buildFirstMessage(variables),
+          prompt: {
+            prompt: strategy.buildSystemPrompt(variables),
+            llm: 'gemini-2.5-flash',
+            tools: strategy.getTools().map((t) => this._toolDeclaration(t, webhookUrl)),
+          },
+        },
+        tts: {
+          voice_id: 'QTKSa2Iyv0yoxvXY2V8a',
+          model_id: 'eleven_v3_conversational',
+        },
+      },
+    };
   }
 
   async createCall(assistantId, phoneNumber, variables = {}) {
