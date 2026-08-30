@@ -572,9 +572,17 @@ class SqliteRepository extends OutcomeRepositoryPort {
         .prepare(
           `SELECT * FROM sessions
            WHERE patient_id = ? AND status = 'dropped' AND ended_at >= ?
-           -- id breaks ties: two sessions ending in the same millisecond
+           -- rowid breaks ties: two sessions ending in the same millisecond
            -- share an ISO timestamp, leaving ended_at alone non-deterministic.
-           ORDER BY ended_at DESC, id DESC LIMIT 1`
+           -- id is a random UUID (see newId() above), not a monotonic
+           -- sequence, so ordering by it does not favour the most recently
+           -- inserted row -- it just picks whichever row happened to get
+           -- the lexicographically larger UUID, which flips from run to
+           -- run. rowid is SQLite's own insertion-order integer (this
+           -- table's PRIMARY KEY is TEXT, so rowid is still implicit and
+           -- available), matching the tiebreak already used by
+           -- listSessions() and list() above.
+           ORDER BY ended_at DESC, rowid DESC LIMIT 1`
         )
         .get(patientId, cutoff) || null
     );
