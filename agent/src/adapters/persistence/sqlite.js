@@ -371,11 +371,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
       this.db
         .prepare(
           `INSERT INTO sessions (
-             session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?)
+             id, session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?)
            ON CONFLICT(session_id) DO NOTHING`
         )
         .run(
+          newId(),
           session.sessionId,
           session.patientId ?? null,
           session.callId || null,
@@ -889,12 +890,13 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async createCall(call) {
     const stmt = this.db.prepare(`
-      INSERT INTO calls (call_id, use_case, language, phone, variables)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO calls (id, call_id, use_case, language, phone, variables)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(call_id) DO NOTHING
     `);
 
     stmt.run(
+      newId(),
       call.callId,
       call.useCase || null,
       call.language || null,
@@ -916,10 +918,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // COALESCE keeps any metadata createCall() did write.
     const stmt = this.db.prepare(`
       INSERT INTO calls (
-        call_id, outcome_label, outcome_source, outcome_reason, transcript,
+        id, call_id, outcome_label, outcome_source, outcome_reason, transcript,
         duration_seconds, cost, prompt_version, parent_id, attempt_number, phone, recording_url, ended_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(call_id) DO UPDATE SET
         outcome_label   = excluded.outcome_label,
         outcome_source  = excluded.outcome_source,
@@ -936,6 +938,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
     `);
 
     stmt.run(
+      newId(),
       outcome.callId,
       outcome.label || null,
       outcome.source || null,
@@ -1048,11 +1051,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async saveMessage(message) {
     const stmt = this.db.prepare(`
-      INSERT INTO messages (call_id, role, content, tool_calls)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO messages (id, call_id, role, content, tool_calls)
+      VALUES (?, ?, ?, ?, ?)
     `);
 
     stmt.run(
+      newId(),
       message.callId,
       message.role,
       message.content || null,
