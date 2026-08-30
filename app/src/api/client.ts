@@ -30,6 +30,14 @@ const READ_TIMEOUT_MS = 3000
  */
 const AUTH_TIMEOUT_MS = 15000
 
+/**
+ * A demo call runs the real agent through a whole simulated conversation
+ * upstream, which takes tens of seconds. The 15s auth timeout would abort a
+ * demo that was going to succeed, and the caregiver would have spent their one
+ * attempt on a spinner.
+ */
+const DEMO_CALL_TIMEOUT_MS = 150000
+
 type Envelope<T> = ({ ok: true } & T) | { ok: false; error: string }
 
 /** Called on any 401 so the session cache can drop and the guard can redirect. */
@@ -146,6 +154,14 @@ export const api = {
  */
 export const authApi = {
   get: <T>(path: string) => request<T>(AUTH_BASE, path, undefined, AUTH_TIMEOUT_MS),
+  /** Same origin and cookie as the rest of authApi, but a much longer patience. */
+  postSlow: <T>(path: string, body: unknown) =>
+    request<T>(
+      AUTH_BASE,
+      path,
+      { method: 'POST', body: JSON.stringify(body) },
+      DEMO_CALL_TIMEOUT_MS,
+    ),
   post: <T>(path: string, body: unknown) =>
     request<T>(
       AUTH_BASE,

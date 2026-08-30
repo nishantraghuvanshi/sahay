@@ -39,14 +39,21 @@ const FILTERS: { key: Filter; label: string }[] = [
 ]
 
 /**
- * `missed` and `no_answer` are the two rows a caregiver must never confuse: one means the
- * dose was not taken, the other means we do not know. Said in words on the row itself.
+ * `missed`, `no_answer` and `unknown` are the rows a caregiver must never confuse: the
+ * dose was not taken, nobody picked up, or they answered and it could not be read.
+ * Said in words on the row itself.
+ *
+ * MEANING is a Record over the whole DoseStatus union, so every member needs an entry
+ * — `pending` included, even though it is the scheduler's bookkeeping rather than an
+ * outcome (see answered() in api/types.ts).
  */
 const MEANING: Record<DoseStatus, string> = {
   confirmed: 'Taken — confirmed on a check-in call.',
   deferred: 'Put off to a later time, and still expected.',
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
+  unknown: 'They answered, but what they said could not be read either way.',
+  pending: 'Not due yet — nothing has been established.',
 }
 
 /** Local calendar day, never UTC — a 21:00 IST dose must not land on the previous day. */

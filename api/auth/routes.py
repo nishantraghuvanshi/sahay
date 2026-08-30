@@ -11,6 +11,9 @@ which is a real 401; see api/auth/deps.py for why.
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
+
 import logging
 
 from fastapi import APIRouter, Request, Response
@@ -142,21 +145,37 @@ async def otp_verify(
             return {"ok": False, "error": result.value}
 
         if body.channel is Channel.sms:
+            # Upstream used `(xmax = 0) AS inserted` to tell an INSERT from an
+            # ON CONFLICT UPDATE — that is a Postgres system column and has no
+            # SQLite equivalent, so the existence check is explicit instead.
+            # Same answer, and it is the answer that decides whether the app
+            # runs onboarding or goes straight to /home.
+            now_iso = datetime.now(UTC).isoformat()
+            existing_id = await conn.fetchval(
+                "SELECT id FROM caregivers WHERE phone_e164 = $1", destination
+            )
+            is_new = existing_id is None
+            if is_new:
+                await conn.execute(
+                    "INSERT INTO caregivers (id, phone_e164, phone_verified_at, created_at) "
+                    "VALUES ($1, $2, $3, $4)",
+                    str(uuid.uuid4()),
+                    destination,
+                    now_iso,
+                    now_iso,
+                )
+            else:
+                await conn.execute(
+                    "UPDATE caregivers SET phone_verified_at = $2 WHERE id = $1",
+                    existing_id,
+                    now_iso,
+                )
             row = await conn.fetchrow(
-                """
-                INSERT INTO caregivers (phone_e164, phone_verified_at)
-                     VALUES ($1, now())
-                ON CONFLICT (phone_e164)
-                  DO UPDATE SET phone_verified_at = now()
-                  RETURNING id, name, phone_e164, email, relationship,
-                            phone_verified_at, email_verified_at,
-                            (xmax = 0) AS inserted
-                """,
+                "SELECT id, name, phone_e164, email, relationship, "
+                "phone_verified_at, email_verified_at FROM caregivers "
+                "WHERE phone_e164 = $1",
                 destination,
             )
-            # xmax = 0 distinguishes an INSERT from an ON CONFLICT UPDATE, which
-            # is what tells the app to run onboarding rather than go to /home.
-            is_new = bool(row["inserted"])
             token = await sess.issue(
                 conn, settings, row["id"], request.headers.get("user-agent")
             )
@@ -164,13 +183,14 @@ async def otp_verify(
         else:
             row = await conn.fetchrow(
                 """
-                UPDATE caregivers SET email = $2, email_verified_at = now()
+                UPDATE caregivers SET email = $2, email_verified_at = $3
                  WHERE id = $1
              RETURNING id, name, phone_e164, email, relationship,
                        phone_verified_at, email_verified_at
                 """,
                 caregiver.id,
                 destination,
+                datetime.now(UTC).isoformat(),
             )
             is_new = False
 
@@ -234,7 +254,7 @@ async def complete_signup(body: CompleteSignupBody, caregiver: CaregiverDep):
             UPDATE caregivers
                SET name = $2,
                    relationship = COALESCE(NULLIF($3, ''), relationship),
-                   password_hash = $4, password_salt = $5, password_set_at = now(),
+                   password_hash = $4, password_salt = $5, password_set_at = $6,
                    failed_logins = 0, locked_until = NULL
              WHERE id = $1
          RETURNING id, name, phone_e164, email, relationship,
@@ -245,6 +265,7 @@ async def complete_signup(body: CompleteSignupBody, caregiver: CaregiverDep):
             (body.relationship or "").strip(),
             digest,
             salt,
+            datetime.now(UTC).isoformat(),
         )
 
     return {"ok": True, "caregiver": _as_json(row)}
@@ -270,7 +291,6 @@ async def login(body: LoginBody, request: Request, response: Response, settings:
                    password_hash, password_salt, failed_logins, locked_until
               FROM caregivers
              WHERE phone_e164 = $1 OR lower(email) = lower($1)
-             FOR UPDATE
             """,
             identifier,
         )

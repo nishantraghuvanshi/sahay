@@ -1,7 +1,6 @@
 {
-  "_spec": "TRD §3.2 seed + LANE-C-APP.md mock requirement. Shapes mirror the tool contract (TRD §5.2).",
+  "_spec": "TRD \u00a73.2 seed + LANE-C-APP.md mock requirement. Shapes mirror the tool contract (TRD \u00a75.2).",
   "_note": "Timestamps are anchored to 2026-08-30 and rebased onto today at load (app/src/api/mock.ts) so the demo never looks stale.",
-
   "caregiver": {
     "id": "c1000000-0000-4000-8000-000000000001",
     "name": "Shubh",
@@ -10,7 +9,6 @@
     "relationship": "son",
     "created_at": "2026-08-29T13:00:00+05:30"
   },
-
   "patient": {
     "id": "p1000000-0000-4000-8000-000000000001",
     "caregiver_id": "c1000000-0000-4000-8000-000000000001",
@@ -19,24 +17,35 @@
     "phone_e164": "+919876543210",
     "language": "hi-IN",
     "age": 68,
-    "conditions": ["hypertension", "type-2 diabetes"],
-    "allergies": ["sulfa"],
+    "conditions": [
+      "hypertension",
+      "type-2 diabetes"
+    ],
+    "allergies": [
+      "sulfa"
+    ],
     "doctor_name": "Dr Rao",
     "doctor_phone": "+919845012345",
     "address_text": "14 Rose Villa, Baner, Pune 411045",
-    "meal_times": { "breakfast": "08:00", "lunch": "13:30", "dinner": "20:30" },
+    "meal_times": {
+      "breakfast": "08:00",
+      "lunch": "13:30",
+      "dinner": "20:30"
+    },
     "schedule_signed_off_at": "2026-08-29T13:20:00+05:30",
     "calls_paused": false,
     "created_at": "2026-08-29T13:10:00+05:30"
   },
-
   "medications": [
     {
       "id": "m1000000-0000-4000-8000-000000000001",
       "patient_id": "p1000000-0000-4000-8000-000000000001",
       "name": "Metformin",
       "dose": "500mg",
-      "slots": ["08:30", "21:00"],
+      "slots": [
+        "08:30",
+        "21:00"
+      ],
       "with_food": "after",
       "is_priority": true,
       "stock_count": 42
@@ -46,7 +55,9 @@
       "patient_id": "p1000000-0000-4000-8000-000000000001",
       "name": "Amlodipine",
       "dose": "5mg",
-      "slots": ["08:30"],
+      "slots": [
+        "08:30"
+      ],
       "with_food": "any",
       "is_priority": false,
       "stock_count": 18
@@ -56,13 +67,14 @@
       "patient_id": "p1000000-0000-4000-8000-000000000001",
       "name": "Atorvastatin",
       "dose": "10mg",
-      "slots": ["21:00"],
+      "slots": [
+        "21:00"
+      ],
       "with_food": "after",
       "is_priority": false,
       "stock_count": 26
     }
   ],
-
   "call_sessions": [
     {
       "id": "s1000000-0000-4000-8000-000000000001",
@@ -105,8 +117,17 @@
       "safety_pass": true
     }
   ],
-
   "dose_events": [
+    {
+      "id": "d1000000-0000-4000-8000-000000000008",
+      "patient_id": "p1000000-0000-4000-8000-000000000001",
+      "medication_id": "m1000000-0000-4000-8000-000000000002",
+      "slot_time": "2026-08-28T08:30:00+05:30",
+      "call_session_id": null,
+      "status": "unknown",
+      "note": "Three attempts, the line did not connect.",
+      "created_at": "2026-08-28T09:05:00+05:30"
+    },
     {
       "id": "d1000000-0000-4000-8000-000000000001",
       "patient_id": "p1000000-0000-4000-8000-000000000001",
@@ -178,7 +199,6 @@
       "created_at": "2026-08-30T13:36:00+05:30"
     }
   ],
-
   "observations": [
     {
       "id": "o1000000-0000-4000-8000-000000000001",
@@ -199,7 +219,6 @@
       "created_at": "2026-08-30T13:36:10+05:30"
     }
   ],
-
   "intake_records": [
     {
       "id": "i1000000-0000-4000-8000-000000000001",
@@ -225,7 +244,6 @@
       "updated_at": "2026-08-30T13:36:20+05:30"
     }
   ],
-
   "escalations": [
     {
       "id": "e1000000-0000-4000-8000-000000000001",
@@ -236,10 +254,22 @@
       "channel": "whatsapp",
       "sent_to": "Shubh",
       "sent_at": "2026-08-30T13:36:40+05:30",
+      "delivery_status": "delivered",
+      "dose_event_id": null
+    },
+    {
+      "id": "e1000000-0000-4000-8000-000000000002",
+      "patient_id": "p1000000-0000-4000-8000-000000000001",
+      "intake_record_id": null,
+      "dose_event_id": "d1000000-0000-4000-8000-000000000008",
+      "level": "P2",
+      "reason": "three consecutive call attempts failed to connect",
+      "channel": "whatsapp",
+      "sent_to": "Shubh",
+      "sent_at": "2026-08-28T09:06:00+05:30",
       "delivery_status": "delivered"
     }
   ],
-
   "handoffs": [
     {
       "id": "h1000000-0000-4000-8000-000000000001",

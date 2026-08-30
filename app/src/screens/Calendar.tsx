@@ -15,6 +15,7 @@ import {
   Tag,
 } from '../ui'
 import { useCareRecord, useDoseHistory } from '../api/hooks'
+import DemoCallPanel from './DemoCallPanel'
 import { slotsForDay } from '../lib/schedule'
 import type { UpcomingDose } from '../lib/schedule'
 import type { DoseStatus } from '../api/types'
@@ -39,14 +40,16 @@ import type { DoseStatus } from '../api/types'
  * buttons at the foot go to.
  */
 
-const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer']
+const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer', 'unknown']
 
-/** Said in words, because the four are exactly what a caregiver must not have to guess at. */
+/** Said in words, because these are exactly what a caregiver must not have to guess at. */
 const MEANING: Record<DoseStatus, string> = {
   confirmed: 'Taken — confirmed on a check-in call.',
   deferred: 'Put off to a later time, and still expected.',
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
+  unknown: 'They answered, but what they said could not be read either way.',
+  pending: 'Not due yet — nothing has been established.',
 }
 
 /* ------------------------------------------------------------------ dates */
@@ -460,6 +463,9 @@ export default function Calendar() {
           Upload new prescription
         </Link>
       </div>
+
+      {/* Optional, and last: a caregiver reads the week first. */}
+      <DemoCallPanel />
     </section>
   )
 }

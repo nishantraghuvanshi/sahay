@@ -254,11 +254,20 @@ export function Divider({ className }: { className?: string }) {
 
 /* ---------------------------------------------------------------- status */
 
+// All six DoseStatus members. `unknown` and `pending` are ours and are not
+// optional: DOSE_LABEL is a Record over the whole union, so omitting them does
+// not merely lose a label, it fails to typecheck. `unknown` is a real outcome
+// the agent records when a caller answered but their intent could not be
+// established, and `pending` is the scheduler's bookkeeping state — see
+// answered() in api/types.ts, which is what keeps `pending` from reading as
+// an outcome anywhere in the app.
 const DOSE_LABEL: Record<DoseStatus, string> = {
   confirmed: 'taken',
   deferred: 'deferred',
   missed: 'missed',
   no_answer: 'no answer',
+  unknown: 'not known',
+  pending: 'waiting',
 }
 
 const SEVERITY_LABEL: Record<Severity, string> = {
@@ -295,7 +304,11 @@ export function DoseStatusChip({ status }: { status: DoseStatus }) {
   const kind = status === 'confirmed' ? 'filled' : status === 'deferred' ? 'empty' : 'hollow'
   const tone: DotTone =
     status === 'confirmed' ? 'accent' : status === 'missed' ? 'danger' : status === 'no_answer' ? 'warn' : 'ink'
-  const emphatic = status === 'missed' || status === 'no_answer'
+  // `unknown` is emphasised alongside missed and no_answer: all three mean the
+  // dose was not established, which is what a caregiver needs to notice. It
+  // carries no tone colour of its own — it is an absence of information, not a
+  // severity, and colouring it would overstate what is known.
+  const emphatic = status === 'missed' || status === 'no_answer' || status === 'unknown'
   return (
     <span className="inline-flex items-center gap-1.5 text-xs">
       <span className={dotClass(kind, tone)} />
@@ -303,6 +316,7 @@ export function DoseStatusChip({ status }: { status: DoseStatus }) {
         className={clsx(
           emphatic && status === 'missed' && 'font-semibold text-danger',
           emphatic && status === 'no_answer' && 'font-semibold text-warn',
+          emphatic && status === 'unknown' && 'font-semibold',
           !emphatic && 'text-muted-strong',
         )}
       >

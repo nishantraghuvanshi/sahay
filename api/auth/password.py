@@ -31,7 +31,7 @@ MAX_FAILED_LOGINS = 5
 LOCKOUT = timedelta(minutes=15)
 
 
-def hash_password(password: str) -> tuple[bytes, bytes]:
+def hash_password(password: str) -> tuple[str, str]:
     """Returns (hash, salt). The salt is per-caregiver, so two people with the
     same password do not share a digest and one cracked row does not reveal the
     other."""
@@ -41,16 +41,26 @@ def hash_password(password: str) -> tuple[bytes, bytes]:
     digest = hashlib.scrypt(
         password.encode(), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, dklen=KEY_BYTES
     )
-    return digest, salt
+    # Hex, not raw bytes. These land in TEXT columns (BYTEA upstream); sqlite3
+    # stores a bytes value in a TEXT column as a decoded string, and the digest
+    # never compares equal on the way back — every login would fail, including
+    # the correct password.
+    return digest.hex(), salt.hex()
 
 
-def verify_password(password: str, digest: bytes, salt: bytes) -> bool:
+def verify_password(password: str, digest: str, salt: str) -> bool:
     import hashlib
 
     candidate = hashlib.scrypt(
-        password.encode(), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, dklen=KEY_BYTES
+        password.encode(),
+        salt=bytes.fromhex(salt),
+        n=SCRYPT_N,
+        r=SCRYPT_R,
+        p=SCRYPT_P,
+        dklen=KEY_BYTES,
     )
-    return hmac.compare_digest(candidate, digest)
+    # compare_digest over the hex, so both sides are the same type.
+    return hmac.compare_digest(candidate.hex(), digest)
 
 
 def problem_with(password: str) -> str | None:
@@ -63,9 +73,15 @@ def problem_with(password: str) -> str | None:
     return None
 
 
-def is_locked(locked_until: datetime | None) -> bool:
-    return locked_until is not None and locked_until > datetime.now(UTC)
+def is_locked(locked_until: str | datetime | None) -> bool:
+    """Accepts the ISO string the TEXT column returns as well as a datetime."""
+    if locked_until is None:
+        return False
+    if isinstance(locked_until, str):
+        locked_until = datetime.fromisoformat(locked_until)
+    return locked_until > datetime.now(UTC)
 
 
-def lockout_until() -> datetime:
-    return datetime.now(UTC) + LOCKOUT
+def lockout_until() -> str:
+    """ISO string: it is written straight into a TEXT column."""
+    return (datetime.now(UTC) + LOCKOUT).isoformat()

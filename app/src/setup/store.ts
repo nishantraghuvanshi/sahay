@@ -15,8 +15,48 @@ export interface DraftMedicine {
   slots: string[]
   with_food: WithFood
   is_priority: boolean
-  /** OCR could not read this row confidently — highlighted for review (wireframe 1e). */
+  /** A person must correct this row before it can be scheduled (wireframe 1e). */
   unclear?: boolean
+
+  /* --- provenance, when the row came from a prescription photo -------------
+   * Safety rule S3: every extracted medicine carries the verbatim text the model
+   * claims it read, so the caregiver can check it against the paper rather than
+   * confirming a value they have no way to verify. Optional because a row the
+   * caregiver typed by hand has no reading to show. */
+
+  /** Verbatim line the model read. Absent on hand-entered rows. */
+  raw_line?: string
+  /** Per-medicine, 0–1, as reported by the model. */
+  confidence?: number
+  /** Validation flags from design doc §7 — e.g. 'low_confidence'. */
+  flags?: string[]
+  /** Days written on the prescription. Nothing consumes this yet — `medications`
+   *  has no end-date column (docs/SCHEMA-GAPS-LANE-C.md §4) — but dropping it at
+   *  the boundary would lose a value that was legibly on the page. */
+  duration_days?: number | null
+  /** Read from the page, deliberately never scheduled: PRN, or a non-oral form. */
+  excluded?: boolean
+  exclusion_reason?: string | null
+}
+
+/** What the extractor reported about the document as a whole. */
+export interface ExtractionMeta {
+  doc_id: string
+  model: string
+  /**
+   * The `DraftFile` ids this reading was produced from.
+   *
+   * This is what distinguishes "the caregiver came back to the same prescription"
+   * from "the caregiver gave us a different one". Without it, `ocrDone` alone
+   * suppresses the re-read and the previous prescription's medicines are shown
+   * under the new photograph — which is the worst possible way to be wrong here,
+   * because the schedule looks confirmed and belongs to someone else's page.
+   */
+  source_files: string[]
+  needs_review: boolean
+  review_reasons: string[]
+  /** Lines the model returned that failed validation — shown, never dropped. */
+  unparsed_lines: string[]
 }
 
 export interface DraftFile {
@@ -65,6 +105,8 @@ export interface SetupDraft {
   /* 1c/1d — prescription */
   files: DraftFile[]
   ocrDone: boolean
+  /** Null until a prescription has actually been read. */
+  extraction: ExtractionMeta | null
 
   /* 1e — schedule */
   medicines: DraftMedicine[]
@@ -106,6 +148,7 @@ export const EMPTY_DRAFT: SetupDraft = {
 
   files: [],
   ocrDone: false,
+  extraction: null,
 
   medicines: [],
   scheduleConfirmed: false,

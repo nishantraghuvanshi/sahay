@@ -93,6 +93,8 @@
 - [x] Reconciles with `dose_events` — no derived or smoothed numbers
 - [x] Reason text shown where captured ("strip not found")
 - [ ] `unknown` renders as its own status, never as `missed` (`2o` degraded state)
+      ↳ built — `unknown` is the fifth value in `DoseStatus`, in `TRD §3`'s `dose_events.status`
+      comment, and in the seed. It prints "not known" and is filterable on the history screen
 
 ---
 
@@ -252,12 +254,15 @@ and the desktop landing page (`2a`) reuses the same component.
       am making … explicitly advised by our doctor"* — `Save and Continue` disabled until
       ticked. Persist the attestation with the change batch and who made it
 - [ ] Schedule changes propagate to the scheduler (tell Lane B when a slot moves)
-      ↳ ⛔ no mutation endpoint yet — Save is a marked stub naming `POST /app/medications`
+      ↳ built — `POST /app/medications` persists the edit and writes the `medication_changes`
+      audit row with the attestation text verbatim. The medications table *is* the schedule,
+      so persisting is propagating; there is no second copy to keep in step
 
 ## Home (`1f` / `2e`)
 
 - [ ] Next-dose primary card with `Mark taken` — and marking taken **cancels** the agent
-      ↳ ⛔ card is built; the button is inert until there is a mutation endpoint
+      ↳ built — `POST /app/doses` writes the confirmation, which *is* the cancellation: the
+      scheduler dials slots with no `dose_events` row, so there is no separate flag to drift
       call for that slot
 - [x] The agent-will-call line states the offset ("Agent will call at 2:05 PM if
       unconfirmed")
@@ -308,13 +313,19 @@ and the desktop landing page (`2a`) reuses the same component.
       ↳ `?fail=<key>` forces any single query to fail; `{ok:false}` is thrown, never rendered as data
 - [x] **Loading is a skeleton, never a spinner** — layout stable before data lands
 - [ ] Degraded state: agent cannot reach the parent → doses read `unknown`, the escalation
-      ↳ ⛔ not built — `unknown` is not a value in the DoseStatus union (TRD §3 has four). Needs a schema decision first
+      ↳ built — the schema decision was taken: `unknown` is a fifth `DoseStatus`, and
+      `escalations.dose_event_id` links the alert to the slot it fired about, so it can be
+      named rather than guessed at from timestamps. Two of the three offered actions render
+      disabled with their reason: no second number and no neighbour are stored (gap 5)
       that fired is named, and the caregiver is offered `Call Mom yourself` /
       `Try another number` / `Ask neighbour`
 - [ ] OCR failure offers a manual path — `Retake` / `Crop & retry` / **`Type it in`**
       ↳ ⛔ not built — OCR cannot fail in the mock; needs the real endpoint
 - [ ] Missing states to add: **intro call scheduled but not yet placed**, and
       **parent declined on the intro call**. Neither is drawn; both are now reachable
+      ↳ the first is built — the calendar carries the scheduled intro call as its own event and
+      a banner saying dose reminders do not begin until it has happened. `declined` is a value
+      `intro_call_status` accepts but nothing writes or draws yet
 
 ## Gate verification (do this with Lane B present)
 
@@ -331,6 +342,17 @@ and the desktop landing page (`2a`) reuses the same component.
 - [ ] Caregiver app usable on a phone
 - [ ] Tap targets sized for a thumb — and the 8.5px micro-label is **not** shipped at
       8.5px (10–11px, see `WIREFRAMES §2.2`)
+- [ ] ⚠️ **Calendar drag-to-reschedule has no keyboard or touch path.** The week grid uses
+      HTML5 drag-and-drop, which is mouse-only: it does not respond to a keyboard, and it
+      does not fire on a touchscreen. So on the device the demo is most likely to be filmed
+      on, the gesture `2f` specifies simply does nothing.
+      ↳ Not a regression — nothing could be rescheduled at all before. The medicine editor
+      remains a full keyboard-accessible path to every time change, so no capability is
+      exclusive to the drag. Flagged, deliberately deferred.
+      ↳ The fix is a per-dose **Move** control on the day timeline: a button opening an
+      `<input type="time">` (plus a day picker for cross-day moves), calling the same
+      `POST /app/doses/move` and `postMedications` the drop already calls. The writes exist
+      and are tested; this is a second way in, not new behaviour
 - [ ] `tel:` links actually open the dialler on a real handset, number pre-filled
 - [ ] Test on a **second physical device** — this is what happens on camera
 

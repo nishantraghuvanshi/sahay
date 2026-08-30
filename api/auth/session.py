@@ -2,7 +2,7 @@
 
 Opaque, not JWT: a session must die the moment it is revoked, and a signed token
 that verifies without a database read cannot be revoked at all. Nothing here
-needs stateless verification — the API touches Postgres on every request anyway.
+needs stateless verification — the API touches the database on every request anyway.
 
 The raw token exists only in the caregiver's cookie. The database holds sha256
 of it, so a dump of `auth_sessions` yields no usable login.
@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-import asyncpg
 from fastapi import Request, Response
 
+from api import db
 from api.config import Settings
 
 TOKEN_BYTES = 32  # 256 bits, URL-safe — same order as the handoff token (TRD §11)
@@ -57,24 +58,33 @@ def _hash(token: str) -> bytes:
 
 
 async def issue(
-    conn: asyncpg.Connection,
+    conn,
     settings: Settings,
     caregiver_id: str,
     user_agent: str | None,
 ) -> str:
     token = secrets.token_urlsafe(TOKEN_BYTES)
+    now = datetime.now(UTC)
+    # id, created_at and last_seen_at are supplied rather than defaulted: the
+    # SQLite schema has no gen_random_uuid() or now(), and a TEXT primary key
+    # accepts NULL silently — three tables in this repo were found holding NULL
+    # ids exactly that way.
     await conn.execute(
-        "INSERT INTO auth_sessions (caregiver_id, token_hash, expires_at, user_agent) "
-        "VALUES ($1, $2, $3, $4)",
+        "INSERT INTO auth_sessions "
+        "(id, caregiver_id, token_hash, expires_at, last_seen_at, user_agent, created_at) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        str(uuid.uuid4()),
         caregiver_id,
         _hash(token),
-        datetime.now(UTC) + timedelta(days=settings.session_ttl_days),
+        (now + timedelta(days=settings.session_ttl_days)).isoformat(),
+        now.isoformat(),
         (user_agent or "")[:500],
+        now.isoformat(),
     )
     return token
 
 
-async def resolve(conn: asyncpg.Connection, token: str) -> Caregiver | None:
+async def resolve(conn, token: str) -> Caregiver | None:
     row = await conn.fetchrow(
         """
         SELECT s.id AS session_id, s.expires_at,
@@ -84,15 +94,18 @@ async def resolve(conn: asyncpg.Connection, token: str) -> Caregiver | None:
           JOIN caregivers c ON c.id = s.caregiver_id
          WHERE s.token_hash = $1
            AND s.revoked_at IS NULL
-           AND s.expires_at > now()
+           AND s.expires_at > $2
         """,
         _hash(token),
+        datetime.now(UTC).isoformat(),
     )
     if row is None:
         return None
 
     await conn.execute(
-        "UPDATE auth_sessions SET last_seen_at = now() WHERE id = $1", row["session_id"]
+        "UPDATE auth_sessions SET last_seen_at = $2 WHERE id = $1",
+        row["session_id"],
+        datetime.now(UTC).isoformat(),
     )
     return Caregiver(
         id=str(row["id"]),
@@ -105,21 +118,23 @@ async def resolve(conn: asyncpg.Connection, token: str) -> Caregiver | None:
     )
 
 
-async def slide_if_stale(conn: asyncpg.Connection, settings: Settings, token: str) -> None:
+async def slide_if_stale(conn, settings: Settings, token: str) -> None:
+    now = datetime.now(UTC)
     await conn.execute(
-        "UPDATE auth_sessions SET expires_at = now() + ($2 || ' days')::interval "
-        "WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at < now() + $3",
+        "UPDATE auth_sessions SET expires_at = $2 "
+        "WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at < $3",
         _hash(token),
-        str(settings.session_ttl_days),
-        SLIDE_WHEN_REMAINING,
+        (now + timedelta(days=settings.session_ttl_days)).isoformat(),
+        (now + SLIDE_WHEN_REMAINING).isoformat(),
     )
 
 
-async def revoke(conn: asyncpg.Connection, token: str) -> None:
+async def revoke(conn, token: str) -> None:
     await conn.execute(
-        "UPDATE auth_sessions SET revoked_at = now() "
+        "UPDATE auth_sessions SET revoked_at = $2 "
         "WHERE token_hash = $1 AND revoked_at IS NULL",
         _hash(token),
+        datetime.now(UTC).isoformat(),
     )
 
 

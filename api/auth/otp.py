@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import uuid
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 
-import asyncpg
 
 from api.config import Settings
 
@@ -56,11 +56,15 @@ def generate_code() -> str:
     return f"{secrets.randbelow(10**CODE_DIGITS):0{CODE_DIGITS}d}"
 
 
-def hash_code(code: str, pepper: str) -> bytes:
-    return hmac.new(pepper.encode(), code.encode(), hashlib.sha256).digest()
+def hash_code(code: str, pepper: str) -> str:
+    """Hex, not raw bytes. auth_otp.code_hash is BYTEA in the Postgres schema
+    this came from and TEXT here; handing sqlite3 a bytes value for a TEXT
+    column stores it as a decoded string and compare_digest then never matches
+    on the way back — a wrong code and a right code would both fail."""
+    return hmac.new(pepper.encode(), code.encode(), hashlib.sha256).hexdigest()
 
 
-def code_matches(code: str, code_hash: bytes, pepper: str) -> bool:
+def code_matches(code: str, code_hash: str, pepper: str) -> bool:
     # compare_digest, not ==. A byte-by-byte early exit leaks the correct prefix
     # through timing, which turns 10^6 guesses into about 60.
     return hmac.compare_digest(hash_code(code, pepper), code_hash)
@@ -77,7 +81,7 @@ def normalise(channel: Channel, destination: str) -> str:
 
 
 async def prepare_send(
-    conn: asyncpg.Connection,
+    conn,
     settings: Settings,
     channel: Channel,
     destination: str,
@@ -93,12 +97,14 @@ async def prepare_send(
     now = datetime.now(UTC)
     hour_ago = now - timedelta(hours=1)
 
-    last_sent_at: datetime | None = await conn.fetchval(
+    last_sent_raw: str | None = await conn.fetchval(
         "SELECT max(created_at) FROM auth_otp WHERE channel = $1 AND destination = $2",
         channel.value,
         destination,
     )
-    if last_sent_at is not None:
+    if last_sent_raw is not None:
+        # TEXT column: parse before arithmetic. asyncpg handed back a datetime.
+        last_sent_at = datetime.fromisoformat(last_sent_raw)
         elapsed = (now - last_sent_at).total_seconds()
         if elapsed < settings.otp_resend_cooldown_s:
             return SendDecision(False, int(settings.otp_resend_cooldown_s - elapsed))
@@ -108,7 +114,7 @@ async def prepare_send(
         "WHERE channel = $1 AND destination = $2 AND created_at > $3",
         channel.value,
         destination,
-        hour_ago,
+        hour_ago.isoformat(),
     )
     if per_destination >= settings.otp_max_per_destination_hour:
         return SendDecision(False, settings.otp_resend_cooldown_s)
@@ -117,7 +123,7 @@ async def prepare_send(
         per_ip: int = await conn.fetchval(
             "SELECT count(*) FROM auth_otp WHERE request_ip = $1 AND created_at > $2",
             request_ip,
-            hour_ago,
+            hour_ago.isoformat(),
         )
         if per_ip >= settings.otp_max_per_ip_hour:
             return SendDecision(False, settings.otp_resend_cooldown_s)
@@ -135,19 +141,25 @@ async def prepare_send(
     # Supersede anything still outstanding. Without this, a resend leaves the
     # previous code live and doubles the guessing surface for its full TTL.
     await conn.execute(
-        "UPDATE auth_otp SET consumed_at = now() "
+        "UPDATE auth_otp SET consumed_at = $3 "
         "WHERE channel = $1 AND destination = $2 AND consumed_at IS NULL",
         channel.value,
         destination,
+        now.isoformat(),
     )
+    # id and created_at supplied: no gen_random_uuid()/now() defaults here, and
+    # a TEXT primary key takes NULL without complaint.
     await conn.execute(
-        "INSERT INTO auth_otp (channel, destination, code_hash, expires_at, request_ip) "
-        "VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO auth_otp "
+        "(id, channel, destination, code_hash, expires_at, request_ip, created_at) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        str(uuid.uuid4()),
         channel.value,
         destination,
         hash_code(code, settings.otp_pepper),
-        now + timedelta(minutes=settings.otp_ttl_min),
+        (now + timedelta(minutes=settings.otp_ttl_min)).isoformat(),
         request_ip,
+        now.isoformat(),
     )
     return SendDecision(
         send=not is_bypass,
@@ -160,7 +172,7 @@ async def prepare_send(
 
 
 async def verify_code(
-    conn: asyncpg.Connection,
+    conn,
     settings: Settings,
     channel: Channel,
     destination: str,
@@ -168,26 +180,30 @@ async def verify_code(
 ) -> VerifyResult:
     """Check `code` against the newest live row, consuming attempts.
 
-    Runs inside the caller's transaction. `FOR UPDATE` serialises concurrent
-    verifies of the same destination — two racing requests must burn two
-    attempts, not read the same counter and each see one.
+    Two racing verifies of the same destination must burn two attempts rather
+    than both read the same counter and each see one. Postgres needed FOR UPDATE
+    to guarantee that; SQLite takes a single write lock per connection, so the
+    UPDATE that spends the attempt already serialises them.
     """
     row = await conn.fetchrow(
         "SELECT id, code_hash, expires_at, attempts FROM auth_otp "
         "WHERE channel = $1 AND destination = $2 AND consumed_at IS NULL "
-        "ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
+        # FOR UPDATE dropped: SQLite serialises writers with a single write
+        # lock, so the race it guarded against cannot interleave here.
+        "ORDER BY created_at DESC LIMIT 1",
         channel.value,
         destination,
     )
     if row is None:
         return VerifyResult.no_code
 
-    if row["expires_at"] <= datetime.now(UTC):
-        await conn.execute("UPDATE auth_otp SET consumed_at = now() WHERE id = $1", row["id"])
+    now_iso = datetime.now(UTC).isoformat()
+    if datetime.fromisoformat(row["expires_at"]) <= datetime.now(UTC):
+        await conn.execute("UPDATE auth_otp SET consumed_at = $2 WHERE id = $1", row["id"], now_iso)
         return VerifyResult.expired
 
     if row["attempts"] >= settings.otp_max_attempts:
-        await conn.execute("UPDATE auth_otp SET consumed_at = now() WHERE id = $1", row["id"])
+        await conn.execute("UPDATE auth_otp SET consumed_at = $2 WHERE id = $1", row["id"], now_iso)
         return VerifyResult.too_many_attempts
 
     # Spend the attempt first. If anything below this line fails to complete,
@@ -199,8 +215,10 @@ async def verify_code(
 
     if not code_matches(code, row["code_hash"], settings.otp_pepper):
         if attempts >= settings.otp_max_attempts:
-            await conn.execute("UPDATE auth_otp SET consumed_at = now() WHERE id = $1", row["id"])
+            await conn.execute(
+                "UPDATE auth_otp SET consumed_at = $2 WHERE id = $1", row["id"], now_iso
+            )
         return VerifyResult.wrong_code
 
-    await conn.execute("UPDATE auth_otp SET consumed_at = now() WHERE id = $1", row["id"])
+    await conn.execute("UPDATE auth_otp SET consumed_at = $2 WHERE id = $1", row["id"], now_iso)
     return VerifyResult.ok

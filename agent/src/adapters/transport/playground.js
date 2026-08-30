@@ -170,6 +170,12 @@ class PlaygroundTransportAdapter extends TransportPort {
    * Not applicable — the playground never dials out. Present only because
    * TransportPort declares it.
    */
+  getAssistantId() {
+    throw new Error(
+      'PlaygroundTransportAdapter.getAssistantId() is not applicable — the playground never dials out.'
+    );
+  }
+
   async createCall() {
     throw new Error('PlaygroundTransportAdapter.createCall() is not applicable — the playground never dials out.');
   }

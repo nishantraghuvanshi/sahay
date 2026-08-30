@@ -1,5 +1,35 @@
 # Prompt Configuration — Medication Adherence (English)
 # ===============================================
+#
+# ⚠ STALE AND UNREACHABLE — DO NOT SHIP WITHOUT PORTING FIRST (30 Aug 2026)
+#
+# This file is at version 6. The Hindi config is at version 12. Every fix made
+# on 30 August landed only in medication-adherence.yaml, so an English call
+# would reproduce, one by one, the defects that day was spent removing:
+#
+#   - the model speaking its own reasoning aloud to the patient, in English
+#     ("The user just said ... However, the guardrail for emotional dist...")
+#   - claiming to be contacting the family when no alert has been raised
+#   - recording CONFIRMED from "maybe", i.e. a dose that may never be taken
+#   - filing the missed dose and hanging up without ever reminding anyone
+#   - ending the call with no goodbye at all
+#   - escalating ordinary irritation into a family alert
+#
+# It is also unreachable at runtime: server.js constructs the strategy with no
+# language argument and the constructor defaults to 'hi', and the ElevenLabs
+# adapter sends language: 'hi' unconditionally. Nothing in src/ ever selects
+# 'en'. So this is currently dead config, not a working second language.
+#
+# The parity test (tests/prompt-safety-guardrails.test.js) stayed green through
+# all of this. It regex-matches a handful of guardrail LABELS in both files; it
+# cannot see that the behaviour behind them has diverged by six versions.
+#
+# Porting it is three jobs, not one: translate v7-v12 with equivalents chosen
+# for the Hindi example phrases the rules lean on ("अब क्या फायदा" as the
+# hopelessness marker, the forbidden timing instructions); thread language
+# through server.js -> strategy -> buildAssistantConfig; and write English
+# variants of the 21 scenarios in scripts/lib/el-scenarios.js, whose simulated
+# callers and mustSay patterns are all Hindi today.
 # Versioned prompt for the elderly medication adherence agent.
 # Edit this file to change agent behavior — no code changes needed.
 #

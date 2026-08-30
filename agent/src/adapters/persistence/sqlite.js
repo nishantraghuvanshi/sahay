@@ -52,6 +52,24 @@ function _withDefaultTimezone(patientRow) {
  *   calls     — one row per conversation (callId, outcome, timestamps, metadata)
  *   messages  — conversation history (role, content, callId FK)
  */
+/**
+ * Every patient read goes through this.
+ *
+ * `caregiver_name` and `caregiver_phone` used to be columns on `patients`; they are
+ * now a row in `caregivers`, joined and aliased back to the names callers already
+ * use (inbound-context.js reads `patient.caregiver_name`). The shape above this
+ * layer is unchanged — what changed is that there is one caregiver record rather
+ * than a copy of the name and number on every patient.
+ */
+const PATIENT_SELECT = `
+  SELECT p.*, c.name AS caregiver_name, c.phone_e164 AS caregiver_phone
+  FROM patients p
+  LEFT JOIN caregivers c ON c.id = p.caregiver_id
+`;
+
+/** Ids are TEXT uuids across the whole schema now, not per-table autoincrements. */
+const newId = () => require('crypto').randomUUID();
+
 class SqliteRepository extends OutcomeRepositoryPort {
   /**
    * @param {Object} opts
@@ -59,7 +77,14 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   constructor(opts = {}) {
     super();
-    this.dbPath = opts.dbPath || './data/voiceagent.db';
+    // One database for the product, not one per lane. It used to be
+    // ./data/voiceagent.db while the caregiver app wrote api/kinvox.db, and the two
+    // never met: a dose moved on the calendar did not change which call was placed.
+    // KINVOX_DB is the same variable the Python API reads, so both land on one file.
+    this.dbPath =
+      opts.dbPath ||
+      process.env.KINVOX_DB ||
+      require('path').join(__dirname, '..', '..', '..', '..', 'api', 'kinvox.db');
 
     // Ensure the data directory exists
     const path = require('path');
@@ -87,219 +112,21 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @private
    */
   _migrate() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS calls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        call_id TEXT UNIQUE NOT NULL,
-        use_case TEXT,
-        language TEXT,
-        phone TEXT,
-        variables TEXT,
-        outcome_label TEXT,
-        outcome_source TEXT,
-        outcome_reason TEXT,
-        transcript TEXT,
-        duration_seconds REAL,
-        cost REAL,
-        created_at TEXT DEFAULT (datetime('now')),
-        ended_at TEXT,
-        -- Pilot measurement columns (PILOT-PLAN.md §5)
-        prompt_version TEXT,
-        parent_id TEXT,
-        attempt_number INTEGER,
-        alert_sent_at TEXT,
-        alert_channel TEXT,
-        ground_truth TEXT,
-        -- Vapi call recording URL, captured from end-of-call-report. Null
-        -- when the report carried none (e.g. recording failed upstream).
-        recording_url TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        call_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT,
-        tool_calls TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (call_id) REFERENCES calls(call_id) ON DELETE CASCADE
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_calls_outcome ON calls(outcome_label);
-      CREATE INDEX IF NOT EXISTS idx_calls_created ON calls(created_at);
-      CREATE INDEX IF NOT EXISTS idx_messages_call ON messages(call_id);
-
-      -- The record an inbound call is answered from. Without this, an inbound
-      -- caller is a stranger and there is nothing to "already know".
-      CREATE TABLE IF NOT EXISTS patients (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone_e164 TEXT UNIQUE NOT NULL,
-        name TEXT,
-        drug_name TEXT,
-        language TEXT,
-        caregiver_name TEXT,
-        caregiver_phone TEXT,
-        notes TEXT,
-        -- IANA zone name, e.g. "Asia/Kolkata". NULL defaults to
-        -- DEFAULT_PATIENT_TIMEZONE at the read site (findPatientByPhone /
-        -- listPatients) rather than being backfilled here.
-        timezone TEXT,
-        -- ISO-8601 UTC, set by setPatientSchedule(). NULL means no call is
-        -- ever placed for this patient's schedule — a refusal for the
-        -- scheduler to act on, not a warning. Left unset here (not
-        -- backfilled) so a patient seeded before sign-off existed stays
-        -- correctly un-signed-off rather than silently granted consent.
-        schedule_signed_off_at TEXT,
-        -- JSON array of {"start":"HH:MM","end":"HH:MM"}, patient-local, e.g.
-        -- caregiver-declared do-not-call hours. Stored and read as a raw
-        -- JSON string — never parsed at this layer — matching how
-        -- medications.times is handled; the caller parses it.
-        quiet_windows TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT
-      );
-
-      -- Session state machine:
-      --   active ──normal end──► completed
-      --      │
-      --   disconnect ──► dropped ──redial in window──► active
-      --                     │
-      --             window expires ──► abandoned
-      --
-      -- Timestamps here are ISO-8601 UTC written from JS, NOT sqlite
-      -- datetime('now'), so the resume window can be compared against an
-      -- injected clock and tested without sleeping.
-      CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT UNIQUE NOT NULL,
-        patient_id INTEGER,
-        call_id TEXT,
-        direction TEXT,
-        status TEXT NOT NULL,
-        fields_so_far TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT,
-        ended_at TEXT,
-        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-      );
-
-      -- Resume lookup runs before the agent's first word, inside Vapi's
-      -- 7.5s assistant-request budget. It must not scan call history.
-      CREATE INDEX IF NOT EXISTS idx_sessions_patient_status
-        ON sessions(patient_id, status);
-      CREATE INDEX IF NOT EXISTS idx_sessions_ended ON sessions(ended_at);
-
-      -- A patient's standing drug schedule, seeded by hand today (the
-      -- caregiver app's OCR pipeline that will populate this is a separate
-      -- lane and is not ready). One row per medication, not per dose.
-      --
-      -- times: JSON array of "HH:MM" 24h strings, e.g. '["08:00","20:00"]'.
-      -- A medication is taken at a fixed set of times of day, repeated once
-      -- per day between start_date and end_date — not a fixed list of
-      -- absolute timestamps (those belong to dose_events, one row each,
-      -- generated from this). JSON keeps the column schema-free as dose
-      -- counts vary per medication, and sqlite's json_each can expand it
-      -- when a script needs to materialize dose_events from it.
-      CREATE TABLE IF NOT EXISTS medications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        dose TEXT,
-        times TEXT NOT NULL,
-        food_rule TEXT,
-        start_date TEXT NOT NULL,
-        end_date TEXT,
-        active INTEGER NOT NULL DEFAULT 1,
-        -- 0/1. A priority medication overrides a caregiver's do-not-call
-        -- quiet window — see the scheduling policy that reads this.
-        is_priority INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-      );
-
-      -- A scheduler will list a patient's active medications on every poll;
-      -- this is that lookup.
-      CREATE INDEX IF NOT EXISTS idx_medications_patient_active
-        ON medications(patient_id, active);
-
-      -- upsertMedication is idempotent on (patient_id, name, start_date):
-      -- re-running the hand seed script with an updated dose/times for the
-      -- same drug/regimen must update the existing row, not create a second
-      -- medication. start_date (not just name) is part of the key so a
-      -- taper — the same drug prescribed twice with different start_dates
-      -- as its dose steps down over time — is representable as two rows
-      -- instead of being silently merged into one. start_date is NOT NULL
-      -- above, so there is no null-collapsing case to handle here.
-      --
-      -- This replaces an earlier idx_medications_patient_name unique index
-      -- on (patient_id, name) alone, which could not represent a taper.
-      -- CREATE INDEX IF NOT EXISTS never redefines an existing index of the
-      -- same name, so the old index is dropped by name before recreating —
-      -- otherwise a database migrated from before this change would keep
-      -- enforcing the old, incorrect constraint alongside the new one.
-      DROP INDEX IF EXISTS idx_medications_patient_name;
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_medications_patient_name_start
-        ON medications(patient_id, name, start_date);
-
-      -- One row per scheduled dose occurrence, generated ahead of time from
-      -- a medication's times. This is the ledger a caregiver-app number
-      -- like "3 of 5 doses taken" is computed from, and what a future
-      -- scheduler polls to decide who to call next.
-      --
-      -- status: pending | confirmed | deferred | missed | no_answer |
-      --         unknown | skipped_with_reason
-      --
-      -- 'unknown' is distinct from 'missed': when the agent could not reach
-      -- the patient at all (no_answer exhausted retries, or the call itself
-      -- never connected), the truth is that whether the dose was taken is
-      -- unknown — not that it was skipped. Recording that as 'missed' would
-      -- be a false clinical claim surfaced in the caregiver's UI ("missed
-      -- dose" implies the patient was asked and didn't take it). 'unknown'
-      -- keeps that uncertainty honest downstream.
-      --
-      -- Timestamps are ISO-8601 UTC written from JS, matching sessions,
-      -- so dueDoseEvents can take an injected clock and be tested without
-      -- sleeping.
-      CREATE TABLE IF NOT EXISTS dose_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        medication_id INTEGER NOT NULL,
-        patient_id INTEGER NOT NULL,
-        slot_time TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        actor TEXT,
-        confirmed_at TEXT,
-        call_id TEXT,
-        -- Retry bookkeeping, written by recordDoseAttempt(). The initial
-        -- dial at slot_time plus retries counts up from here; the policy
-        -- that decides when attempt_count hits its ceiling lives outside
-        -- this repository.
-        attempt_count INTEGER DEFAULT 0,
-        -- ISO-8601 UTC; when the next attempt becomes eligible. dueDoseEvents
-        -- excludes a row whose next_attempt_at is still in the future, so a
-        -- dose already dialled once is not picked up again before its retry
-        -- offset has elapsed.
-        next_attempt_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
-        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-      );
-
-      -- The single most important index in this schema: a retried or
-      -- duplicated call (Vapi retries, a re-run seed, a scheduler double
-      -- fire) must never double-log the same scheduled dose. upsertDoseEvent
-      -- relies on this to be idempotent on (medication_id, slot_time).
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_dose_events_medication_slot
-        ON dose_events(medication_id, slot_time);
-
-      -- listDoseEvents filters by patient and a slot_time range; dueDoseEvents
-      -- filters pending rows by slot_time. Both run against this pair.
-      CREATE INDEX IF NOT EXISTS idx_dose_events_patient_slot
-        ON dose_events(patient_id, slot_time);
-      CREATE INDEX IF NOT EXISTS idx_dose_events_status_slot
-        ON dose_events(status, slot_time);
-    `);
+    // One schema for the whole product, loaded from api/schema.sql rather than
+    // declared again here.
+    //
+    // There used to be two: this file described medicines and doses for the
+    // dialler, api/schema.sql described them for the caregiver app, and neither
+    // knew about the other. A dose moved on the calendar did not change which call
+    // was placed. The founder's call on 30 Aug was that TRD §3 names win and the
+    // scheduler's columns fold into them, so this reads that file and adds nothing.
+    //
+    // Every statement in it is CREATE TABLE/INDEX IF NOT EXISTS, so running it on
+    // every boot stays safe.
+    const path = require('path');
+    const fs = require('fs');
+    const schemaPath = path.join(__dirname, '..', '..', '..', '..', 'api', 'schema.sql');
+    this.db.exec(fs.readFileSync(schemaPath, 'utf8'));
 
     // CREATE TABLE IF NOT EXISTS never alters a table that already exists,
     // so a database created before recording_url was added needs an
@@ -345,32 +172,75 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @param {Object} patient - { phone, name, drugName, language, caregiverName, caregiverPhone, notes }
    */
   async upsertPatient(patient) {
+    // The caregiver is a row of its own now, not two columns on the patient.
+    // Callers still pass caregiverName/caregiverPhone and still read back
+    // `caregiver_name`/`caregiver_phone` — see the join in _patientSelect — so
+    // nothing above this layer changed. What did change is that there is one
+    // caregiver record instead of a copy per patient.
+    const caregiverId = this._upsertCaregiver(patient.caregiverName, patient.caregiverPhone);
+
     const stmt = this.db.prepare(`
       INSERT INTO patients (
-        phone_e164, name, drug_name, language, caregiver_name, caregiver_phone, notes, updated_at
+        id, caregiver_id, phone_e164, name, drug_name, language, notes, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       ON CONFLICT(phone_e164) DO UPDATE SET
-        name            = COALESCE(excluded.name, patients.name),
-        drug_name       = COALESCE(excluded.drug_name, patients.drug_name),
-        language        = COALESCE(excluded.language, patients.language),
-        caregiver_name  = COALESCE(excluded.caregiver_name, patients.caregiver_name),
-        caregiver_phone = COALESCE(excluded.caregiver_phone, patients.caregiver_phone),
-        notes           = COALESCE(excluded.notes, patients.notes),
-        updated_at      = datetime('now')
+        caregiver_id = COALESCE(excluded.caregiver_id, patients.caregiver_id),
+        name         = COALESCE(excluded.name, patients.name),
+        drug_name    = COALESCE(excluded.drug_name, patients.drug_name),
+        language     = COALESCE(excluded.language, patients.language),
+        notes        = COALESCE(excluded.notes, patients.notes),
+        updated_at   = datetime('now')
     `);
 
     stmt.run(
+      newId(),
+      caregiverId,
       patient.phone,
       patient.name || null,
       patient.drugName || null,
-      patient.language || null,
-      patient.caregiverName || null,
-      patient.caregiverPhone || null,
+      patient.language || 'hi-IN',
       patient.notes || null
     );
 
     logger.log('db_patient_upserted', { phone: patient.phone });
+  }
+
+  /**
+   * Find or create the caregiver row, keyed on phone.
+   *
+   * Returns null when neither a name nor a phone was given: `patients.caregiver_id`
+   * is nullable and an anonymous caller has no caregiver yet, which is a real state
+   * rather than an error. `caregivers.phone_e164` is NOT NULL and unique, so a
+   * caregiver known only by name gets a placeholder key derived from that name —
+   * enough to hold one row per person without inventing a phone number.
+   *
+   * @private
+   */
+  _upsertCaregiver(name, phone) {
+    if (!name && !phone) return null;
+    const key = phone || `name:${name}`;
+
+    const existing = this.db
+      .prepare('SELECT id FROM caregivers WHERE phone_e164 = ?')
+      .get(key);
+    if (existing) {
+      if (name) {
+        this.db
+          .prepare('UPDATE caregivers SET name = COALESCE(?, name) WHERE id = ?')
+          .run(name, existing.id);
+      }
+      return existing.id;
+    }
+
+    const id = newId();
+    this.db
+      .prepare(
+        `INSERT INTO caregivers (id, name, phone_e164, created_at)
+         VALUES (?, ?, ?, datetime('now'))`
+      )
+      .run(id, name || 'Caregiver', key);
+    return id;
   }
 
   /**
@@ -379,14 +249,36 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @returns {Object|null} Never invents a record.
    */
   async findPatientByPhone(phone) {
-    const stmt = this.db.prepare('SELECT * FROM patients WHERE phone_e164 = ?');
+    const stmt = this.db.prepare(`${PATIENT_SELECT} WHERE p.phone_e164 = ?`);
     const row = stmt.get(phone);
     return row ? _withDefaultTimezone(row) : null;
   }
 
+  /**
+   * Active medications for one patient, in slot order.
+   *
+   * Stopped and excluded rows are filtered here rather than by every caller,
+   * because the consequence of leaking one is specific: the agent would tell a
+   * patient about a dose call that will never come, or ask about a medicine
+   * they were taken off.
+   *
+   * @param {string} patientId
+   * @returns {Promise<Array>} rows from `medications`
+   */
+  async findMedicationsForPatient(patientId) {
+    if (!patientId) return [];
+    return this.db
+      .prepare(
+        `SELECT * FROM medications
+         WHERE patient_id = ? AND excluded = 0 AND stopped_at IS NULL
+         ORDER BY name ASC`
+      )
+      .all(patientId);
+  }
+
   /** @returns {Array} All patients. */
   async listPatients() {
-    const rows = this.db.prepare('SELECT * FROM patients ORDER BY id ASC').all();
+    const rows = this.db.prepare(`${PATIENT_SELECT} ORDER BY p.created_at ASC`).all();
     return rows.map(_withDefaultTimezone);
   }
 
@@ -458,7 +350,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
         : undefined,
     });
 
-    const row = this.db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
+    const row = this.db.prepare(`${PATIENT_SELECT} WHERE p.id = ?`).get(patientId);
     return _withDefaultTimezone(row);
   }
 
@@ -501,11 +393,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
       this.db
         .prepare(
           `INSERT INTO sessions (
-             session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?)
+             id, session_id, patient_id, call_id, direction, status, fields_so_far, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?)
            ON CONFLICT(session_id) DO NOTHING`
         )
         .run(
+          newId(),
           session.sessionId,
           session.patientId ?? null,
           session.callId || null,
@@ -552,7 +445,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
     }
     const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
     return this.db
-      .prepare(`SELECT * FROM sessions${where} ORDER BY created_at DESC`)
+      .prepare(`SELECT * FROM sessions${where} ORDER BY created_at DESC, rowid DESC`)
       .all(...params);
   }
 
@@ -691,19 +584,29 @@ class SqliteRepository extends OutcomeRepositoryPort {
 
     const stmt = this.db.prepare(`
       INSERT INTO medications (
-        patient_id, name, dose, times, food_rule, start_date, end_date, active, created_at, updated_at
+        id, patient_id, name, dose, slots, with_food, start_date, end_date, stopped_at,
+        confirmed_by, confirmed_at, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(patient_id, name, start_date) DO UPDATE SET
         dose       = excluded.dose,
-        times      = excluded.times,
-        food_rule  = excluded.food_rule,
+        slots      = excluded.slots,
+        with_food  = excluded.with_food,
         end_date   = excluded.end_date,
-        active     = excluded.active,
+        stopped_at = excluded.stopped_at,
         updated_at = excluded.updated_at
     `);
 
+    // confirmed_by / confirmed_at are NOT NULL in the shared schema: FR-4 says no
+    // schedule exists without a human having signed it off. A medication the agent
+    // writes is attributed to the patient's own caregiver, which is who signed the
+    // schedule this row belongs to.
+    const confirmedBy = this.db
+      .prepare('SELECT caregiver_id FROM patients WHERE id = ?')
+      .get(med.patientId)?.caregiver_id ?? null;
+
     stmt.run(
+      newId(),
       med.patientId,
       med.name,
       med.dose ?? null,
@@ -711,7 +614,9 @@ class SqliteRepository extends OutcomeRepositoryPort {
       med.foodRule ?? null,
       med.startDate,
       med.endDate ?? null,
-      med.active === false ? 0 : 1,
+      med.active === false ? nowIso : null,
+      confirmedBy,
+      nowIso,
       nowIso,
       nowIso
     );
@@ -732,7 +637,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @returns {Array}
    */
   async listMedications(patientId, opts = {}) {
-    const where = opts.activeOnly ? ' AND active = 1' : '';
+    const where = opts.activeOnly ? ' AND stopped_at IS NULL' : '';
     return this.db
       .prepare(`SELECT * FROM medications WHERE patient_id = ?${where} ORDER BY id ASC`)
       .all(patientId);
@@ -990,7 +895,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
   async recentCallsForPhone(phone, limit = 3) {
     return this.db
       .prepare(
-        'SELECT * FROM calls WHERE phone = ? ORDER BY created_at DESC, id DESC LIMIT ?'
+        'SELECT * FROM calls WHERE phone = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
       )
       .all(phone, Math.min(limit, 20));
   }
@@ -1007,12 +912,13 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async createCall(call) {
     const stmt = this.db.prepare(`
-      INSERT INTO calls (call_id, use_case, language, phone, variables)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO calls (id, call_id, use_case, language, phone, variables)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(call_id) DO NOTHING
     `);
 
     stmt.run(
+      newId(),
       call.callId,
       call.useCase || null,
       call.language || null,
@@ -1034,10 +940,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // COALESCE keeps any metadata createCall() did write.
     const stmt = this.db.prepare(`
       INSERT INTO calls (
-        call_id, outcome_label, outcome_source, outcome_reason, transcript,
+        id, call_id, outcome_label, outcome_source, outcome_reason, transcript,
         duration_seconds, cost, prompt_version, parent_id, attempt_number, phone, recording_url, ended_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(call_id) DO UPDATE SET
         outcome_label   = excluded.outcome_label,
         outcome_source  = excluded.outcome_source,
@@ -1054,6 +960,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
     `);
 
     stmt.run(
+      newId(),
       outcome.callId,
       outcome.label || null,
       outcome.source || null,
@@ -1115,7 +1022,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT ?';
+    // created_at has second precision, so rows written in the same second tie.
+    // rowid breaks it by insertion order — `id DESC` used to, back when ids were
+    // autoincrementing integers rather than uuids.
+    sql += ' ORDER BY created_at DESC, rowid DESC LIMIT ?';
     params.push(limit);
 
     const stmt = this.db.prepare(sql);
@@ -1163,11 +1073,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async saveMessage(message) {
     const stmt = this.db.prepare(`
-      INSERT INTO messages (call_id, role, content, tool_calls)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO messages (id, call_id, role, content, tool_calls)
+      VALUES (?, ?, ?, ?, ?)
     `);
 
     stmt.run(
+      newId(),
       message.callId,
       message.role,
       message.content || null,
