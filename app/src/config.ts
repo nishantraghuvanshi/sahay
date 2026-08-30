@@ -35,6 +35,19 @@ export const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 export const EXTRACT_API_BASE = import.meta.env.VITE_EXTRACT_API_BASE ?? ''
 
 /**
+ * Prescription reading falls back to a fixture only when explicitly asked to.
+ *
+ * It used to fall back whenever `EXTRACT_API_BASE` was empty — and empty is the
+ * default, and the .env that set it is gitignored. So the analysing screen quietly
+ * returned three invented medicines instead of reading the photograph, and looked
+ * like it had worked. Same failure as the old `API_BASE ?? '/mock'`: a default that
+ * silently substitutes fiction for the caregiver's actual prescription.
+ *
+ * Empty now means same-origin, which vite.config.ts proxies to the API.
+ */
+export const EXTRACT_MOCK = import.meta.env.VITE_EXTRACT_API_BASE === '/mock'
+
+/**
  * Auth and onboarding never mock. `API_BASE` can sit on `/mock` all it likes —
  * a login that pretends is exactly what this replaced — so these calls have
  * their own base, empty by default so they go same-origin through the dev proxy

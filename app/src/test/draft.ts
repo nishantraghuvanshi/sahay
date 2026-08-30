@@ -7,6 +7,12 @@ export function seedDraft(patch: Partial<SetupDraft>): void {
   localStorage.setItem('voxikin.setup.draft.v1', JSON.stringify({ ...EMPTY_DRAFT, ...patch }))
 }
 
+/** Read the draft back, as the next setup step would. */
+export function readDraft(): SetupDraft {
+  const raw = localStorage.getItem('voxikin.setup.draft.v1')
+  return { ...EMPTY_DRAFT, ...(raw ? (JSON.parse(raw) as Partial<SetupDraft>) : {}) }
+}
+
 export function stageFile(name = 'rx.png'): File {
   return new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], name, { type: 'image/png' })
 }

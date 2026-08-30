@@ -1,4 +1,4 @@
-import { EXTRACT_API_BASE } from '../config'
+import { EXTRACT_API_BASE, EXTRACT_MOCK } from '../config'
 import type { WithFood } from './types'
 
 /**
@@ -66,8 +66,8 @@ export interface ExtractError {
 export type ExtractResult =
   { ok: true; schedule: ExtractedSchedule } | { ok: false; error: ExtractError }
 
-/** No extraction service configured (config.ts) — fall back to the fixture. */
-const isMock = !EXTRACT_API_BASE
+/** Opt-in only: VITE_EXTRACT_API_BASE=/mock. An unset base means same-origin, live. */
+const isMock = EXTRACT_MOCK
 
 const MOCK_DOC = 'rx_mock_0001'
 

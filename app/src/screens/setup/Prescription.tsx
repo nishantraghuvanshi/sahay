@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { seedDevDraftOnce } from '../../setup/devSeed'
 import { Bar, Button, Card, Label, Placeholder, Row, Tag } from '../../ui'
 import { useSetupDraft } from '../../setup/store'
+import { dropFile, previewUrl, putFile } from '../../setup/files'
 import type { DraftFile } from '../../setup/store'
 
 /**
@@ -20,13 +21,21 @@ const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,applicatio
 const UPLOAD_MS = 1200
 const TICK_MS = 80
 
-/**
- * Object URLs for the picked images, keyed by draft-file id. Blobs cannot live in
- * localStorage, so this map — not the draft — is what a thumbnail reads. It is module
- * scope rather than a ref so stepping forward to 1d and back keeps the previews; a full
- * reload empties it and the tiles fall back to the page number, same as before.
+/*
+ * The picked images live in setup/files.ts, which holds the `File` itself as well as
+ * its object URL.
+ *
+ * This screen used to keep a private map of object URLs and throw the File away. It
+ * made the thumbnails work and the reading impossible: the analysing screen asks
+ * setup/files.ts for the bytes to POST, nothing ever wrote them there, so
+ * `getFile()` returned undefined for every page and every caregiver was told
+ * "PAGES NOT AVAILABLE — the photos were cleared when the page reloaded" whether or
+ * not anything had reloaded. Prescription reading has never worked from the UI.
+ *
+ * The tests did not catch it because Analysing.test.tsx calls `putFile` itself to
+ * stage its fixture, so the one code path that was missing in production was
+ * supplied by hand in the test.
  */
-const previews = new Map<string, string>()
 
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`
 
@@ -92,7 +101,9 @@ export default function Prescription() {
           continue
         }
         const id = `f${Date.now()}-${(seq.current += 1)}`
-        if (file.type.startsWith('image/')) previews.set(id, URL.createObjectURL(file))
+        // putFile keeps the File and derives the object URL; the analysing screen
+        // needs the former to POST and this screen needs the latter to draw.
+        putFile(id, file)
         accepted.push({ id, name: file.name, size: file.size, type: file.type, progress: 0 })
       }
 
@@ -115,11 +126,7 @@ export default function Prescription() {
 
   const removeFile = useCallback(
     (id: string) => {
-      const url = previews.get(id)
-      if (url) {
-        URL.revokeObjectURL(url)
-        previews.delete(id)
-      }
+      dropFile(id)  // revokes the object URL and releases the bytes
       writeFiles(filesRef.current.filter((f) => f.id !== id))
     },
     [writeFiles],
@@ -262,7 +269,7 @@ export default function Prescription() {
 
           {files.map((f, i) => {
             const done = f.progress >= 100
-            const preview = previews.get(f.id)
+            const preview = previewUrl(f.id)
             return (
               <Card key={f.id}>
                 <Row>

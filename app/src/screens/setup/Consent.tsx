@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { Button, Card, Chip, Divider, Label, Row, Tag } from '../../ui'
+import { clearFiles } from '../../setup/files'
 import { toE164, useSetupDraft } from '../../setup/store'
 import { ApiError, authApi } from '../../api/client'
 
@@ -108,6 +109,10 @@ export default function Consent() {
         })),
       })
       setSubmitted(true)
+      // The schedule is the record we keep; holding the photograph any longer than
+      // it took to read is what the DPDP guidance says not to do. files.ts has
+      // named this as its job since it was written, and nothing ever called it.
+      clearFiles()
       reset()
       navigate('/home', { replace: true })
     } catch (err) {
