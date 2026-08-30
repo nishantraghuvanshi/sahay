@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { Button, Card, Chip, Divider, Label, Row, Tag } from '../../ui'
+import { clearFiles } from '../../setup/files'
 import { toE164, useSetupDraft } from '../../setup/store'
 import { ApiError, authApi } from '../../api/client'
 
@@ -22,7 +23,7 @@ const CONSENTS = [
   {
     id: 'informed',
     text: (name: string) =>
-      `I have told ${name} that Kinvox will call, and they are happy to receive these calls.`,
+      `I have told ${name} that Voxikin will call, and they are happy to receive these calls.`,
   },
   {
     id: 'recording',
@@ -31,7 +32,7 @@ const CONSENTS = [
   {
     id: 'no_advice',
     text: () =>
-      'I understand Kinvox never gives medical advice — it captures what is said and tells me.',
+      'I understand Voxikin never gives medical advice — it captures what is said and tells me.',
   },
 ] as const
 
@@ -82,10 +83,36 @@ export default function Consent() {
           slots: m.slots,
           with_food: m.with_food,
           is_priority: m.is_priority,
+          // Safety rule S3: the verbatim line the model read has to survive to a
+          // reviewer. It was being dropped here, so the moment onboarding
+          // finished there was no way to check a row against the paper again.
+          raw_line: m.raw_line ?? null,
+          confidence: m.confidence ?? null,
+          flags: m.flags ?? [],
+          duration_days: m.duration_days ?? null,
+          excluded: m.excluded ?? false,
+          exclusion_reason: m.exclusion_reason ?? null,
         })),
+        extraction: draft.extraction,
+        // FR-4: the sign-off itself, enforced server-side too.
+        schedule_confirmed: draft.scheduleConfirmed,
         consents: draft.consents,
+        // GAP-2: the dialler will not place a dose call until the intro call has
+        // happened. The screen above collects the answer; sending it is what
+        // makes it a gate rather than a question.
+        intro_call: draft.introCall,
+        intro_call_at: draft.introCallAt,
+        escalation: draft.escalation.map((c) => ({
+          name: c.name,
+          relationship: c.relationship || null,
+          after: c.after ? Number(c.after) : null,
+        })),
       })
       setSubmitted(true)
+      // The schedule is the record we keep; holding the photograph any longer than
+      // it took to read is what the DPDP guidance says not to do. files.ts has
+      // named this as its job since it was written, and nothing ever called it.
+      clearFiles()
       reset()
       navigate('/home', { replace: true })
     } catch (err) {

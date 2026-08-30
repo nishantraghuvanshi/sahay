@@ -133,7 +133,7 @@ system_prompt: |
   - "Hello?" → Repeat the original question.
   - After 2 failed clarifications → report_outcome("INCOMPLETE", "clarify_loop_exceeded") → end the call
 
-first_message: "Hello {parent_name}, this is Asha. It's time to take your {drug_name}. Have you taken it?"
+first_message: "Hello {parent_name}, this is Asha. It's time to take your {drug_name} {dose_timing}. Have you taken it?"
 
 modes:
   # ── Inbound: they called us, and we already hold their record ────
@@ -195,6 +195,10 @@ variables:
   drug_name: "Crocin"
   caregiver_name: "your family"
   language: "en"
+  # Meal-relative timing ("after lunch"), composed per call from the schedule.
+  # Empty by default, and _tidy() closes the gap it leaves — a call with no
+  # meal on record says "your Crocin" exactly as it always did.
+  dose_timing: ""
   # Filled per-call by the inbound handler; empty on a cold call.
   context_line: ""
   fields_summary: ""

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Chip, Divider, Label, Row } from '../../ui'
-import { missingParentFields, toE164, useSetupDraft } from '../../setup/store'
+import { missingParentFields, normalizePhoneInput, toE164, useSetupDraft } from '../../setup/store'
 
 /**
  * Wireframe 1b / 2b — the parent profile. Everything captured here shapes what the agent
@@ -22,6 +22,40 @@ const LANGUAGES = [
 ]
 const RELATIONS = ['Mother', 'Father', 'Grandmother', 'Grandfather', 'Other']
 
+/** What each gated field is called on screen, so the CTA can name what is missing. */
+const FIELD_LABELS: Record<string, string> = {
+  parentName: 'name',
+  age: 'age',
+  relation: 'relation to you',
+  parentPhone: 'a valid 10-digit phone',
+  language: 'language',
+}
+
+const listed = (items: string[]) =>
+  items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+
+/**
+ * Scroll to a gated field and put the caregiver in it.
+ *
+ * The footer named what was missing but left finding it as an exercise — and two
+ * of the five are chip rows well above the fold on a phone, with a second,
+ * different "relationship" question further down the same screen. Naming a field
+ * you cannot then reach is how someone concludes the form is broken.
+ *
+ * Focus lands on the first control inside the group: the input for a text field,
+ * the first chip for a chip row, so a keyboard user carries on from there.
+ */
+function goToField(key: string | undefined) {
+  if (!key) return
+  const group = document.querySelector<HTMLElement>(`[data-field="${key}"]`)
+  if (!group) return
+  group.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const control = group.querySelector<HTMLElement>('input, select, textarea, button')
+  // After the scroll, not during: focusing first makes the browser jump to the
+  // element and the smooth scroll then animates from the wrong place.
+  window.setTimeout(() => control?.focus({ preventScroll: true }), 300)
+}
+
 export default function Parent() {
   const navigate = useNavigate()
   const { draft, patch } = useSetupDraft()
@@ -29,6 +63,11 @@ export default function Parent() {
   const missing = missingParentFields(draft)
   const ready = missing.length === 0
   const e164 = toE164(draft.parentPhone)
+
+  // Naming them beats counting them. Two of the five are chips rather than text
+  // fields — relation and language — and a caregiver who has filled in every box
+  // they can see has no way to tell a bare count which one it means.
+  const missingLabels = missing.map((k) => FIELD_LABELS[k] ?? k)
 
   const toggle = (list: string[], value: string) =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -39,7 +78,7 @@ export default function Parent() {
         <button
           type="button"
           aria-label="Back"
-          onClick={() => navigate('/login')}
+          onClick={() => navigate('/setup/meet')}
           className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           &larr;
@@ -53,33 +92,43 @@ export default function Parent() {
 
       <Card className="gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <FieldInput
-            className="sm:col-span-2"
-            label="Name"
-            value={draft.parentName}
-            onChange={(v) => patch({ parentName: v })}
-            placeholder="e.g. Sharma"
-            required
-          />
+          {/* data-field marks every gated control so the footer can take the
+              caregiver to the one it is asking for. Naming a missing field is
+              not much use on a form this long if finding it is their problem. */}
+          <div data-field="parentName" className="sm:col-span-2">
+            <FieldInput
+              label="Name"
+              value={draft.parentName}
+              onChange={(v) => patch({ parentName: v })}
+              placeholder="e.g. Sharma"
+              required
+            />
+          </div>
           <FieldInput
             label="They are called"
             value={draft.honorific}
             onChange={(v) => patch({ honorific: v })}
             placeholder="e.g. ji"
           />
-          <FieldInput
-            label="Age"
-            value={draft.age}
-            onChange={(v) => patch({ age: v.replace(/\D/g, '').slice(0, 3) })}
-            placeholder="e.g. 68"
-            inputMode="numeric"
-            required
-          />
+          <div data-field="age">
+            <FieldInput
+              label="Age"
+              value={draft.age}
+              onChange={(v) => patch({ age: v.replace(/\D/g, '').slice(0, 3) })}
+              placeholder="e.g. 68"
+              inputMode="numeric"
+              required
+            />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div data-field="relation" className="flex flex-col gap-1.5">
+          {/* "Relation to you" and the escalation contact's "Relationship to your
+              parent" are two different questions on one screen, and a caregiver
+              who has just filled the second reasonably reads the footer as
+              satisfied. Saying whose relation this is removes the collision. */}
           <Label>
-            Relation to you <Req />
+            Your parent is your <Req />
           </Label>
           <Row className="flex-wrap">
             {RELATIONS.map((r) => (
@@ -91,21 +140,23 @@ export default function Parent() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <FieldInput
-            label="Parent&rsquo;s phone — the agent calls this"
-            value={draft.parentPhone}
-            onChange={(v) => patch({ parentPhone: v })}
-            placeholder="Their 10-digit mobile number"
-            inputMode="tel"
-            required
-            hint={
-              draft.parentPhone && !e164
-                ? 'Enter the 10-digit mobile number'
-                : e164
-                  ? `Saved as ${e164}`
-                  : undefined
-            }
-          />
+          <div data-field="parentPhone">
+            <FieldInput
+              label="Parent&rsquo;s phone — the agent calls this"
+              value={draft.parentPhone}
+              onChange={(v) => patch({ parentPhone: normalizePhoneInput(v) })}
+              placeholder="Their 10-digit mobile number"
+              inputMode="tel"
+              required
+              hint={
+                draft.parentPhone && !e164
+                  ? 'Enter the 10-digit mobile number'
+                  : e164
+                    ? `Saved as ${e164}`
+                    : undefined
+              }
+            />
+          </div>
           <FieldInput
             label="Where they live"
             value={draft.address}
@@ -115,21 +166,26 @@ export default function Parent() {
         </div>
       </Card>
 
-      <Card>
-        <Label>
-          Language the agent should speak <Req />
-        </Label>
-        <Row className="flex-wrap">
-          {LANGUAGES.map((l) => (
-            <Chip key={l.code} on={draft.language === l.code} onClick={() => patch({ language: l.code })}>
-              {l.label}
-            </Chip>
-          ))}
-        </Row>
-        <p className="text-sm text-muted-strong">
-          They can switch language mid-sentence; the agent follows.
-        </p>
-      </Card>
+      {/* Wrapped rather than marked on the Card itself: Card destructures its
+          props and drops anything it does not name, so a data-* on it never
+          reaches the DOM. */}
+      <div data-field="language">
+        <Card>
+          <Label>
+            Language the agent should speak <Req />
+          </Label>
+          <Row className="flex-wrap">
+            {LANGUAGES.map((l) => (
+              <Chip key={l.code} on={draft.language === l.code} onClick={() => patch({ language: l.code })}>
+                {l.label}
+              </Chip>
+            ))}
+          </Row>
+          <p className="text-sm text-muted-strong">
+            They can switch language mid-sentence; the agent follows.
+          </p>
+        </Card>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>
@@ -191,7 +247,7 @@ export default function Parent() {
         <FieldInput
           label="Doctor's phone"
           value={draft.doctorPhone}
-          onChange={(v) => patch({ doctorPhone: v })}
+          onChange={(v) => patch({ doctorPhone: normalizePhoneInput(v) })}
           placeholder="Their 10-digit phone number"
           inputMode="tel"
           card
@@ -284,7 +340,20 @@ export default function Parent() {
 
       <div className="sticky bottom-0 z-10 -mx-4 mt-2 flex flex-col gap-2 bg-canvas px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-14px_18px_-14px_rgb(26_23_18/0.18)]">
         <Row>
-          <Label className="flex-1">Name, age, relation, phone and language required</Label>
+          {ready ? (
+            // Was "Name, age, relation, phone and language required" — a demand,
+            // shown at the one moment nothing is being demanded. It read as an
+            // unmet requirement beside an enabled button.
+            <Label className="flex-1">Everything the agent needs is filled in</Label>
+          ) : (
+            <button
+              type="button"
+              onClick={() => goToField(missing[0])}
+              className="min-w-0 flex-1 text-left underline decoration-dotted underline-offset-4"
+            >
+              <Label>Still needed: {listed(missingLabels)}</Label>
+            </button>
+          )}
           {!ready && <Label>{missing.length} left</Label>}
         </Row>
         <Button disabled={!ready} onClick={() => navigate('/setup/prescription')}>
@@ -335,7 +404,7 @@ function AddContact({ onAdd }: { onAdd: (c: { name: string; relationship: string
         <input
           value={phone}
           inputMode="tel"
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => setPhone(normalizePhoneInput(e.target.value))}
           placeholder="Their 10-digit mobile number"
           aria-label="Contact phone number"
           className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"

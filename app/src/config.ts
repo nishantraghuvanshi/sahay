@@ -1,13 +1,23 @@
 /**
  * The single integration switch (LANE-C-APP.md: "one line to swap at integration").
  *
- * Mock mode is the default so the app never blocks on Lane B. At integration set
- * VITE_API_BASE to the live Care API origin and change nothing else.
+ * Live is now the default, and mock is opt-in with `VITE_API_BASE=/mock`.
+ *
+ * It was the other way round while Lane B's read endpoints did not exist. They do,
+ * and the default outlived the reason for it: `.env` is gitignored, so "just set
+ * VITE_API_BASE" meant a fresh clone — and every deployment nobody had hand-
+ * configured — silently served the fixture household to every caregiver who
+ * signed in. A default that quietly shows the wrong family's medicines is worse
+ * than one that fails loudly against a backend that is not running.
+ *
+ * Empty rather than an origin: vite.config.ts proxies /app and /auth to the API in
+ * dev, so the browser stays same-origin and the session cookie stays SameSite=Lax.
+ * A cross-site base would need SameSite=None + Secure, which localhost cannot have.
  *
  * No bearer token lives here. The agent-facing tool contract (TRD §5) is server-to-server;
  * the browser only ever calls caregiver-scoped read endpoints (NFR-7).
  */
-export const API_BASE = import.meta.env.VITE_API_BASE ?? '/mock'
+export const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 /**
  * Prescription extraction, switched separately from the Care API above.
@@ -23,6 +33,19 @@ export const API_BASE = import.meta.env.VITE_API_BASE ?? '/mock'
  * before, so the app still runs standalone with no Python process at all.
  */
 export const EXTRACT_API_BASE = import.meta.env.VITE_EXTRACT_API_BASE ?? ''
+
+/**
+ * Prescription reading falls back to a fixture only when explicitly asked to.
+ *
+ * It used to fall back whenever `EXTRACT_API_BASE` was empty — and empty is the
+ * default, and the .env that set it is gitignored. So the analysing screen quietly
+ * returned three invented medicines instead of reading the photograph, and looked
+ * like it had worked. Same failure as the old `API_BASE ?? '/mock'`: a default that
+ * silently substitutes fiction for the caregiver's actual prescription.
+ *
+ * Empty now means same-origin, which vite.config.ts proxies to the API.
+ */
+export const EXTRACT_MOCK = import.meta.env.VITE_EXTRACT_API_BASE === '/mock'
 
 /**
  * Auth and onboarding never mock. `API_BASE` can sit on `/mock` all it likes —
@@ -46,3 +69,14 @@ export const LIVE_POLL_MS = 5000
 // Must match Tailwind's `lg:` (1024px). At 900 the shell switched to the desktop
 // sidebar while screens were still rendering their single-column mobile layout.
 export const DESKTOP_MIN_PX = 1024
+
+/**
+ * Origin of the voice agent bridge server (`agent/`), which hosts the
+ * `/playground` WebSocket the "meet the agent" step talks to.
+ *
+ * Not `API_BASE`: the Care API and the agent are two different servers on two
+ * different ports, and the playground socket never goes through the Care API.
+ * Empty means same-origin, which is what a reverse-proxied deployment wants;
+ * the default is the port `agent/src/server.js` listens on locally.
+ */
+export const AGENT_BASE = import.meta.env.VITE_AGENT_BASE ?? 'http://localhost:3001'

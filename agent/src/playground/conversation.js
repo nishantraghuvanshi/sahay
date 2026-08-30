@@ -31,6 +31,7 @@ const { TurnManager, STATE } = require('./turn-manager');
 const { SentenceBuffer } = require('../utils/sentence-buffer');
 const { buildInboundVariables } = require('../use-cases/medication-adherence/inbound-context');
 const { chooseDestination } = require('../core/squad/router');
+const { buildDoseTiming } = require('../use-cases/medication-adherence/dose-timing');
 
 class PlaygroundConversation {
   /**
@@ -41,6 +42,9 @@ class PlaygroundConversation {
    * @param {string} deps.language - 'hi' or 'en'
    * @param {string|null} deps.phone - Selected patient's E.164 phone
    * @param {'inbound'|'outbound'} deps.direction
+   * @param {string|null} [deps.drugName] - Medicine this simulated call is about
+   * @param {'before'|'after'|null} [deps.mealRelation] - Dose timing, relative to a meal
+   * @param {'breakfast'|'lunch'|'dinner'|null} [deps.meal] - Which meal
    * @param {Function} deps.onTranscript - (text, isFinal) => void
    * @param {Function} deps.onAgentResponse - (text) => void
    * @param {Function} deps.onAudio - (pcmBuffer) => void
@@ -56,6 +60,12 @@ class PlaygroundConversation {
     this.language = deps.language || 'hi';
     this.phone = deps.phone || null;
     this.direction = deps.direction === 'outbound' ? 'outbound' : 'inbound';
+    // The dose the caller picked in the playground. These override what the
+    // patient row says for this conversation only — the row is what a real
+    // call reads, and a demo must not quietly rewrite someone's schedule.
+    this.drugName = deps.drugName || null;
+    this.mealRelation = deps.mealRelation || null;
+    this.meal = deps.meal || null;
 
     // Per-call testing overrides, set from the playground UI so the graph can
     // be exercised without editing .env or the database between calls.
@@ -171,7 +181,11 @@ class PlaygroundConversation {
       // resumes into) a session, exactly as the Vapi adapter does for a
       // phone call. Must happen before anything else: the system prompt and
       // first message both depend on the resolved mode and variables.
-      const resolution = await this.transport.openSession({ phone: this.phone, direction: this.direction });
+      const resolution = await this.transport.openSession({
+        phone: this.phone,
+        direction: this.direction,
+        drugName: this.drugName,
+      });
       this.sessionId = resolution.sessionId;
       // A forced mode makes 'resume' testable without having to drop a call
       // and start another inside the resume window.
@@ -194,7 +208,18 @@ class PlaygroundConversation {
 
       // 3. Build system prompt and first message from the resolved mode and
       // variables — exactly as the Vapi adapter's buildAssistantConfig does.
-      const variables = buildInboundVariables(resolution, this.language);
+      const variables = {
+        ...buildInboundVariables(resolution, this.language),
+        // Applied after, so an explicitly picked medicine wins over whatever
+        // the resolved patient row happens to hold. An empty pick changes
+        // nothing: `drug_name` falls through to the record, `dose_timing` to
+        // the config default of ''.
+        ...(this.drugName ? { drug_name: this.drugName } : {}),
+        dose_timing: buildDoseTiming(
+          { mealRelation: this.mealRelation, meal: this.meal },
+          this.language
+        ),
+      };
 
       // Squad mode runs the SAME member graph the phone path builds, so the
       // one place this design can actually be heard is not quietly running a

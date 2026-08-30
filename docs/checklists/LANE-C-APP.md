@@ -38,7 +38,7 @@
 - [~] ~~Note which database Emergent provisions~~ — N/A
 - [x] Routing skeleton for every screen, even if empty — including the two new routes:
       `/setup/consent` (`2D.2`) and `/medicines/edit` (`2F.2`)
-- [x] Brand string is **Kinvox**, domain `kinvox.app`. Dead names — "MediWatch",
+- [x] Brand string is **Voxikin**, domain `voxikin.app`. Dead names — "MediWatch",
       "Sahay", "Voxikin" — survive in older commits and screenshots. Ship none of them.
       ⚠️ **Voxikin is the founder's company**: `[V]` rule 04 keeps it off screen entirely
 
@@ -223,7 +223,7 @@ and the desktop landing page (`2a`) reuses the same component.
       ↳ also hides slots already past today, and says so when none are left
       not greyed
 - [x] Three **mandatory** consents with a "N left" counter: parent knows · calls recorded
-      and transcribed · Kinvox never gives medical advice (`SR-5`)
+      and transcribed · Voxikin never gives medical advice (`SR-5`)
 - [x] `Continue on the app` stays disabled until all three are ticked
 - [x] "What happens next" ladder: we call Mom → she agrees on that call → dose calls
       begin next morning
@@ -373,7 +373,7 @@ and the desktop landing page (`2a`) reuses the same component.
 - [ ] 🚩 **No `copy TBC` on screen.** The consent lines and the login copy are unwritten
       in the wireframe — every one of them must carry real copy before recording
 - [ ] No blue handwritten annotation text anywhere — those are builder notes, not UI
-- [ ] Wordmark says **Kinvox** — never MediWatch, Sahay or Voxikin, in the app or the video
+- [ ] Wordmark says **Voxikin** — never MediWatch, Sahay or Voxikin, in the app or the video
 
 ## Pricing note
 

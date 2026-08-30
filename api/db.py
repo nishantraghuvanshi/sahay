@@ -23,7 +23,7 @@ SCHEMA = ROOT / "schema.sql"
 # app from mock to live is a base-URL change and not a debugging session.
 FIXTURE = ROOT.parent / "scripts" / "mock-api.json"
 
-DB_PATH = Path(os.getenv("KINVOX_DB", ROOT / "kinvox.db"))
+DB_PATH = Path(os.getenv("VOXIKIN_DB", ROOT / "voxikin.db"))
 
 # The fixture is written against this date; every timestamp in it is shifted by
 # whole days onto today, so "yesterday" stays yesterday however long the file sits
@@ -76,8 +76,13 @@ def connect() -> sqlite3.Connection:
 class _Conn:
     """The slice of asyncpg's connection API the auth modules use."""
 
-    def __init__(self, con: sqlite3.Connection):
+    def __init__(self, con: sqlite3.Connection, in_transaction: bool = False):
         self._con = con
+        # Inside `db.transaction()` the block decides when to commit. Committing
+        # per statement made the rollback on the way out a no-op, so a failure
+        # half way through onboarding left a patient with half a prescription —
+        # exactly what that route's docstring says the transaction prevents.
+        self._in_transaction = in_transaction
 
     @staticmethod
     def _q(sql: str, args: tuple) -> tuple[str, list]:
@@ -117,7 +122,8 @@ class _Conn:
     async def execute(self, sql: str, *args):
         q, p = self._q(sql, args)
         self._con.execute(q, p)
-        self._con.commit()
+        if not self._in_transaction:
+            self._con.commit()
 
 
 class _ConnCtx:
@@ -127,9 +133,11 @@ class _ConnCtx:
     cheap, and sharing one across async handlers would need a lock to be safe.
     """
 
+    IN_TRANSACTION = False
+
     async def __aenter__(self) -> _Conn:
         self._con = connect()
-        return _Conn(self._con)
+        return _Conn(self._con, self.IN_TRANSACTION)
 
     async def __aexit__(self, *exc):
         self._con.close()
@@ -140,6 +148,8 @@ class _TxCtx(_ConnCtx):
     """`async with db.transaction() as conn:` — commits on clean exit, rolls
     back on exception. sqlite3 opens a transaction implicitly on the first
     write, so this only has to decide how it ends."""
+
+    IN_TRANSACTION = True
 
     async def __aexit__(self, exc_type, *rest):
         try:
@@ -209,10 +219,35 @@ def _encode(table: str, row: dict) -> dict:
     return out
 
 
+# Tables a REPLACE must never touch, because another table cascades off them.
+#
+# SQLite implements INSERT OR REPLACE as DELETE followed by INSERT, and with
+# foreign keys on, that DELETE fires ON DELETE CASCADE. Rewriting a caregiver
+# row therefore destroyed every auth_sessions row pointing at it: finishing
+# onboarding silently signed the caregiver out, and the next screen answered
+# 401. The caregiver row looked untouched afterwards — same id, updated name —
+# which is why this was invisible until an end-to-end test walked the journey.
+#
+# The auth tables arrived with the origin/main merge; INSERT OR REPLACE predates
+# them, and nothing connected the two.
+_CASCADE_PARENTS = {"caregivers", "patients"}
+
+
 def insert(con: sqlite3.Connection, table: str, row: dict) -> None:
     data = _encode(table, row)
     cols = ", ".join(data)
     marks = ", ".join("?" for _ in data)
+
+    if table in _CASCADE_PARENTS:
+        # Upsert in place: same effect on this row, without deleting it first.
+        assignments = ", ".join(f"{c} = excluded.{c}" for c in data if c != "id")
+        con.execute(
+            f"INSERT INTO {table} ({cols}) VALUES ({marks}) "
+            f"ON CONFLICT(id) DO UPDATE SET {assignments}",
+            tuple(data.values()),
+        )
+        return
+
     con.execute(f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({marks})", tuple(data.values()))
 
 
@@ -267,6 +302,7 @@ _ADDED_COLUMNS["caregivers"] = {
     "failed_logins": "INTEGER NOT NULL DEFAULT 0",
     "locked_until": "TEXT",
     "demo_call_used_at": "TEXT",
+    "test_call_used_at": "TEXT",
 }
 
 _ADDED_COLUMNS["calls"] = {"alert_sent_at": "TEXT", "alert_channel": "TEXT"}
@@ -291,8 +327,25 @@ def _migrate(con: sqlite3.Connection) -> list[str]:
     return added
 
 
+def seed_enabled() -> bool:
+    """Whether the demo household may be written into an empty database.
+
+    Opt-in, and default off. The seed is a whole fabricated family — Shubh, his
+    mother, her three medicines and a week of calls — and while the app read from
+    a client-side mock it was harmless scaffolding. Now that every screen reads
+    the real API, a deployment that seeds itself hands the first real caregiver a
+    patient who does not exist. Reads are caregiver-scoped, so they would not in
+    fact see it, but the row is still there to be joined to by anything that
+    forgets, and "there is a fake patient in the health record" is not a state to
+    leave switched on by default.
+
+    Set VOXIKIN_SEED=1 for the demo and the fixtures the tests build against.
+    """
+    return os.getenv("VOXIKIN_SEED", "").strip().lower() in {"1", "true", "yes"}
+
+
 def init(reset: bool = False) -> None:
-    """Create the schema, and seed it the first time.
+    """Create the schema, and seed it the first time, if seeding is switched on.
 
     Seeding only happens when `caregivers` is empty, so restarting the API never
     overwrites a schedule someone signed off through the app.
@@ -306,9 +359,9 @@ def init(reset: bool = False) -> None:
         added = _migrate(con)
         if added:
             import logging
-            logging.getLogger("kinvox.api").info("migrated: added %s", ", ".join(added))
+            logging.getLogger("voxikin.api").info("migrated: added %s", ", ".join(added))
         already = con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0]
-        if not already:
+        if not already and seed_enabled():
             _seed(con)
         con.commit()
     finally:

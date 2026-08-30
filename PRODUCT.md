@@ -14,11 +14,11 @@ Secondary audience for the build window: hackathon judges evaluating a screen re
 
 ## Product Purpose
 
-Kinvox is an AI voice line that calls an ageing parent in India on a schedule to confirm each medicine dose and capture, verbatim, anything they say about how they feel — and picks up when the parent calls in, already knowing everything the outbound calls learned. This app is the adult child's window into what happened; they pay the subscription.
+Voxikin is an AI voice line that calls an ageing parent in India on a schedule to confirm each medicine dose and capture, verbatim, anything they say about how they feel — and picks up when the parent calls in, already knowing everything the outbound calls learned. This app is the adult child's window into what happened; they pay the subscription.
 
 ## Positioning
 
-Every product in the category is one-directional and starts cold; Kinvox's value is the loop between outbound and inbound calls — the inbound line already knows. (PRD §1, team-stated.)
+Every product in the category is one-directional and starts cold; Voxikin's value is the loop between outbound and inbound calls — the inbound line already knows. (PRD §1, team-stated.)
 
 ## Operating Context
 
@@ -45,13 +45,13 @@ Scope constraint for UI work: presentation only — do not touch `app/src/api/`,
 
 ## Brand Commitments
 
-- Name: **Kinvox** (settled 30 Aug 2026; never submit under Voxikin).
+- Name: **Voxikin** (settled 30 Aug 2026; never submit under Voxikin).
 - Committed visual system (binding, extend-don't-replace): warm cream neutral ramp, single blue accent (#3674b5), status colours layered on shaped marks; IBM Plex Sans body, Newsreader serif for the one hero line per screen, IBM Plex Sans Devanagari via `:lang()` for Hindi/Marathi; two warm-tinted elevation steps; settling motion (≤200ms, never springy), `prefers-reduced-motion` wired.
 - [Inferred — question tool errored during init] Direction for the current craft pass: refine the incumbent world, not replace it, per docs/EMERGENT_UI_PROMPT.md "extend, do not replace".
 
 ## Evidence on Hand
 
-- docs/PRD.md (evidence-legended market data: 149M Indians 60+, ~50% non-adherence, team survey n=31), docs/TRD.md, docs/IDEA_SCOPE.md, docs/EMERGENT_UI_PROMPT.md (design contract), docs/WIREFRAMES.md, wireframe/kinvox-system.html + kinvox-palettes.html.
+- docs/PRD.md (evidence-legended market data: 149M Indians 60+, ~50% non-adherence, team survey n=31), docs/TRD.md, docs/IDEA_SCOPE.md, docs/EMERGENT_UI_PROMPT.md (design contract), docs/WIREFRAMES.md, wireframe/voxikin-system.html + voxikin-palettes.html.
 - No real testimonials, pricing proof, or live-user data — do not fabricate any.
 
 ## Product Principles

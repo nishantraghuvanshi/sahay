@@ -32,7 +32,7 @@ interface SignInPageProps {
   onResetPassword?: () => void;
   onCreateAccount?: () => void;
 
-  /* ---- additions for the Kinvox integration. All optional: leave them off and
+  /* ---- additions for the Voxikin integration. All optional: leave them off and
      the component behaves exactly as it shipped. ----------------------------- */
 
   /** Replaces the built-in email/password form (and the Google button, the
@@ -46,7 +46,7 @@ interface SignInPageProps {
   busy?: boolean;
   submitLabel?: string;
   busyLabel?: string;
-  /** The first field is an email upstream; Kinvox accepts a phone there too. */
+  /** The first field is an email upstream; Voxikin accepts a phone there too. */
   identifierName?: string;
   identifierType?: React.HTMLInputTypeAttribute;
   identifierLabel?: string;

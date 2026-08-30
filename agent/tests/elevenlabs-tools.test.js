@@ -38,7 +38,7 @@ async function post(app, path, body, headers = {}) {
   }
 }
 
-const AUTH_HEADERS = { 'X-Kinvox-Token': TEST_SECRET };
+const AUTH_HEADERS = { 'X-Voxikin-Token': TEST_SECRET };
 
 describe('ElevenLabs tool webhooks', () => {
   test('report_outcome reaches the engine on the real tool.called channel', async () => {
@@ -55,16 +55,16 @@ describe('ElevenLabs tool webhooks', () => {
     assert.strictEqual(seen[0].payload.args.outcome, 'CONFIRMED');
   });
 
-  test('kinvox_call_id in the body becomes callId, not part of args', async () => {
+  test('voxikin_call_id in the body becomes callId, not part of args', async () => {
     const { app, seen } = harness();
     await post(app, '/el/tools/report_outcome', {
-      outcome: 'CONFIRMED', reason: 'user confirmed taking medicine', kinvox_call_id: 'call-123',
+      outcome: 'CONFIRMED', reason: 'user confirmed taking medicine', voxikin_call_id: 'call-123',
     }, AUTH_HEADERS);
     assert.strictEqual(seen[0].payload.callId, 'call-123');
-    assert.strictEqual(seen[0].payload.args.kinvox_call_id, undefined);
+    assert.strictEqual(seen[0].payload.args.voxikin_call_id, undefined);
   });
 
-  test('a tool call with no kinvox_call_id gets a null callId, not a throw', async () => {
+  test('a tool call with no voxikin_call_id gets a null callId, not a throw', async () => {
     const { app, seen } = harness();
     const res = await post(app, '/el/tools/report_outcome', {
       outcome: 'CONFIRMED', reason: 'user confirmed taking medicine',
@@ -103,7 +103,7 @@ describe('ElevenLabs tool webhooks', () => {
     const { app, seen } = harness();
     const res = await post(app, '/el/tools/report_outcome', {
       outcome: 'CONFIRMED', reason: 'user confirmed taking medicine',
-    }, { 'X-Kinvox-Token': 'not-the-secret' });
+    }, { 'X-Voxikin-Token': 'not-the-secret' });
     assert.strictEqual(res.status, 401);
     assert.strictEqual(res.body.ok, false);
     assert.strictEqual(seen.length, 0);
@@ -134,7 +134,7 @@ describe('ElevenLabs post-call webhook', () => {
       phone_call: { external_number: '+919000000042' },
     },
     conversation_initiation_client_data: {
-      dynamic_variables: { patient_name: 'Kamala', kinvox_call_id: 'call-1' },
+      dynamic_variables: { patient_name: 'Kamala', voxikin_call_id: 'call-1' },
     },
     analysis: { call_successful: 'success' },
   };
@@ -154,7 +154,7 @@ describe('ElevenLabs post-call webhook', () => {
     assert.strictEqual(callData.duration, 42);
     assert.strictEqual(callData.cost, 0.031);
     assert.strictEqual(callData.endedReason, 'agent_ended_call');
-    assert.deepStrictEqual(callData.variables, { patient_name: 'Kamala', kinvox_call_id: 'call-1' });
+    assert.deepStrictEqual(callData.variables, { patient_name: 'Kamala', voxikin_call_id: 'call-1' });
     assert.strictEqual(callData.recordingUrl, null);
     assert.deepStrictEqual(callData.toolCalls, [
       { name: 'report_outcome', arguments: '{"outcome":"CONFIRMED","reason":"user confirmed"}' },
@@ -181,7 +181,7 @@ describe('ElevenLabs post-call webhook', () => {
 
   test('a request with the wrong token is refused and never reaches the event bus', async () => {
     const { app, seen } = harness();
-    const res = await post(app, '/el/post-call', FULL_PAYLOAD, { 'X-Kinvox-Token': 'not-the-secret' });
+    const res = await post(app, '/el/post-call', FULL_PAYLOAD, { 'X-Voxikin-Token': 'not-the-secret' });
     assert.strictEqual(res.status, 401);
     assert.strictEqual(res.body.ok, false);
     assert.strictEqual(seen.length, 0);
@@ -229,7 +229,7 @@ describe('ElevenLabs post-call webhook — the shape the service actually sends'
       phone_call: { external_number: '+919000000042' },
     },
     conversation_initiation_client_data: {
-      dynamic_variables: { parent_name: 'Kamala', kinvox_call_id: 'call-9' },
+      dynamic_variables: { parent_name: 'Kamala', voxikin_call_id: 'call-9' },
     },
     analysis: { call_successful: 'success' },
   };
@@ -322,7 +322,7 @@ describe('ElevenLabs post-call webhook — HMAC signature authentication', () =>
     })();
   }
 
-  test('a correctly signed delivery is accepted without any X-Kinvox-Token', () =>
+  test('a correctly signed delivery is accepted without any X-Voxikin-Token', () =>
     withSigningSecret(async () => {
       const { app, seen } = harness();
       const res = await post(app, '/el/post-call', PAYLOAD, signedHeaders(PAYLOAD));
@@ -353,7 +353,7 @@ describe('ElevenLabs post-call webhook — HMAC signature authentication', () =>
       assert.strictEqual(seen.length, 0);
     }));
 
-  test('the X-Kinvox-Token path still works while a signing secret is configured', () =>
+  test('the X-Voxikin-Token path still works while a signing secret is configured', () =>
     // Both mechanisms are accepted: ElevenLabs always signs, but a webhook
     // configured in the dashboard with a custom header should not break.
     withSigningSecret(async () => {
@@ -370,4 +370,134 @@ describe('ElevenLabs post-call webhook — HMAC signature authentication', () =>
       assert.strictEqual(res.status, 401);
       assert.strictEqual(seen.length, 0);
     }));
+});
+
+describe('POST /el/conversation-init — who is calling, and what to say to them', () => {
+  // ElevenLabs asks this at the start of an inbound call and uses the answer as
+  // that call's configuration. Payload confirmed against their Twilio
+  // personalization docs: caller_id, agent_id, called_number, call_sid,
+  // conversation_id. The response must carry `type` and, critically,
+  // dynamic_variables holding EVERY variable the agent's templates reference —
+  // a missing one is a hard failure, as simulate-conversation demonstrated with
+  // "Missing required dynamic variables in first message".
+  const KNOWN = {
+    id: 'p1',
+    name: 'कमला',
+    phone_e164: '+919876543210',
+    drug_name: 'Metformin',
+    caregiver_name: 'प्रिया',
+    meal_times: '{"dinner":"19:30"}',
+  };
+
+  function inboundHarness({ patient = KNOWN, medications = [{ slots: '["08:00","20:00"]', with_food: 'after' }] } = {}) {
+    const strategy = new (require('../src/use-cases/medication-adherence/strategy'))('hi');
+    const repository = {
+      async findPatientByPhone(phone) {
+        return patient && phone === patient.phone_e164 ? patient : null;
+      },
+      async findMedicationsForPatient() {
+        return medications;
+      },
+      // The full set resolveInboundCall touches. A stub missing one of these
+      // throws, the route's catch swallows it, and the call silently degrades
+      // to "unknown caller" — which is how this test first failed while the
+      // rendering was already correct.
+      async findResumableSession() { return null; },
+      async getSessionFields() { return {}; },
+      async recentCallsForPhone() { return []; },
+      async upsertPatient(p) { return p; },
+    };
+    return harness({ strategy, repository });
+  }
+
+  const init = (extra = {}) => ({
+    caller_id: '+919876543210',
+    agent_id: 'agent_x',
+    called_number: '+18145243223',
+    call_sid: 'CA123',
+    conversation_id: 'conv_init',
+    ...extra,
+  });
+
+  test('answers with the inbound prompt, not the outbound dose opener', async () => {
+    const { app } = inboundHarness();
+    const res = await post(app, '/el/conversation-init', init(), AUTH_HEADERS);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.type, 'conversation_initiation_client_data');
+    const agent = res.body.conversation_config_override.agent;
+    // The outbound opener announces a dose is due. An inbound caller rang US.
+    assert.doesNotMatch(agent.first_message, /लेने का समय हो गया है/);
+    assert.ok(agent.first_message.length > 0);
+    assert.ok(agent.prompt.prompt.length > 0);
+  });
+
+  test('every templated variable is present, because a missing one fails the call', async () => {
+    const { app } = inboundHarness();
+    const res = await post(app, '/el/conversation-init', init(), AUTH_HEADERS);
+    const vars = res.body.dynamic_variables;
+    for (const key of ['parent_name', 'drug_name', 'caregiver_name', 'next_call_line', 'food_line']) {
+      assert.ok(key in vars, `${key} must be sent`);
+      assert.strictEqual(typeof vars[key], 'string', `${key} must be a string`);
+    }
+  });
+
+  test('nothing it returns still contains a placeholder', async () => {
+    const { app } = inboundHarness();
+    const res = await post(app, '/el/conversation-init', init(), AUTH_HEADERS);
+    const agent = res.body.conversation_config_override.agent;
+    assert.doesNotMatch(agent.first_message, /\{\{|\{[a-z_]+\}/);
+    assert.doesNotMatch(agent.prompt.prompt, /\{\{|\{[a-z_]+\}/);
+  });
+
+  test('greets a known caller by name', async () => {
+    const { app } = inboundHarness();
+    const res = await post(app, '/el/conversation-init', init(), AUTH_HEADERS);
+    assert.match(res.body.conversation_config_override.agent.first_message, /कमला/);
+    assert.strictEqual(res.body.dynamic_variables.parent_name, 'कमला');
+  });
+
+  test('an unknown caller is still answered, without pretending to know them', async () => {
+    // A stranger reaching this number must get a working call, and must not be
+    // greeted as though we recognise them.
+    const { app } = inboundHarness({ patient: null, medications: [] });
+    const res = await post(app, '/el/conversation-init', init({ caller_id: '+910000000000' }), AUTH_HEADERS);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.conversation_config_override.agent.first_message.length > 0);
+    assert.doesNotMatch(res.body.conversation_config_override.agent.first_message, /कमला/);
+    assert.strictEqual(res.body.dynamic_variables.next_call_line, '');
+  });
+
+  test('a withheld number does not crash the call', async () => {
+    const { app } = inboundHarness({ patient: null, medications: [] });
+    for (const caller of [undefined, '', 'anonymous']) {
+      const res = await post(app, '/el/conversation-init', init({ caller_id: caller }), AUTH_HEADERS);
+      assert.strictEqual(res.status, 200, `caller_id=${caller}`);
+    }
+  });
+
+  test('refuses an unauthenticated request', async () => {
+    const { app } = inboundHarness();
+    assert.strictEqual((await post(app, '/el/conversation-init', init())).status, 401);
+    assert.strictEqual(
+      (await post(app, '/el/conversation-init', init(), { 'X-Voxikin-Token': 'wrong' })).status,
+      401
+    );
+  });
+
+  test('a repository failure still yields a usable call', async () => {
+    // Losing the caller's history is a degraded call. Returning a 500 is no
+    // call at all — ElevenLabs would have no configuration and the person who
+    // dialled hears nothing.
+    const strategy = new (require('../src/use-cases/medication-adherence/strategy'))('hi');
+    const { app } = harness({
+      strategy,
+      repository: {
+        async findPatientByPhone() { throw new Error('db gone'); },
+        async findMedicationsForPatient() { throw new Error('db gone'); },
+      },
+    });
+    const res = await post(app, '/el/conversation-init', init(), AUTH_HEADERS);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.conversation_config_override.agent.first_message.length > 0);
+  });
 });

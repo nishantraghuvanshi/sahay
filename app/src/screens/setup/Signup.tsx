@@ -22,7 +22,7 @@ import { AuthSteps } from '../../setup/AuthSteps'
  * The previous card layout is preserved verbatim at the bottom of this file.
  */
 
-/* No testimonials. Kinvox has no users yet, so there are none to quote —
+/* No testimonials. Voxikin has no users yet, so there are none to quote —
    PRODUCT.md: "No real testimonials, pricing proof, or live-user data — do not
    fabricate any." The hero panel renders without them. */
 
@@ -81,7 +81,7 @@ export default function Signup() {
 //           lg:bg-paper lg:p-8 lg:shadow-[var(--shadow-card)]
 //         "
 //       >
-//         <Link to="/" aria-label="Kinvox home" className="self-start">
+//         <Link to="/" aria-label="Voxikin home" className="self-start">
 //           <Wordmark size={26} />
 //         </Link>
 //

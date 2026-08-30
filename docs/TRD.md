@@ -1,5 +1,5 @@
 # Technical Requirements Document
-# "Kinvox" — bidirectional care-line agent
+# "Voxikin" — bidirectional care-line agent
 
 | | |
 |---|---|
@@ -632,7 +632,7 @@ escalate(patient, level, reason, summary)
 Message template:
 
 ```
-Kinvox alert — {patient_name}
+Voxikin alert — {patient_name}
 
 {summary}
 

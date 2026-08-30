@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { LogoutButton } from '../auth/LogoutButton'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -15,6 +16,7 @@ import {
   Tag,
 } from '../ui'
 import { useCareRecord } from '../api/hooks'
+import { getSubscription } from '../api/billing'
 
 /**
  * `/settings` — frames `1m` (phone) / `2k` (web).
@@ -33,9 +35,14 @@ import { useCareRecord } from '../api/hooks'
  * says the parent may ask us to stop on any call. It is wired to local state only, and the
  * card says so in words — see the TODO below.
  *
+ * The Plan card is a statement of the same kind. `subscriptions` and `payments` are real tables
+ * now (`api/schema.sql`), so what was paid and what it covers can be read and shown; but nothing
+ * cancels, switches or refunds a plan, so the card states the subscription and does not manage
+ * it, and the only thing it ever offers is checkout — a page of its own.
+ *
  * Deliberately absent: voice and tone, retry policy, alert-rule toggles, notification channels,
- * quiet hours, billing, data export, delete account. Each needs either an endpoint that does
- * not exist or a table that does not exist.
+ * quiet hours, data export, delete account. Each needs either an endpoint that does not exist
+ * or a table that does not exist.
  */
 
 /** Display only. The raw BCP-47 tag is always shown beside it, never replaced. */
@@ -349,6 +356,9 @@ export default function Settings() {
         />
       </Card>
 
+      {/* ---------------------------------------------------------------- plan */}
+      <PlanCard />
+
       {/* ------------------------------------------------------------- privacy */}
       <Card className="gap-2">
         <Label>Privacy</Label>
@@ -375,8 +385,9 @@ export default function Settings() {
       </Card>
 
       <p className="px-1 pb-1 text-sm leading-relaxed text-muted-strong">
-        Every value on this screen is read from the care record. Apart from the pause switch
-        above, which holds only while this screen is open, nothing here changes anything.
+        Every value on this screen is read from the care record, and the plan from the
+        subscription behind it. Apart from the pause switch above, which holds only while this
+        screen is open, nothing here changes anything.
       </p>
 
       {/* Phone has no sidebar, so this is the only way out of the session. */}
@@ -384,6 +395,126 @@ export default function Settings() {
         <LogoutButton className="justify-center border border-line" />
       </div>
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------- plan */
+
+/** Paise are what is stored; rupees are what a person was charged. No rounding either way. */
+function formatRupees(paise: number): string {
+  const rupees = paise / 100
+  const fraction = rupees % 1 === 0 ? 0 : 2
+  return `₹${rupees.toLocaleString('en-IN', {
+    minimumFractionDigits: fraction,
+    maximumFractionDigits: fraction,
+  })}`
+}
+
+/**
+ * What was paid for, and until when. `subscriptions` and `payments` exist, so this is read
+ * rather than guessed — but no endpoint cancels or switches a plan, so there is no control
+ * here that could pretend to. The date is only ever called a renewal when a period has
+ * actually been paid for; an expired plan says it ended, and a cancelled one says how far
+ * it is paid up.
+ */
+function PlanCard() {
+  const billing = useQuery({ queryKey: ['billing'], queryFn: getSubscription })
+
+  /* Skeleton in the shape this card ends up in — label, then the lines it will hold. */
+  if (billing.isLoading || !billing.data) {
+    if (billing.error) {
+      return <ErrorBlock error={billing.error} onRetry={() => billing.refetch()} />
+    }
+    return (
+      <Card className="gap-2.5">
+        <Label>Plan</Label>
+        <LoadingBlock rows={3} />
+      </Card>
+    )
+  }
+
+  const { subscription, pending_order_id } = billing.data
+
+  /* Nothing on the record. Either a payment is mid-flight, or none has been started. */
+  if (!subscription) {
+    return (
+      <Card emphasis="rule" className="gap-2.5">
+        <Row className="flex-wrap gap-2">
+          <Label className="flex-1">Plan</Label>
+          <Tag>{pending_order_id ? 'payment not verified' : 'no plan'}</Tag>
+        </Row>
+
+        {pending_order_id ? (
+          <>
+            <div className="text-md leading-snug font-semibold">
+              A payment is waiting to be verified.
+            </div>
+            <div className="text-sm leading-relaxed text-muted-strong">
+              It has been made but not confirmed back to us yet, so no plan is on the record.
+              Open the one already in progress rather than starting a second — that is how a
+              card gets charged twice.
+            </div>
+            <Row>
+              <Button variant="outline" href="/checkout">
+                Open that payment
+              </Button>
+            </Row>
+          </>
+        ) : (
+          <>
+            <div className="text-md leading-snug font-semibold">No plan on this account.</div>
+            <div className="text-sm leading-relaxed text-muted-strong">
+              Nothing has been paid for yet. A plan is chosen at checkout, not here.
+            </div>
+            <Row>
+              <Button href="/checkout?plan=care">Choose a plan</Button>
+            </Row>
+          </>
+        )}
+      </Card>
+    )
+  }
+
+  const active = subscription.status === 'active'
+  const endLabel = active ? 'Renews on' : subscription.status === 'expired' ? 'Ended' : 'Paid up to'
+
+  return (
+    <Card emphasis={active ? 'none' : 'rule'} className="gap-2.5">
+      <Row className="flex-wrap gap-2">
+        <Label className="flex-1">Plan</Label>
+        {/* Word first, shape second — the status is never carried by colour. */}
+        {active ? <Tag outline>active</Tag> : <Tag>{subscription.status}</Tag>}
+      </Row>
+
+      <div className="text-md leading-snug font-semibold">{subscription.plan_name}</div>
+
+      <Divider />
+      <Stated label="Price" value={formatRupees(subscription.amount_paise)} />
+      <Divider />
+      <Stated
+        label="This period started"
+        value={formatDateTime(subscription.current_period_start)}
+      />
+      <Divider />
+      <Stated label={endLabel} value={formatDateTime(subscription.current_period_end)} />
+
+      {/* A lapsed plan is the one non-active state with something to do about it, and
+          leaving it with no way forward would strand a paying caregiver on the screen
+          that told them they had lapsed. Renewing is another checkout — the same one —
+          because a renewal here is a second payment and not a stored mandate. */}
+      {!active && (
+        <Row>
+          <Button href={`/checkout?plan=${subscription.plan}`}>
+            Pay for another month
+          </Button>
+        </Row>
+      )}
+
+      <div className="text-sm leading-relaxed text-muted-strong">
+        This card says what is on the subscription. Stopping a plan or moving to another one is
+        not wired into the app yet, so there is no button here that would look like it did.
+      </div>
+    </Card>
   )
 }
 

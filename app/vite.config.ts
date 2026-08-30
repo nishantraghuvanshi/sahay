@@ -20,6 +20,10 @@ export default defineConfig({
     proxy: {
       '/auth': { target: 'http://localhost:8000', changeOrigin: true },
       '/app': { target: 'http://localhost:8000', changeOrigin: true },
+      // Prescription reading. Forwarded for the same reason as the two above, and
+      // because the alternative — an absolute origin in VITE_EXTRACT_API_BASE —
+      // lives in a gitignored .env that nobody has on a fresh clone.
+      '/extract': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
 })

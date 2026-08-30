@@ -29,7 +29,7 @@ const path = require('path');
 require('dotenv').config();
 
 const defaultVapiClient = require('./lib/vapi-client');
-const { generate, redactSecrets } = require('./generate-assistant-config');
+const { generate, redactSecrets, redactWebhookUrl } = require('./generate-assistant-config');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'config', 'assistant.json');
 
@@ -86,9 +86,10 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   }
 
   // 1. Re-generate the config from config files
-  const { assistantConfig, strategy } = generate();
+  const { assistantConfig, strategy, webhookUrl } = generate();
   const committed = readCommittedConfig();
-  const changedPaths = diffPaths(committed || {}, redactSecrets(assistantConfig));
+  const redacted = redactWebhookUrl(redactSecrets(assistantConfig), webhookUrl);
+  const changedPaths = diffPaths(committed || {}, redacted);
 
   console.log(apply ? 'Updating Vapi assistant...' : 'DRY RUN — no changes will be sent to Vapi.');
   console.log(`  ID: ${assistantId}`);
@@ -116,9 +117,10 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   }
 
   // 2. Write the updated config to disk
-  // Redacted on disk, real secret over the wire: config/assistant.json is
-  // tracked and this repo goes public, but Vapi needs the live value.
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(redactSecrets(assistantConfig), null, 2) + '\n');
+  // Redacted on disk, real values over the wire: config/assistant.json is
+  // tracked and this repo goes public, but Vapi needs the live secret and
+  // this developer's webhook URL is not the committed artifact's business.
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(redacted, null, 2) + '\n');
 
   // 3. Update the assistant via Vapi API
   const updated = await vapiClient.updateAssistant(assistantId, assistantConfig);

@@ -93,3 +93,69 @@ Cost: ~$0.13/min
 - Use headphones to avoid echo
 - Check internet connection
 - Try English mode (better STT accuracy for non-native Hindi speakers)
+
+---
+
+## Trying it without ringing anyone
+
+Two things you can run that do not touch a phone.
+
+**The scenario battery** — 24 simulated callers against the real agent:
+
+```bash
+cd agent && npm run simulate-elevenlabs -- --all --repeat 3
+```
+
+It prints per-scenario pass rates, the outcomes seen across rounds, and LLM
+time-to-first-sentence percentiles. Use `--repeat`: outcomes vary run to run,
+and a single run cannot tell a regression from variance.
+
+One scenario, with its transcript:
+
+```bash
+npm run simulate-elevenlabs -- --scenario refuses_with_reason
+```
+
+**Replaying a real call** through the production webhook — envelope, signature,
+engine, database — without dialling:
+
+```bash
+npm run replay-post-call -- --conversation=conv_xxx --strip-tools
+```
+
+`--strip-tools` removes the tool calls, reproducing a call whose agent ended
+without reporting an outcome, which is what the analysis backstop is for.
+
+## The two buttons in the app
+
+At the bottom of the Calendar screen, once onboarding is done.
+
+**Demo call.** Runs the real agent against a scripted patient and shows the
+conversation as text. No phone rings, nothing is recorded, and it cannot mark a
+dose taken or alert anyone. One per caregiver. This is the one to show first.
+
+**Place a real call.** Actually dials the parent's number. The agent talks to
+whoever answers and the outcome is written to their dose record like any other
+call. One per caregiver, and it asks twice — the second press confirms against
+the number it is about to ring.
+
+They are separate routes with separate quotas. Spending the demo does not spend
+the real call.
+
+## If a call goes wrong
+
+The agent logs one JSON line per event. The ones worth grepping:
+
+| Event | Means |
+|---|---|
+| `el_agent_patched` | boot pushed the prompt, tools and webhooks to ElevenLabs |
+| `transport_start_failed` | that push failed — usually a stale tunnel. The server stays up |
+| `el_tool_dispatched` | a tool call arrived from a live call |
+| `el_post_call_processed` | the call ended and the outcome was derived |
+| `el_post_call_unauthorized` | a delivery failed its signature — check `ELEVENLABS_POST_CALL_SECRET` |
+| `el_init_served` | an inbound call was configured |
+| `el_init_resolution_failed` | inbound answered, but the caller could not be looked up |
+
+The full transcript, cost and timings of any call are in the `calls` table and
+in ElevenLabs' own conversation record.
+

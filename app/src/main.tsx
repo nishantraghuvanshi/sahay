@@ -4,7 +4,12 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { SessionProvider } from './auth/SessionProvider'
+import { purgeDevSeedIfDisabled } from './setup/devSeed'
 import './index.css'
+
+// Before the first render, so no screen ever paints seeded data. Cheap and a
+// no-op for anyone who never ran with VITE_DEV_MODE=true.
+purgeDevSeedIfDisabled()
 
 const queryClient = new QueryClient({
   defaultOptions: {

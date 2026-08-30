@@ -1,6 +1,6 @@
 # `rx_extract` — prescription reading
 
-Kinvox's prescription-extraction module. A photograph of an Indian prescription goes
+Voxikin's prescription-extraction module. A photograph of an Indian prescription goes
 in; a structured, reviewable medicine schedule comes out, via a single vision-model
 call. No OCR stage.
 
@@ -61,12 +61,23 @@ extracted and displayed but never scheduled.
 |---|---|---|---|
 | `google` | `gemini-3.5-flash-lite` | `GOOGLE_API_KEY` | Yes — the accuracy baseline |
 | `groq` | `qwen/qwen3.8-27b` | `GROQ_API_KEY` | Yes, but the free tier meters to roughly 2 documents/minute |
-| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | No — same wire format as Groq, never run against a real key |
+| `openai` | `gpt-5-nano` | `OPENAI_API_KEY` | Yes — verified 2026-08-30, all 4 medicines off a printed page |
 | `anthropic` | — | — | Stub. Raises `NotImplementedError` at construction |
 
 Configure with `PIPELINE_B_PROVIDER` / `PIPELINE_B_MODEL`, or pass a
 `VLMProviderConfig`. Optional: `PIPELINE_B_TIMEOUT` (60s), `PIPELINE_B_MAX_ATTEMPTS`
 (3; use 7 on Groq).
+
+### Reasoning models
+
+`gpt-5*` and the `o*` series are detected by name (`_is_reasoning_model`) and sent
+`max_completion_tokens` instead of `max_tokens`, with no `temperature` — they reject
+both of the others outright, HTTP 400, on every request.
+
+Their budget is also much larger (8192 vs 2048) because thinking is charged against
+the same ceiling: a live gpt-5-nano read of a four-medicine prescription spent 1920
+tokens reasoning to emit 336 of JSON. At the ordinary 2048 the reply is truncated
+mid-object, which reaches the pipeline as unparseable JSON rather than as an error.
 
 ## Accuracy
 

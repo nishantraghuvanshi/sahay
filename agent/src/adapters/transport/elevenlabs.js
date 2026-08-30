@@ -4,7 +4,15 @@ const crypto = require('crypto');
 const TransportPort = require('../../core/ports/transport');
 const { verifyElevenLabsSignature } = require('./elevenlabs-signature');
 const { captureField } = require('../../core/call/lifecycle');
-const { INTAKE_FIELDS } = require('../../use-cases/medication-adherence/inbound-context');
+const {
+  INTAKE_FIELDS,
+  buildInboundVariables,
+} = require('../../use-cases/medication-adherence/inbound-context');
+const { resolveInboundCall } = require('../../core/inbound/resolve-caller');
+const {
+  buildScheduleVariables,
+} = require('../../use-cases/medication-adherence/scheduling/call-variables');
+const { utcToLocalParts } = require('../../utils/time');
 const { EVENT_TYPES } = require('../../core/events/types');
 const logger = require('../../utils/logger');
 
@@ -27,6 +35,23 @@ const DEFAULT_TURN_EAGERNESS = 'normal';
 // Seconds to wait for a reply before re-engaging. Sent alongside eagerness so
 // that setting one does not drop the other from the turn object.
 const DEFAULT_TURN_TIMEOUT = 7;
+
+// A dose call is four or five exchanges. One that has run three minutes has
+// failed whatever it contains, and on a real line the caller is stuck on the
+// phone with it. ElevenLabs' own default is 300s.
+//
+// This is deliberately a hard bound rather than another prompt rule. Two
+// scenarios loop by repeating a single refusal until the turn cap, and every
+// attempt to fix that in the prompt has half-worked, because the model cannot
+// count its own turns. The cap ends the call; the post-call webhook still
+// fires and tier-2 extraction still files an outcome, so a bounded call is a
+// recorded call rather than a lost one.
+const DEFAULT_MAX_CALL_SECONDS = 180;
+
+// Spoken before the cap cuts in. A call that simply stops is indistinguishable
+// from the line dropping, which to an elderly caller is exactly the abandonment
+// this product exists to prevent.
+const MAX_DURATION_MESSAGE = 'माफ़ कीजिए, मुझे अब रुकना होगा। मैंने नोट कर लिया है। अपना ख़याल रखियेगा।';
 
 // What ElevenLabs is asked to pull out of the transcript once the call ends.
 // Spells out the promise-versus-taken distinction because that is the mistake
@@ -144,6 +169,8 @@ class ElevenLabsTransportAdapter extends TransportPort {
       providersConfig?.transport?.elevenlabs?.turn_eagerness || DEFAULT_TURN_EAGERNESS;
     this.turnTimeout =
       providersConfig?.transport?.elevenlabs?.turn_timeout ?? DEFAULT_TURN_TIMEOUT;
+    this.maxCallSeconds =
+      providersConfig?.transport?.elevenlabs?.max_call_seconds ?? DEFAULT_MAX_CALL_SECONDS;
   }
 
   get apiKey() {
@@ -169,6 +196,8 @@ class ElevenLabsTransportAdapter extends TransportPort {
       config.providersConfig?.transport?.elevenlabs?.turn_eagerness || this.turnEagerness;
     this.turnTimeout =
       config.providersConfig?.transport?.elevenlabs?.turn_timeout ?? this.turnTimeout;
+    this.maxCallSeconds =
+      config.providersConfig?.transport?.elevenlabs?.max_call_seconds ?? this.maxCallSeconds;
 
     const KNOWN_TOOLS = new Set(['report_outcome', 'capture_field']);
 
@@ -182,7 +211,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         // the secret is not configured — an unset secret must never be
         // treated as "no check required".
         const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
-        if (!expected || req.get('X-Kinvox-Token') !== expected) {
+        if (!expected || req.get('X-Voxikin-Token') !== expected) {
           // Deliberately says nothing about which part was wrong.
           logger.log('el_tool_unauthorized', { name });
           return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -197,13 +226,13 @@ class ElevenLabsTransportAdapter extends TransportPort {
         }
 
         try {
-          // kinvox_call_id rides in the body alongside the tool's real
+          // voxikin_call_id rides in the body alongside the tool's real
           // arguments — it's a request_body_schema property ElevenLabs
           // populates from a dynamic variable (see _toolDeclaration), not a
           // separate call-metadata field the way Vapi's message.call.id is.
           // Pulled out here so `args` handed to the engine and to
           // _captureField is exactly the tool's own arguments, nothing else.
-          const { kinvox_call_id: callId, ...args } = req.body || {};
+          const { voxikin_call_id: callId, ...args } = req.body || {};
 
           await this.engine.getEventBus().emit(EVENT_TYPES.TOOL_CALLED, {
             callId: callId || null,
@@ -225,6 +254,91 @@ class ElevenLabsTransportAdapter extends TransportPort {
         }
       });
 
+      // --- HTTP route: /el/conversation-init ---
+      //
+      // ElevenLabs asks this at the start of an INBOUND call and uses the
+      // answer as that call's configuration. Without it the caller reaches the
+      // stored prompt, which is an outbound dose-reminder opener — "your
+      // Metformin is due, have you taken it?" — with none of its variables
+      // filled. That is why the number still routes to the previous product's
+      // agent, and this is what makes reassigning it safe.
+      //
+      // Request shape from ElevenLabs' Twilio personalization docs: caller_id,
+      // agent_id, called_number, call_sid, conversation_id.
+      config.app.post('/el/conversation-init', async (req, res) => {
+        const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
+        if (!expected || req.get('X-Voxikin-Token') !== expected) {
+          logger.log('el_init_unauthorized', {});
+          return res.status(401).json({ ok: false, error: 'unauthorized' });
+        }
+
+        const callerId = (req.body || {}).caller_id || null;
+        // "anonymous" is what a withheld number arrives as; it is not a phone
+        // number and must not be looked up as one.
+        const phone = callerId && callerId.startsWith('+') ? callerId : null;
+
+        let variables;
+        try {
+          const resolution = await resolveInboundCall({ repository: this.repository, phone });
+          variables = buildInboundVariables(resolution, 'hi');
+
+          // The same schedule lines the outbound path speaks. A caller who
+          // rings in and asks when their next dose is should get the same
+          // answer the call would have given them.
+          Object.assign(
+            variables,
+            await buildScheduleVariables({
+              repository: this.repository,
+              phone,
+              nowHHMM: utcToLocalParts(new Date().toISOString(), 'Asia/Kolkata').hhmm,
+            })
+          );
+        } catch (err) {
+          // Losing the caller's history degrades the call. Failing the request
+          // ends it: ElevenLabs would have no configuration at all and the
+          // person who dialled hears nothing. Answer with what we can.
+          logger.log('el_init_resolution_failed', { error: err.message });
+          variables = buildInboundVariables({ patient: null, fieldsSoFar: {} }, 'hi');
+        }
+
+        const strategy = this.strategy;
+        const filled = {
+          ...(typeof strategy?.getVariables === 'function' ? strategy.getVariables() : {}),
+          ...variables,
+        };
+
+        // Rendered here rather than templated, because inbound is the branch
+        // where the values genuinely differ per caller and there is nothing to
+        // gain from sending a template ElevenLabs must fill. dynamic_variables
+        // goes too: their docs require it to carry every variable the agent
+        // defines, and a missing one fails the call outright.
+        let firstMessage = '';
+        let prompt = '';
+        try {
+          firstMessage = strategy.buildFirstMessage(filled, 'inbound');
+          prompt = strategy.buildSystemPrompt(filled, 'inbound');
+        } catch (err) {
+          logger.log('el_init_render_failed', { error: err.message });
+          return res.status(500).json({ ok: false, error: 'could not build the call' });
+        }
+
+        logger.log('el_init_served', {
+          known: Boolean(variables.parent_name && phone),
+          hasSchedule: Boolean(variables.next_call_line),
+        });
+
+        return res.json({
+          type: 'conversation_initiation_client_data',
+          conversation_config_override: {
+            agent: { first_message: firstMessage, prompt: { prompt } },
+          },
+          // Strings only: a null here reads as a missing variable.
+          dynamic_variables: Object.fromEntries(
+            Object.entries(filled).map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)])
+          ),
+        });
+      });
+
       // --- HTTP route: /el/post-call ---
       // ElevenLabs' post-call webhook, fired once after the conversation
       // ends. This is the only place a call's transcript, duration, cost
@@ -238,7 +352,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         // Two accepted proofs, because there are two senders in play.
         //
         // ElevenLabs signs every delivery itself — we do not choose those
-        // headers, so the X-Kinvox-Token gate the tool route uses cannot
+        // headers, so the X-Voxikin-Token gate the tool route uses cannot
         // apply here. A webhook configured in the dashboard with a custom
         // header is still honoured, so the token path stays.
         //
@@ -250,7 +364,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // whether a real delivery arrived shaped differently than
             // expected, without writing a signature into the log.
             signaturePresent: Boolean(req.get('ElevenLabs-Signature')),
-            tokenPresent: Boolean(req.get('X-Kinvox-Token')),
+            tokenPresent: Boolean(req.get('X-Voxikin-Token')),
             rawBodyCaptured: Boolean(req.rawBody),
           });
           return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -360,7 +474,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
    *   - a valid ElevenLabs-Signature HMAC over the raw body, which the service
    *     always sends and which requires ELEVENLABS_POST_CALL_SECRET (the
    *     wsec_… value shown once when the workspace webhook is created);
-   *   - the X-Kinvox-Token shared secret, for a webhook configured in the
+   *   - the X-Voxikin-Token shared secret, for a webhook configured in the
    *     dashboard with a custom header.
    *
    * Neither secret configured means no request is authorized. The endpoint is
@@ -386,7 +500,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
 
     const token = process.env.ELEVENLABS_WEBHOOK_SECRET;
     if (!token) return false;
-    const provided = req.get('X-Kinvox-Token');
+    const provided = req.get('X-Voxikin-Token');
     if (typeof provided !== 'string' || provided.length !== token.length) return false;
     return crypto.timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(token, 'utf8'));
   }
@@ -474,7 +588,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         // Proves the call came from our agent and not from anyone who found the
         // tunnel URL. report_outcome can raise a family medical alert, so the
         // endpoint cannot be open.
-        request_headers: { 'X-Kinvox-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
+        request_headers: { 'X-Voxikin-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
         path_params_schema: {},
         query_params_schema: null,
         request_body_schema: {
@@ -486,7 +600,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // ElevenLabs' documented dynamic variables
             // (system__call_duration_secs, system__time) carry no
             // conversation id. `dynamic_variable` here tells ElevenLabs to
-            // populate this property from the kinvox_call_id dynamic
+            // populate this property from the voxikin_call_id dynamic
             // variable createCall() sets, rather than asking the model to
             // supply it.
             //
@@ -498,9 +612,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // schema. This one is bound to the dynamic variable createCall
             // sends, so dynamic_variable is the one it gets, and it
             // therefore carries no description.
-            kinvox_call_id: {
+            voxikin_call_id: {
               type: 'string',
-              dynamic_variable: 'kinvox_call_id',
+              dynamic_variable: 'voxikin_call_id',
             },
           },
           required: params.required || [],
@@ -608,6 +722,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         agent: {
           language: 'hi',
           first_message: strategy.buildFirstMessage(placeholders),
+          max_conversation_duration_message: MAX_DURATION_MESSAGE,
           ...(Object.keys(templated).length
             ? { dynamic_variables: { dynamic_variable_placeholders: templated } }
             : {}),
@@ -624,6 +739,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
               ...SYSTEM_TOOLS,
             ],
           },
+        },
+        conversation: {
+          max_duration_seconds: this.maxCallSeconds ?? DEFAULT_MAX_CALL_SECONDS,
         },
         turn: {
           turn_eagerness: eagerness,
@@ -647,6 +765,32 @@ class ElevenLabsTransportAdapter extends TransportPort {
       // surfaced the moment someone registered the workspace webhook and
       // concluded the feature was finished.
       platform_settings: {
+        // Per-call configuration for INBOUND calls.
+        //
+        // The stored prompt is an outbound dose-reminder opener. A caller who
+        // dials in gets that too, with none of its variables filled, so the
+        // placeholders arrive empty or are spoken aloud — which is exactly why
+        // the number still routes to the previous product's agent.
+        //
+        // ElevenLabs asks a webhook at conversation start and we answer with
+        // the inbound prompt and that caller's own context. Every field below
+        // is off by default, and a webhook whose response touches a field that
+        // was never enabled is ignored in silence — the same shape as
+        // platform_settings nested one level too deep, or built_in_tools sent
+        // beside tools.
+        overrides: {
+          enable_conversation_initiation_client_data_from_webhook: true,
+          conversation_config_override: {
+            agent: {
+              first_message: true,
+              prompt: { prompt: true },
+              // Left closed deliberately. A per-call override of the voice, the
+              // model or the call duration would let a webhook response change
+              // what the caller hears, which is far beyond deciding who they
+              // are and what to say to them.
+            },
+          },
+        },
         // Extracted from the transcript after the call, independently of any
         // tool the agent did or did not invoke mid-conversation. deriveOutcome
         // reads it as tier 2, below a real report_outcome and above keyword
@@ -661,16 +805,24 @@ class ElevenLabsTransportAdapter extends TransportPort {
             description: DOSE_OUTCOME_EXTRACTION,
           },
         },
-        ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
-          ? {
-              workspace_overrides: {
+        workspace_overrides: {
+          conversation_initiation_client_data_webhook: {
+            url: `${webhookUrl}/el/conversation-init`,
+            // The same shared secret the tool routes use. This endpoint sits on
+            // the same public tunnel and decides what the agent says to whoever
+            // dialled; leaving it open would let anyone who finds the URL
+            // choose the prompt for a real caller.
+            request_headers: { 'X-Voxikin-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
+          },
+          ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
+            ? {
                 webhooks: {
                   post_call_webhook_id: process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID,
                   events: ['transcript'],
                 },
-              },
-            }
-          : {}),
+              }
+            : {}),
+        },
       },
     };
   }
@@ -685,7 +837,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
    */
   /**
    * @see TransportPort#getAssistantId
-   * @returns {string} the Kinvox-owned ElevenLabs agent id
+   * @returns {string} the Voxikin-owned ElevenLabs agent id
    */
   getAssistantId() {
     // this.agentId is captured at start(); the env var is the fallback for
@@ -694,7 +846,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
     if (!id) {
       throw new Error(
         'Missing env var: ELEVENLABS_AGENT_ID. Run `npm run setup-elevenlabs` ' +
-          'to duplicate the source agent into a Kinvox-owned copy, and record ' +
+          'to duplicate the source agent into a Voxikin-owned copy, and record ' +
           'the id it prints.'
       );
     }
@@ -714,9 +866,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
     // only system__call_duration_secs and system__time as dynamic
     // variables — no conversation id — so the webhook tool calls would
     // otherwise have no way to say which call they belong to. Sent as a
-    // dynamic variable so _toolDeclaration's kinvox_call_id property (bound
+    // dynamic variable so _toolDeclaration's voxikin_call_id property (bound
     // via `dynamic_variable`) gets it populated on every tool call.
-    const kinvoxCallId = crypto.randomUUID();
+    const voxikinCallId = crypto.randomUUID();
 
     const res = await fetch(`${API}/v1/convai/twilio/outbound-call`, {
       method: 'POST',
@@ -726,7 +878,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         agent_phone_number_id: this.phoneNumberId,
         to_number: phoneNumber,
         conversation_initiation_client_data: {
-          dynamic_variables: { ...variables, kinvox_call_id: kinvoxCallId },
+          dynamic_variables: { ...variables, voxikin_call_id: voxikinCallId },
         },
       }),
     });
@@ -735,10 +887,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
       throw new Error(`ElevenLabs createCall error (${res.status}): ${await res.text()}`);
     }
     const body = await res.json();
-    logger.log('el_call_created', { conversationId: body.conversation_id, kinvoxCallId });
+    logger.log('el_call_created', { conversationId: body.conversation_id, voxikinCallId });
     // Returned alongside the API's own response so a caller can correlate
     // this dispatch with the tool calls and post-call webhook that follow.
-    return { ...body, kinvox_call_id: kinvoxCallId };
+    return { ...body, voxikin_call_id: voxikinCallId };
   }
 }
 

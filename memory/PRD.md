@@ -1,4 +1,4 @@
-# Kinvox — UI refinement pass
+# Voxikin — UI refinement pass
 
 ## Product
 AI voice line that phones an ageing parent in India on a schedule to confirm each medicine

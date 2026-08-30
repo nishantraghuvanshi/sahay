@@ -6,7 +6,7 @@ import type { Severity } from '../api/types'
  * Signature components — the pieces that give the product's own ideas a form.
  *
  * The atoms in ./index.tsx are the wireframe's vocabulary. These are not in the
- * wireframes: they exist because the three things Kinvox is actually for — what she
+ * wireframes: they exist because the three things Voxikin is actually for — what she
  * said, the rule that fired, and the fields it already knew — were all rendering as
  * grey body text indistinguishable from a settings label.
  *
@@ -17,19 +17,26 @@ import type { Severity } from '../api/types'
 
 /* ------------------------------------------------------------------ wordmark */
 
-/** "Kinvox" with the i-dot lifted onto the hairline that runs under the word. */
-export function Wordmark({ className, size = 15 }: { className?: string; size?: number }) {
+/** "Voxikin" with the i-dot lifted onto the hairline that runs under the word. */
+/**
+ * The rule and the accent dot are sized in `em`, not pixels, so the whole mark
+ * scales from one font-size — which is what lets a caller size it with a
+ * responsive class (`text-[17px] 2xl:text-[24px]`) instead of a fixed number.
+ * Pass `size` for a fixed pixel size; omit it and the mark inherits, so
+ * breakpoints reach it.
+ */
+export function Wordmark({ className, size }: { className?: string; size?: number }) {
   return (
     <span
-      className={clsx('relative inline-block pb-[5px] leading-none', className)}
-      style={{ fontFamily: 'var(--font-display)', fontSize: size }}
+      className={clsx('relative inline-block pb-[0.33em] leading-none', className)}
+      style={{ fontFamily: 'var(--font-display)', ...(size ? { fontSize: size } : null) }}
     >
-      <span className="tracking-[-0.01em]">Kinvox</span>
+      <span className="tracking-[-0.01em]">Voxikin</span>
       <span className="absolute inset-x-0 bottom-0 h-px bg-current" />
-      <span
-        className="absolute bottom-[-1.5px] size-[3px] rounded-full bg-accent"
-        style={{ left: size * 0.38 }}
-      />
+      {/* Centred under the first "i", measured in the display face at 1.702-1.969em,
+          so the dot reads as that letter's tittle come to rest on the rule. Was
+          0.38em while the word was "Kinvox", where the i is the second glyph. */}
+      <span className="absolute bottom-[-0.1em] left-[1.74em] size-[0.2em] rounded-full bg-accent" />
     </span>
   )
 }

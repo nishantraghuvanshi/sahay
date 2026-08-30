@@ -157,3 +157,35 @@ export async function getDemoCallStatus(): Promise<DemoCallStatus> {
 export async function postDemoCall(persona: string): Promise<DemoCall | DemoCallRefused> {
   return authApi.postSlow<DemoCall | DemoCallRefused>('/app/demo-call', { persona })
 }
+
+/* --------------------------------------------------------- real test call */
+
+export type TestCallStatus = {
+  available: boolean
+  used_at: string | null
+  ready: boolean
+  will_call: string | null
+  parent_name: string | null
+}
+
+export type TestCallPlaced = { ok: true; calling: string; parent_name: string | null }
+export type TestCallRefused = { ok: false; error: string; used_at?: string }
+
+/**
+ * Whether the caregiver may still place their one REAL test call, and which
+ * number it would ring. The number is returned so the button can show it: "we
+ * will call this number" is the fact to check before pressing, not after.
+ */
+export async function getTestCallStatus(): Promise<TestCallStatus> {
+  return authApi.get<TestCallStatus>('/app/test-call')
+}
+
+/**
+ * Place a real call. A phone rings in someone's house.
+ *
+ * Separate from postDemoCall at every level — different route, different
+ * quota — because a demo and a real call must never be one flag apart.
+ */
+export async function postTestCall(): Promise<TestCallPlaced | TestCallRefused> {
+  return authApi.postSlow<TestCallPlaced | TestCallRefused>('/app/test-call', {})
+}

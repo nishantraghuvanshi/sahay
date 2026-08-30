@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { Button, Card, Chip, Divider, Label, Row, Tag } from '../ui'
-import { getDemoCallStatus, postDemoCall } from '../api/hooks'
-import type { DemoCall, DemoCallStatus, DemoTurn } from '../api/hooks'
+import { getDemoCallStatus, getTestCallStatus, postDemoCall, postTestCall } from '../api/hooks'
+import type { DemoCall, DemoCallStatus, DemoTurn, TestCallStatus } from '../api/hooks'
 
 /**
  * The optional demo call.
@@ -70,6 +70,15 @@ export default function DemoCallPanel() {
   const [result, setResult] = useState<DemoCall | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // The REAL call, kept in its own state and its own block below. A shared
+  // "running" flag between a transcript and a ringing telephone is one typo
+  // away from dialling somebody's parent.
+  const [testStatus, setTestStatus] = useState<TestCallStatus | null>(null)
+  const [testArmed, setTestArmed] = useState(false)
+  const [testRinging, setTestRinging] = useState(false)
+  const [testPlaced, setTestPlaced] = useState<string | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
+
   useEffect(() => {
     let alive = true
     getDemoCallStatus()
@@ -78,6 +87,9 @@ export default function DemoCallPanel() {
       // does not see the panel. It is optional; failing loudly here would be
       // noise on a screen that is about doses.
       .catch(() => alive && setStatus(null))
+    getTestCallStatus()
+      .then((s) => alive && setTestStatus(s))
+      .catch(() => alive && setTestStatus(null))
     return () => {
       alive = false
     }
@@ -107,6 +119,30 @@ export default function DemoCallPanel() {
       setError('The demo could not run just now. Your demo call has not been used.')
     } finally {
       setRunning(false)
+    }
+  }
+
+  async function placeTestCall() {
+    setTestRinging(true)
+    setTestError(null)
+    try {
+      const res = await postTestCall()
+      if (res.ok) {
+        setTestPlaced(res.calling)
+        setTestStatus((s) => (s ? { ...s, available: false } : s))
+      } else if (res.error === 'test_call_already_used') {
+        setTestStatus((s) => (s ? { ...s, available: false } : s))
+        setTestError('You have already used your one test call.')
+      } else if (res.error === 'onboarding_incomplete') {
+        setTestError('Finish setting up the prescription first.')
+      } else {
+        setTestError('The call could not be placed. Your test call has not been used.')
+      }
+    } catch {
+      setTestError('The call could not be placed. Your test call has not been used.')
+    } finally {
+      setTestRinging(false)
+      setTestArmed(false)
     }
   }
 
@@ -173,6 +209,74 @@ export default function DemoCallPanel() {
         <p className="text-xs text-muted-strong">
           This takes up to a minute — the agent is holding a whole conversation.
         </p>
+      )}
+
+      {/* ------------------------------------------------- the real call */}
+      {testStatus && (
+        <>
+          <Divider />
+          <Row>
+            <h3 className="flex-1 text-base font-bold">Place a real test call</h3>
+            <Tag tone="warn" outline>rings a phone</Tag>
+          </Row>
+          <p className="text-xs leading-relaxed text-muted-strong">
+            This is not a demo. {testStatus.parent_name || 'Your parent'}'s phone will
+            actually ring
+            {testStatus.will_call ? ` on ${testStatus.will_call}` : ''}, the agent will
+            talk to whoever answers, and the outcome{' '}
+            <strong className="font-semibold text-ink">is recorded</strong> like any
+            other call. You get one.
+          </p>
+
+          {testError && <p className="text-xs font-semibold text-danger">{testError}</p>}
+
+          {testPlaced ? (
+            <p className="text-xs font-semibold text-ink">
+              Calling {testPlaced} now — it should ring within a few seconds.
+            </p>
+          ) : !testArmed ? (
+            <Row>
+              <Button
+                variant="outline"
+                disabled={!testStatus.available || !testStatus.ready || testRinging}
+                onClick={() => {
+                  setTestError(null)
+                  setTestArmed(true)
+                }}
+              >
+                Place a real call
+              </Button>
+            </Row>
+          ) : (
+            /* Two presses, deliberately. Everything else on this screen is
+               reversible; a telephone ringing in an elderly person's house is
+               not, and the second press is where the number is confirmed. */
+            <>
+              <p className="text-xs font-semibold text-ink">
+                Call {testStatus.will_call} now?
+              </p>
+              <Row className="gap-1.5">
+                <Button variant="accent" disabled={testRinging} onClick={placeTestCall}>
+                  {testRinging ? 'Placing the call…' : 'Yes, call now'}
+                </Button>
+                <Button variant="outline" disabled={testRinging} onClick={() => setTestArmed(false)}>
+                  Cancel
+                </Button>
+              </Row>
+            </>
+          )}
+
+          {!testStatus.ready && (
+            <p className="text-xs text-muted-strong">
+              Available once the prescription is set up.
+            </p>
+          )}
+          {testStatus.ready && !testStatus.available && !testPlaced && (
+            <p className="text-xs text-muted-strong">
+              You have already used your one test call.
+            </p>
+          )}
+        </>
       )}
 
       {result && (

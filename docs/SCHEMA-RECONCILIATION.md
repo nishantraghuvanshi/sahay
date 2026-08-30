@@ -94,8 +94,8 @@ Verified end to end against one database:
 
 ## Notes for whoever runs this
 
-* `KINVOX_DB` points both processes at one file. Unset, both default to
-  `api/kinvox.db`. The agent still honours `DB_PATH` for its own scripts.
+* `VOXIKIN_DB` points both processes at one file. Unset, both default to
+  `api/voxikin.db`. The agent still honours `DB_PATH` for its own scripts.
 * `api/db.py` has a migration that ALTERs columns onto an existing database, because
   `CREATE TABLE IF NOT EXISTS` skips a table that already exists and a new column
   would otherwise never appear on an older file.

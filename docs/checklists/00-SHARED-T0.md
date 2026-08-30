@@ -19,7 +19,7 @@ four lanes assigned to four named people.
 - [ ] **Get a name.** Write down who answered and what they said
 - [ ] Confirm among yourselves: has any of this been **pitched or demoed at another event?**
       (`[V]` hard disqualifier, no borderline path)
-- [x] Agree the submitted product name — **not Voxikin**. Settled 30 Aug: **Kinvox**.
+- [x] Agree the submitted product name — **not Voxikin**. Settled 30 Aug: **Voxikin**.
       A distinct name, so `[V]` rule 04 is satisfied on the brand question
 - [ ] Move `docs/Archive 2/` **out of the project directory** to a sibling folder.
       It contains a working codebase for the same use case **and a `.env` with live

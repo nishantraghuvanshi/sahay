@@ -5,7 +5,13 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { generate, redactSecrets } = require('../scripts/generate-assistant-config');
+const {
+  generate,
+  redactSecrets,
+  redactWebhookUrl,
+  substituteWebhookUrl,
+  WEBHOOK_URL_PLACEHOLDER,
+} = require('../scripts/generate-assistant-config');
 
 /**
  * config/assistant.json is what create-assistant.js / update-assistant.js PATCH
@@ -42,16 +48,52 @@ describe('committed config/assistant.json is not stale', () => {
 
   test('matches what the generator would write', () => {
     const onDisk = JSON.parse(fs.readFileSync(ASSISTANT_JSON, 'utf8'));
-    const { assistantConfig } = generate();
+    const { assistantConfig, webhookUrl } = generate();
     // Compare against the redacted form: the committed file deliberately
     // carries a placeholder where VAPI_SECRET goes, so that a tracked, soon
-    // to be public artifact never holds the live secret. Without this the
-    // staleness check would pressure the real secret into the repo.
+    // to be public artifact never holds the live secret — and a placeholder
+    // where THIS reader's WEBHOOK_URL goes, so the file matches every
+    // developer's .env, not just whoever last ran the generator. Without
+    // this the staleness check would pressure the real secret, or one
+    // developer's own webhook URL, into the repo.
     assert.deepStrictEqual(
       onDisk,
-      redactSecrets(assistantConfig),
+      redactWebhookUrl(redactSecrets(assistantConfig), webhookUrl),
       'config/assistant.json is stale — run `node scripts/generate-assistant-config.js`'
     );
+  });
+});
+
+describe('the committed config carries no developer\'s environment', () => {
+  test('contains no hostname — every WEBHOOK_URL-derived field is the placeholder', () => {
+    const raw = fs.readFileSync(ASSISTANT_JSON, 'utf8');
+    // The placeholder itself contains no "://", so any surviving http(s) URL
+    // means a concrete host slipped in — a developer's tunnel origin, a
+    // teammate's domain, whatever whoever last ran the generator had in
+    // their .env.
+    assert.ok(
+      !/https?:\/\//.test(raw),
+      'config/assistant.json contains what looks like a concrete hostname — it should carry ' +
+        `only the ${WEBHOOK_URL_PLACEHOLDER} placeholder for every WEBHOOK_URL-derived field`
+    );
+    assert.ok(raw.includes(WEBHOOK_URL_PLACEHOLDER), 'expected the webhook URL placeholder to be present');
+  });
+
+  test('substituting a webhook URL back in reproduces the previous concrete output', () => {
+    const onDisk = JSON.parse(fs.readFileSync(ASSISTANT_JSON, 'utf8'));
+    const webhookUrl = 'https://voice.voxikin.com';
+    const restored = substituteWebhookUrl(onDisk, webhookUrl);
+    assert.ok(
+      JSON.stringify(restored).includes(webhookUrl),
+      'substituteWebhookUrl should put a concrete webhook URL back into every placeholder field'
+    );
+    assert.ok(
+      !JSON.stringify(restored).includes(WEBHOOK_URL_PLACEHOLDER),
+      'no placeholder should survive substitution'
+    );
+    // Round-trip: redacting the restored config with the same URL should
+    // reproduce exactly what is committed on disk.
+    assert.deepStrictEqual(redactWebhookUrl(restored, webhookUrl), onDisk);
   });
 });
 

@@ -101,15 +101,15 @@ describe('buildAssistantConfig', () => {
     assert.deepStrictEqual(outcome.api_schema.request_body_schema.required.sort(), ['outcome', 'reason']);
   });
 
-  test('declares kinvox_call_id bound to the dynamic variable, on every tool', () => {
+  test('declares voxikin_call_id bound to the dynamic variable, on every tool', () => {
     // Without this, the webhook has no idea which call a tool call belongs
     // to — ElevenLabs' documented dynamic variables carry no conversation id.
     const a = new ElevenLabsTransportAdapter({});
     const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
     for (const t of tools) {
-      const prop = t.api_schema.request_body_schema.properties.kinvox_call_id;
+      const prop = t.api_schema.request_body_schema.properties.voxikin_call_id;
       assert.strictEqual(prop.type, 'string');
-      assert.strictEqual(prop.dynamic_variable, 'kinvox_call_id');
+      assert.strictEqual(prop.dynamic_variable, 'voxikin_call_id');
       // A live PATCH 400'd when this property carried dynamic_variable
       // alongside is_system_provided/constant_value/is_omitted — the API
       // accepts only one of that mutually-exclusive set per property.
@@ -122,7 +122,7 @@ describe('buildAssistantConfig', () => {
 
   test('every tool property sets at most one of description/dynamic_variable/is_system_provided/constant_value/is_omitted', () => {
     // The API rejects a property that sets more than one of these five keys.
-    // Pinned generically, not just for kinvox_call_id, so the next property
+    // Pinned generically, not just for voxikin_call_id, so the next property
     // anyone adds to any tool cannot silently reintroduce the same 400.
     const MUTUALLY_EXCLUSIVE = ['description', 'dynamic_variable', 'is_system_provided', 'constant_value', 'is_omitted'];
     const a = new ElevenLabsTransportAdapter({});
@@ -146,7 +146,7 @@ describe('buildAssistantConfig', () => {
       const a = new ElevenLabsTransportAdapter({});
       const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools.filter((t) => t.type === 'webhook');
       for (const t of tools) {
-        assert.strictEqual(t.api_schema.request_headers['X-Kinvox-Token'], 'test-secret');
+        assert.strictEqual(t.api_schema.request_headers['X-Voxikin-Token'], 'test-secret');
       }
     } finally {
       process.env.ELEVENLABS_WEBHOOK_SECRET = originalSecret;
@@ -261,10 +261,13 @@ describe('buildAssistantConfig — post-call webhook registration', () => {
       // platform_settings at the top level too. Nesting it was silently
       // accepted with a 200, because conversation_config allows additional
       // properties, so the webhook id went nowhere and nothing said so.
-      // Asserts the webhook block specifically, not the whole of
-      // platform_settings — data_collection lives alongside it now.
-      assert.deepStrictEqual(cfg.platform_settings.workspace_overrides, {
-        webhooks: { post_call_webhook_id: 'webhook_abc123', events: ['transcript'] },
+      // Asserts the post-call block specifically. workspace_overrides also
+      // carries the conversation-initiation webhook, and platform_settings
+      // carries data_collection and overrides, so equality against either
+      // whole object pins unrelated things.
+      assert.deepStrictEqual(cfg.platform_settings.workspace_overrides.webhooks, {
+        post_call_webhook_id: 'webhook_abc123',
+        events: ['transcript'],
       });
       assert.strictEqual(
         cfg.conversation_config.platform_settings,
@@ -322,7 +325,7 @@ describe('createCall', () => {
       await a.createCall('agent_x', '+919000000042', { patient_name: 'Kamala', meal_slot: 'morning' });
     } finally { restore(); }
 
-    // kinvox_call_id rides alongside the caller's own variables — it isn't
+    // voxikin_call_id rides alongside the caller's own variables — it isn't
     // one of them, so it's asserted separately below rather than folded
     // into one deepStrictEqual against the whole object.
     const dynamicVariables = cap.body.conversation_initiation_client_data.dynamic_variables;
@@ -330,7 +333,7 @@ describe('createCall', () => {
     assert.strictEqual(dynamicVariables.meal_slot, 'morning');
   });
 
-  test('createCall mints a kinvox_call_id and puts it in dynamic_variables', async () => {
+  test('createCall mints a voxikin_call_id and puts it in dynamic_variables', async () => {
     // ElevenLabs' documented dynamic variables (system__call_duration_secs,
     // system__time) carry no conversation id, so the tool webhook has no
     // other way to know which call it belongs to without this.
@@ -343,12 +346,12 @@ describe('createCall', () => {
       await a.createCall('agent_x', '+919000000042', {});
     } finally { restore(); }
 
-    const { kinvox_call_id: callId } = cap.body.conversation_initiation_client_data.dynamic_variables;
+    const { voxikin_call_id: callId } = cap.body.conversation_initiation_client_data.dynamic_variables;
     assert.strictEqual(typeof callId, 'string');
     assert.match(callId, /^[0-9a-f-]{36}$/);
   });
 
-  test('createCall returns the kinvox_call_id it sent, so a caller can correlate', async () => {
+  test('createCall returns the voxikin_call_id it sent, so a caller can correlate', async () => {
     process.env.ELEVENLABS_API_KEY = 'test-key';
     const cap = {};
     const restore = stubFetch(cap);
@@ -359,8 +362,8 @@ describe('createCall', () => {
       result = await a.createCall('agent_x', '+919000000042', {});
     } finally { restore(); }
 
-    const sentId = cap.body.conversation_initiation_client_data.dynamic_variables.kinvox_call_id;
-    assert.strictEqual(result.kinvox_call_id, sentId);
+    const sentId = cap.body.conversation_initiation_client_data.dynamic_variables.voxikin_call_id;
+    assert.strictEqual(result.voxikin_call_id, sentId);
     // The API's own response fields (conversation_id, callSid) still pass through.
     assert.strictEqual(result.conversation_id, 'conv_1');
   });
@@ -777,6 +780,89 @@ describe('data_collection — a backstop when report_outcome is not called', () 
     const a = new ElevenLabsTransportAdapter({});
     const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
     assert.ok(cfg.platform_settings.data_collection);
-    assert.strictEqual(cfg.platform_settings.workspace_overrides, undefined);
+    // workspace_overrides always exists now — it also carries the
+    // conversation-initiation webhook. Only the post-call block is conditional.
+    assert.strictEqual(cfg.platform_settings.workspace_overrides.webhooks, undefined);
+  });
+});
+
+describe('call duration — a stuck call must end on its own', () => {
+  // Two scenarios still loop: the agent repeats one refusal until the turn cap
+  // and never files an outcome. Every attempt to fix that in the prompt has
+  // half-worked, because the model cannot count its own turns — it has no idea
+  // it is on the eighth identical reply.
+  //
+  // So bound it outside the model. A dose call that has run five minutes has
+  // failed whatever it contains, and on a real line the caller is stuck on the
+  // phone with it. The cap ends the call, the post-call webhook still fires,
+  // and tier-2 extraction still files an outcome — so a bounded call is a
+  // recorded call, not a lost one.
+  test('caps the call well below the five-minute default', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    const secs = cfg.conversation_config.conversation.max_duration_seconds;
+    assert.ok(secs > 0 && secs <= 240, `expected a real cap, got ${secs}`);
+  });
+
+  test('says something before hanging up on them', () => {
+    // A call that simply stops is indistinguishable from the line dropping,
+    // which for an elderly caller is the failure this product exists to avoid.
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    const msg = cfg.conversation_config.agent.max_conversation_duration_message;
+    assert.ok(msg && msg.length > 10, 'a closing line is required');
+    assert.doesNotMatch(msg, /\{\{/, 'must not carry an unfilled placeholder');
+  });
+
+  test('both are configurable from providers.yaml', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { max_call_seconds: 90 } },
+    });
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.conversation.max_duration_seconds, 90);
+  });
+});
+
+describe('inbound — the agent must be told who is calling', () => {
+  // The outbound prompt is a dose-reminder opener: "your Metformin is due, have
+  // you taken it?". An inbound caller gets that too, with no dynamic variables,
+  // so the placeholders arrive empty or are spoken literally. That is why the
+  // number still routes to the previous product's agent.
+  //
+  // The fix is per-call config: ElevenLabs asks a webhook at conversation start
+  // and we answer with the inbound prompt and this caller's variables.
+  test('registers the conversation-initiation webhook with an auth header', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x.ngrok-free.dev');
+    const hook = cfg.platform_settings.workspace_overrides
+      .conversation_initiation_client_data_webhook;
+    assert.strictEqual(hook.url, 'https://x.ngrok-free.dev/el/conversation-init');
+    // Same shared secret as the tool routes: this endpoint is on the same
+    // public tunnel and it decides what the agent says to a caller.
+    assert.ok(hook.request_headers['X-Voxikin-Token'] !== undefined);
+  });
+
+  test('turns the webhook on, which is off by default', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(
+      cfg.platform_settings.overrides.enable_conversation_initiation_client_data_from_webhook,
+      true
+    );
+  });
+
+  test('permits exactly the overrides the webhook needs, and no others', () => {
+    // Overrides are false by default, per field. A webhook that returns a
+    // first_message the agent will not accept is ignored in silence — the same
+    // failure shape as platform_settings nested one level too deep.
+    const a = new ElevenLabsTransportAdapter({});
+    const o = a.buildAssistantConfig(STRATEGY, {}, 'https://x')
+      .platform_settings.overrides.conversation_config_override;
+    assert.strictEqual(o.agent.first_message, true);
+    assert.strictEqual(o.agent.prompt.prompt, true);
+    // Not opened up: a per-call override of the voice or the model would let a
+    // webhook response change what the caller hears, well beyond who they are.
+    assert.notStrictEqual(o.tts?.voice_id, true);
+    assert.notStrictEqual(o.agent.prompt.llm, true);
   });
 });

@@ -331,3 +331,75 @@ def test_endpoint_never_leaves_the_uploaded_image_on_disk(client, monkeypatch, t
 def test_health_reports_extraction_availability(client, monkeypatch):
     set_pipeline(monkeypatch, run_with("[]"))
     assert client.get("/health").json()["extraction_available"] is True
+
+
+# ------------------------------------------------- provider request shape
+
+def test_a_reasoning_model_is_not_sent_the_parameters_it_rejects():
+    """gpt-5 and the o-series answer HTTP 400 to `max_tokens` ("Unsupported
+    parameter ... use max_completion_tokens instead") and to any temperature but
+    the default. Both were being sent, so every request failed before the image
+    was ever looked at."""
+    from api.rx_extract import pipeline_b as pb
+
+    captured = {}
+
+    def fake_post(url, headers, payload, parse, **kw):
+        captured.update(payload)
+        return VLMResponse(text="[]")
+
+    call = pb._make_openai_compatible_call("https://api.openai.com/v1")
+    orig, pb._post_with_retry = pb._post_with_retry, fake_post
+    try:
+        call(b"\xff\xd8\xff", "prompt", "gpt-5-nano", "sk-test")
+        assert captured["max_completion_tokens"] == pb.REASONING_MAX_TOKENS
+        assert "max_tokens" not in captured
+        assert "temperature" not in captured
+
+        captured.clear()
+        call(b"\xff\xd8\xff", "prompt", "gpt-4o-mini", "sk-test")
+        assert captured["max_tokens"] == pb.DEFAULT_MAX_TOKENS
+        assert captured["temperature"] == 0
+        assert "max_completion_tokens" not in captured
+    finally:
+        pb._post_with_retry = orig
+
+
+def test_the_reasoning_budget_leaves_room_for_the_thinking():
+    """A live gpt-5-nano read of a four-medicine page spent 1920 tokens reasoning
+    before emitting 336 of JSON. The ordinary 2048 ceiling truncates that mid-object,
+    which arrives as unparseable JSON rather than as an error."""
+    from api.rx_extract import pipeline_b as pb
+
+    assert pb.REASONING_MAX_TOKENS > pb.DEFAULT_MAX_TOKENS * 2
+
+
+@pytest.mark.parametrize("written,expected", [
+    ("Tab.", "tablet"), ("T.", "tablet"), ("tab", "tablet"),
+    ("Inj.", "injection"), ("Cap.", "capsule"), ("Syp.", "syrup"),
+    ("Neb.", "nebuliser"), ("tablet", "tablet"),
+])
+def test_a_prescription_abbreviation_for_form_does_not_lose_the_medicine(written, expected):
+    """`form` is a closed enum, so a model echoing the prefix it read — "Tab." —
+    failed validation for the whole medicine and the caregiver was told the
+    prescription could not be read. gpt-5-nano did exactly that on every line of a
+    perfectly legible page."""
+    from api.rx_extract.json_parsing import build_medicine_from_dict
+
+    med = build_medicine_from_dict(
+        {"raw_line": "T. Metformin 500mg", "generic": "Metformin", "form": written,
+         "confidence": 0.9},
+        1,
+    )
+    assert med is not None, f"{written!r} lost the medicine"
+    assert med.form.value == expected
+
+
+def test_an_unknown_form_is_still_refused():
+    """The alias table is a vocabulary mapping, not a licence to invent. A form
+    nobody can name must still fail rather than be coerced to something plausible."""
+    from api.rx_extract.json_parsing import build_medicine_from_dict
+
+    assert build_medicine_from_dict(
+        {"raw_line": "x", "form": "lozenge", "confidence": 0.9}, 1
+    ) is None

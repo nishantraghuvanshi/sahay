@@ -1,4 +1,4 @@
-# KINVOX — MASTER BUILD CHECKLIST
+# VOXIKIN — MASTER BUILD CHECKLIST
 ### Everything, in clock order. One file. 24 hours.
 
 **Legend** — `[A]` Voice · `[B]` API · `[C]` App · `[D]` Evidence · `[ALL]` everyone
@@ -31,7 +31,7 @@ Gates are pass/fail — miss one, **cut scope, do not extend**.
       codebase for the same use case **and a `.env` with live Sarvam + Groq keys.**
       Gitignoring is not enough — one `git add -f` ships a disqualifier and two live
       credentials into a public repo
-- [x] `[ALL]` Product name — **not Voxikin**. Settled 30 Aug: **Kinvox**
+- [x] `[ALL]` Product name — **not Voxikin**. Settled 30 Aug: **Voxikin**
 - [ ] `[D]` Charge phones. Two recording devices. A second physical handset for the handoff shot
 
 ---

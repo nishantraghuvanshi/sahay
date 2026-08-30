@@ -31,11 +31,12 @@ from api.rx_extract import (
 )
 from api.rx_extract.normalize import normalize
 from api import db
+from api.config import get_settings
 from api.routes_app import router as app_router
 
 load_dotenv()
 
-log = logging.getLogger("kinvox.api")
+log = logging.getLogger("voxikin.api")
 
 # Matches the caregiver app's own limit in app/src/screens/setup/Prescription.tsx.
 MAX_UPLOAD_BYTES = 10 * 1_048_576
@@ -71,6 +72,25 @@ def _build_pipeline():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings = get_settings()  # raises here, not on the first request, if a secret is missing
+    await db.open_pool()
+    logging.getLogger(__name__).info("care api up · app origin %s", settings.app_origin)
+    # Loud, every boot, and never downgraded to info: a wildcard bypass is a
+    # master key for that channel, and the one way it does real harm is by being
+    # forgotten in an environment that outlived the demo. The two channels are
+    # reported separately because they are switched separately.
+    for var, on in (
+        ("DEV_OTP_BYPASS_NUMBERS", settings.bypass_all_numbers),
+        ("DEV_OTP_BYPASS_EMAILS", settings.bypass_all_emails),
+    ):
+        if on:
+            logging.getLogger(__name__).warning(
+                "%s=* — EVERY destination on that channel accepts the fixed code %s, "
+                "and nothing is sent. Demo only. Clear it before real caregivers use "
+                "this deployment.",
+                var,
+                settings.dev_otp_bypass_code,
+            )
     # Schema first: the read endpoints must work even if no VLM key is configured.
     # Seeding only runs on an empty database, so a restart never overwrites a
     # schedule someone signed off through the app.
@@ -82,10 +102,13 @@ async def lifespan(app: FastAPI):
     except (MissingCredentialsError, ValueError, NotImplementedError, FileNotFoundError) as exc:
         _state["config_error"] = f"{type(exc).__name__}: {exc}"
         log.error("pipeline_b NOT available — /extract will fail: %s", _state["config_error"])
-    yield
+    try:
+        yield
+    finally:
+        await db.close_pool()
 
 
-app = FastAPI(title="Kinvox Care API", lifespan=lifespan)
+app = FastAPI(title="Voxikin Care API", lifespan=lifespan)
 
 # Caregiver-app reads and the onboarding write.
 app.include_router(app_router)
@@ -99,6 +122,13 @@ try:
 
     app.include_router(auth_router)
     app.include_router(caregiver_router)
+
+    # Billing rides in the same try: it takes the same CaregiverDep, so if the
+    # auth modules failed to import there is no session to scope a payment to
+    # and mounting it alone would only produce a checkout that 500s.
+    from api.payments.routes import router as billing_router
+
+    app.include_router(billing_router)
 except Exception as exc:  # pragma: no cover - surfaced at boot, not hidden
     # Loud rather than silent: without this the app's login screen 404s and the
     # only clue is an absent route.

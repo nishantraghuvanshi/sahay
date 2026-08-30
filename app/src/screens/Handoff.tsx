@@ -169,7 +169,7 @@ export default function Handoff() {
       return (
         <Notice
           title="This link has expired"
-          body="A Kinvox handoff link stops working 24 hours after it is created, so a medical record cannot sit open on the internet."
+          body="A Voxikin handoff link stops working 24 hours after it is created, so a medical record cannot sit open on the internet."
           aside="The record itself has not been deleted. Ask the family member who sent this link to send a new one."
         />
       )
@@ -186,7 +186,7 @@ export default function Handoff() {
     return (
       <Notice
         title="This record could not be loaded"
-        body="The connection to Kinvox failed, so nothing can be shown here. Pulling the page down to reload it may work."
+        body="The connection to Voxikin failed, so nothing can be shown here. Pulling the page down to reload it may work."
         aside="If it keeps failing, call the family member who sent you this link."
       />
     )
@@ -239,7 +239,7 @@ function Record({ view }: { view: HandoffView }) {
       {/* Why a stranger is holding a stranger's medical record. */}
       <header className="border-b border-line py-[9px]">
         <p className="text-[10px] leading-[13px] text-muted-strong">
-          Emergency handoff from <strong className="font-semibold text-ink">Kinvox</strong>, the
+          Emergency handoff from <strong className="font-semibold text-ink">Voxikin</strong>, the
           care line this family uses. Their family made this record during the call and sent it
           to you. Read-only — nothing to sign in to, nothing to change.
         </p>
@@ -387,7 +387,7 @@ function Record({ view }: { view: HandoffView }) {
 
         <BelowFold title="How this record was made">
           <p>
-            Kinvox is the phone line this family uses to check on their parent. This record was
+            Voxikin is the phone line this family uses to check on their parent. This record was
             written while the call was happening, from what was said on it.
           </p>
           <p className="mt-1">
@@ -415,7 +415,7 @@ function Record({ view }: { view: HandoffView }) {
         </BelowFold>
 
         <p className="border-t border-line pt-3 text-[11px] leading-[16px] text-muted-strong">
-          Kinvox is a phone line, not an emergency service. Nobody has been sent to this address
+          Voxikin is a phone line, not an emergency service. Nobody has been sent to this address
           by this record. If this person needs help, call someone — the number above reaches them,
           and their family sent you this link.
         </p>

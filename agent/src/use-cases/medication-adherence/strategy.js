@@ -19,6 +19,11 @@ const { membersFor, GLOBAL_MEMBERS, GLOBAL_DESTINATIONS } = require('./squad');
  * use-case-specific logic here. Adding a new use case (e.g., emergency triage)
  * means creating a new strategy, not modifying the engine.
  */
+// The language whose prompt is actually maintained. Everything else is checked
+// against it and refused if it trails.
+const BASELINE_LANGUAGE = 'hi';
+const BASELINE_CONFIG = 'medication-adherence.yaml';
+
 class MedicationAdherenceStrategy extends ConversationStrategy {
   constructor(language = 'hi') {
     super();
@@ -30,6 +35,36 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
     const configPath = path.join(__dirname, '../../../config/use-cases/', configFile);
     const raw = fs.readFileSync(configPath, 'utf8');
     this.config = yaml.load(raw);
+
+    // Refuse a language whose prompt has fallen behind the one actually being
+    // maintained. On 30 August the English config sat at version 6 while Hindi
+    // reached 16: an English call would have narrated the model's reasoning
+    // aloud, claimed to be contacting the family when it was not, and read
+    // "maybe" as a taken dose — every defect that day removed.
+    //
+    // Nothing caught it. The parity test was green the whole time, because it
+    // matches guardrail LABELS and a label is not a behaviour.
+    //
+    // Failing here is deliberate. The alternative to a loud boot failure is a
+    // quiet call to a patient with ten versions of missing safety work, and
+    // between those two the choice is not close.
+    if (language !== BASELINE_LANGUAGE) {
+      const baseline = yaml.load(
+        fs.readFileSync(
+          path.join(__dirname, '../../../config/use-cases/', BASELINE_CONFIG),
+          'utf8'
+        )
+      );
+      if (Number(this.config.version) < Number(baseline.version)) {
+        throw new Error(
+          `The ${language} prompt is at version ${this.config.version} while ` +
+            `${BASELINE_LANGUAGE} is at ${baseline.version}. It is missing every prompt ` +
+            `fix made since, so it must not be used on a call. Port ` +
+            `${configFile} up to version ${baseline.version} — see the warning at the ` +
+            `top of that file for what is involved — or run in ${BASELINE_LANGUAGE}.`
+        );
+      }
+    }
   }
 
   get name() {

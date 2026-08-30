@@ -196,6 +196,25 @@ OPENAI_COMPATIBLE_BASES = {
     "openai": "https://api.openai.com/v1",
 }
 
+# Output ceilings for the OpenAI-compatible path.
+DEFAULT_MAX_TOKENS = 2048
+# Reasoning models pay for their thinking out of this same budget, so it buys far
+# less visible output than the number suggests. Measured, not guessed — see the
+# comment at the call site.
+REASONING_MAX_TOKENS = 8192
+
+# Model families that reason before answering. Prefix match rather than an exact
+# list: OpenAI ships point releases (gpt-5-nano, o3-mini, o4-mini-high) faster
+# than a hard-coded set can be kept current, and being wrong here is an HTTP 400
+# on every request rather than a subtle misread.
+_REASONING_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _is_reasoning_model(model: str) -> bool:
+    name = model.split("/")[-1].lower()  # some gateways prefix an org, e.g. "openai/gpt-5"
+    return name.startswith(_REASONING_MODEL_PREFIXES)
+
+
 # finish_reason values that mean "no usable output, retrying will not help".
 _OPENAI_TERMINAL_REASONS = {"content_filter"}
 
@@ -243,12 +262,27 @@ def _make_openai_compatible_call(base_url: str) -> Callable:
             f"data:{_detect_mime_type(image_bytes)};base64,"
             f"{base64.b64encode(image_bytes).decode('ascii')}"
         )
+        reasoning = _is_reasoning_model(model)
         payload = {
             "model": model,
-            "temperature": 0,
             # Prescriptions with many medicines need room; without this some
             # providers default low enough to truncate mid-JSON.
-            "max_tokens": 2048,
+            #
+            # A reasoning model spends this budget on thinking BEFORE it writes
+            # anything, and the thinking is invoiced against the same ceiling: a
+            # live gpt-5-nano read of a four-medicine prescription burned 1920
+            # reasoning tokens to produce 336 of output. At 2048 that is a
+            # truncated answer every time, which arrives as unparseable JSON
+            # rather than as an error — the worst failure shape for this pipeline.
+            **(
+                {"max_completion_tokens": REASONING_MAX_TOKENS} if reasoning
+                # Not a stylistic choice: gpt-5 and the o-series reject
+                # `max_tokens` outright ("Unsupported parameter ... use
+                # max_completion_tokens instead", HTTP 400) and accept only the
+                # default temperature, so both fields have to go for them and
+                # both have to stay for everyone else.
+                else {"temperature": 0, "max_tokens": DEFAULT_MAX_TOKENS}
+            ),
             "messages": [
                 {
                     "role": "user",

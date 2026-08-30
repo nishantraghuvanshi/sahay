@@ -54,7 +54,7 @@ strategy prompt would destroy something that exists and works, for a comparison 
 might not be kept.
 
 Instead: `POST /v1/convai/agents/{id}/duplicate` once, as a one-off setup step, into a
-Kinvox-managed agent. Its id goes in `ELEVENLABS_AGENT_ID` — the placeholder that has
+Voxikin-managed agent. Its id goes in `ELEVENLABS_AGENT_ID` — the placeholder that has
 been sitting empty in `.env.example`. Every subsequent PATCH targets only the copy, so
 the original stays exactly as it is and can be diffed against ours.
 
@@ -241,3 +241,76 @@ threaded through `server.js` to the strategy and into `buildAssistantConfig`.
 Finally the 21 scenarios in `scripts/lib/el-scenarios.js` are Hindi throughout —
 simulated callers and `mustSay` patterns alike — so an English battery has to be
 written before any English claim can be verified.
+
+---
+
+# Where this ended up, 30 Aug
+
+The transport shipped, and the work then ran well past its original scope. What
+follows is the state of it, and the pattern worth carrying forward.
+
+## Built beyond the original design
+
+**Inbound.** `POST /el/conversation-init` answers ElevenLabs' conversation-
+initiation webhook with the strategy's inbound prompt and that caller's own
+context, resolved from `caller_id`. The design listed inbound as out of scope
+because the outbound dose opener would have been read to an inbound caller with
+empty placeholders; this is what removes that objection. The number is still
+**not** reassigned — see the open issues.
+
+**A demo call.** `POST /app/demo-call`, one per caregiver, runs the real agent
+against a scripted patient through `simulate-conversation` and returns a
+transcript. No phone rings and nothing is recorded, which is the property that
+makes it safe to put in front of a caregiver.
+
+**A real test call.** `POST /app/test-call`, also one per caregiver, actually
+dials. Deliberately a separate route, quota and button from the demo: a
+transcript and a ringing telephone must never be one flag apart.
+
+**An outcome backstop.** The agent declares a `dose_outcome` field that
+ElevenLabs extracts from the transcript after the call, and `deriveOutcome`
+reads it as tier 2. This is what stops a call whose agent forgot to invoke
+`report_outcome` being recorded as `NO_ANSWER`.
+
+**A scenario battery.** `npm run simulate-elevenlabs -- --all --repeat 3` runs
+24 simulated callers and reports pass rates and LLM latency percentiles. Single
+runs cannot distinguish a regression from variance, and reading one as the
+other cost real time twice.
+
+## The prompt went from v6 to v17
+
+Driven by seven real calls, each of which found something the tests could not.
+The defects removed: the model narrating its reasoning aloud to a patient in
+English; claiming to be contacting the family when no alert had been raised;
+reading "maybe" and "I will take it" as a taken dose; filing a missed dose
+without ever reminding anyone; ending a call with no goodbye; escalating
+ordinary irritation into a family alert; and inventing a food instruction for a
+medicine that had none.
+
+Two corrections worth recording because they cut against instinct. Removing the
+reminder to satisfy an automated "no medical advice" score took the call from
+33/100 to 100/100 and left an agent that files a record and rings off — the
+evaluator measured compliance, not whether the call was worth making. And
+trimming the prompt for latency bought nothing measurable while dropping the
+"when in doubt, record DENIED" tiebreak, which immediately reopened a false
+family alert.
+
+## Latency
+
+`thinking_budget: 0` was the whole win: LLM p90 fell from 3255ms to 826ms, and
+the reasoning that no longer happens cannot leak into speech. `turn_eagerness:
+eager` and a 180s call cap followed. Swapping the model was screened and
+rejected — the fastest candidate dropped the reminder flow entirely.
+
+## The pattern
+
+The fixes that held removed the *ability* to go wrong. No food vocabulary in the
+prompt to copy. A hard duration cap instead of asking the model to notice it was
+looping. A boot-time version guard instead of trusting a parity test. The fixes
+that half-worked were the ones that asked the model more firmly.
+
+And twice a **passing test was the problem**: the English parity test matched
+guardrail labels while ten versions drifted underneath it, and the battery
+skipped its own expect/forbid checks exactly when the agent filed no outcome.
+Both are fixed. Assume there are more of that shape.
+

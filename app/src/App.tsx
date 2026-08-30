@@ -2,11 +2,13 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { DEV_MODE } from './config'
 import AppShell from './shell/AppShell'
 import RequireAuth from './auth/RequireAuth'
+import RequireHousehold from './auth/RequireHousehold'
 import { useSession } from './auth/SessionProvider'
 import Landing from './screens/landing/Landing'
 import KitchenSink from './screens/KitchenSink'
 import Login from './screens/setup/Login'
 import Signup from './screens/setup/Signup'
+import Meet from './screens/setup/Meet'
 import Parent from './screens/setup/Parent'
 import Prescription from './screens/setup/Prescription'
 import Analysing from './screens/setup/Analysing'
@@ -25,6 +27,8 @@ import Calendar from './screens/Calendar'
 import MedicinesEdit from './screens/MedicinesEdit'
 import NotFound from './screens/NotFound'
 import Settings from './screens/Settings'
+import SetupChrome from './setup/SetupChrome'
+import Checkout from './screens/Checkout'
 
 /**
  * Routing skeleton for every screen, empty for now (LANE-C-APP.md scaffold step).
@@ -47,12 +51,22 @@ export default function App() {
       {/* Onboarding writes against the signed-in caregiver, so it is behind the
           same gate as the app itself — step 2 of login is what opens it. */}
       <Route element={<RequireAuth />}>
-        <Route path="/setup">
-          <Route path="parent" element={<Parent />} />
-          <Route path="prescription" element={<Prescription />} />
-          <Route path="analysing" element={<Analysing />} />
-          <Route path="schedule" element={<Schedule />} />
-          <Route path="consent" element={<Consent />} />
+        {/* SetupChrome is the only chrome these screens get: a sign-out. They sit
+            outside AppShell on purpose, and that left the screens a stuck
+            caregiver sees most often with no way out of the session at all. */}
+        <Route element={<SetupChrome />}>
+          <Route path="/setup">
+            {/* First stop after signup: hear the agent before describing a parent to it. */}
+            <Route path="meet" element={<Meet />} />
+            <Route path="parent" element={<Parent />} />
+            <Route path="prescription" element={<Prescription />} />
+            <Route path="analysing" element={<Analysing />} />
+            <Route path="schedule" element={<Schedule />} />
+            <Route path="consent" element={<Consent />} />
+          </Route>
+          {/* Checkout is signed-in but chrome-free, like /setup: a tab bar during a
+              payment is an invitation to wander off mid-transfer. */}
+          <Route path="/checkout" element={<Checkout />} />
         </Route>
       </Route>
 
@@ -61,20 +75,24 @@ export default function App() {
 
       {/* the four tabs + everything reachable from them */}
       <Route element={<RequireAuth />}>
-        <Route element={<AppShell />}>
-          <Route path="/home" element={<Home />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/medicines/edit" element={<MedicinesEdit />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/alerts/:id" element={<AlertDetail />} />
-          <Route path="/calls" element={<Calls />} />
-          <Route path="/calls/:id" element={<CallDetail />} />
-          <Route path="/record" element={<CareRecord />} />
-          <Route path="/doses" element={<DoseHistory />} />
-          <Route path="/observations" element={<Observations />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* dev-only review surface — tree-shaken out of the production bundle */}
-          {import.meta.env.DEV && <Route path="/kitchen-sink" element={<KitchenSink />} />}
+        {/* Signed in but not yet onboarded belongs in /setup, not on a home screen
+            that has nothing to show. */}
+        <Route element={<RequireHousehold />}>
+          <Route element={<AppShell />}>
+            <Route path="/home" element={<Home />} />
+            <Route path="/calendar" element={<Calendar />} />
+            <Route path="/medicines/edit" element={<MedicinesEdit />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/alerts/:id" element={<AlertDetail />} />
+            <Route path="/calls" element={<Calls />} />
+            <Route path="/calls/:id" element={<CallDetail />} />
+            <Route path="/record" element={<CareRecord />} />
+            <Route path="/doses" element={<DoseHistory />} />
+            <Route path="/observations" element={<Observations />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* dev-only review surface — tree-shaken out of the production bundle */}
+            {import.meta.env.DEV && <Route path="/kitchen-sink" element={<KitchenSink />} />}
+          </Route>
         </Route>
       </Route>
 

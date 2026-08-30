@@ -1,4 +1,4 @@
-# IDEA_SCOPE.md — "Kinvox"
+# IDEA_SCOPE.md — "Voxikin"
 ### The control plane. If a decision isn't here, it isn't decided.
 
 **T-0 = 18:30 IST, Aug 29** · **Code freeze = 18:00 IST, Aug 30** · **Submission window 17:00–18:00**
@@ -22,7 +22,7 @@ Read `PRD.md` for what and why. Read `TRD.md` for how. This file is who, when, a
 | 4 | Outbound is **thin** — it exists to seed memory. Inbound is the hero |
 | 5 | **No** acoustic distress detection. **No** diagnosis. **No** dispatch claim |
 | 6 | Priority is **rule-cited**, and the UI renders the rule string |
-| 7 | Product name is **not Voxikin** — settled 30 Aug: **Kinvox** |
+| 7 | Product name is **not Voxikin** — settled 30 Aug: **Voxikin** |
 | 8 | Tool contract frozen at **T+1h** and not renegotiated |
 
 ## 3. The four lanes
@@ -124,7 +124,7 @@ Ours:
 Get a name. Write down the answer.
 
 **Regardless of the ruling:**
-1. Submit under a name that is **not Voxikin** — settled 30 Aug: **Kinvox**
+1. Submit under a name that is **not Voxikin** — settled 30 Aug: **Voxikin**
 2. First commit after 18:30. Empty repo before that
 3. **Never open `medication-reminder-agent-config.md`**
 4. No Voxikin branding, app, or data on screen
@@ -135,5 +135,5 @@ Get a name. Write down the answer.
 ## 10. Still open
 
 1. **Roster → lanes.** Who owns A? Realtime voice is the critical path and the likeliest slip.
-2. ~~**Product name.**~~ Settled 30 Aug: **Kinvox**.
+2. ~~**Product name.**~~ Settled 30 Aug: **Voxikin**.
 3. **The T-0 verifications** — Hive stack, Emergent requirement, caller-ID variable, live per-minute rates.

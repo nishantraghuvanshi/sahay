@@ -1,5 +1,5 @@
 # Product Requirements Document
-# "Kinvox" — the care line that already knows
+# "Voxikin" — the care line that already knows
 
 | | |
 |---|---|
@@ -11,7 +11,7 @@
 | **Primary track** | Revenue |
 | **Companion docs** | `TRD.md` (technical design) · `IDEA_SCOPE.md` (execution control plane) |
 
-> **Product name is Kinvox**, settled 30 Aug. Do not submit under the Voxikin brand — see `IDEA_SCOPE.md` §9.
+> **Product name is Voxikin**, settled 30 Aug. Do not submit under the Voxikin brand — see `IDEA_SCOPE.md` §9.
 
 **Evidence legend.** Every factual claim in this document carries one:
 - `[V]` **Verified** — read from a live official source during preparation
@@ -22,7 +22,7 @@
 
 # 1. Summary
 
-Kinvox is an AI voice line for an ageing parent in India. It **calls out** on a schedule to manage daily medicines and capture how the parent is doing, and it **picks up when they call in** — and the inbound call already knows everything the outbound calls learned.
+Voxikin is an AI voice line for an ageing parent in India. It **calls out** on a schedule to manage daily medicines and capture how the parent is doing, and it **picks up when they call in** — and the inbound call already knows everything the outbound calls learned.
 
 The parent needs no app, no login, no smartphone. Their entire interface is answering and placing an ordinary phone call. The adult child, living in another city, gets an app showing what happened and pays the subscription.
 
@@ -176,7 +176,7 @@ Two people. The whole product design flows from the split.
 |---|---|---|
 | Reminder bots — ElderVoice, Zangy, Edesy | outbound only | the schedule |
 | Triage / symptom agents | inbound only | **nothing** |
-| **Kinvox** | **both** | **the full care record** |
+| **Voxikin** | **both** | **the full care record** |
 
 ---
 
@@ -564,7 +564,7 @@ Ship only if all of these hold:
 
 # 20. Open questions
 
-1. ~~Product name.~~ Settled 30 Aug: **Kinvox** throughout.
+1. ~~Product name.~~ Settled 30 Aug: **Voxikin** throughout.
 2. Resume window duration — proposed 15 minutes, unvalidated.
 3. Whether the wellbeing question should vary by day or stay fixed for consistency in scoring.
 4. Whether Care+ should include the handoff link or whether it belongs in every tier for safety reasons.
