@@ -248,11 +248,56 @@ class VapiTransportAdapter extends TransportPort {
             return res.json({ assistant });
           }
 
+          // UNOBSERVED: an audit of two real phone calls (see
+          // tests/fixtures/vapi-real/) found Vapi never actually sends
+          // 'call-started' — it sends 'status-update' with
+          // status: 'in-progress' instead (handled below). Kept here in
+          // case some other Vapi configuration does emit it.
           case 'call-started':
             await eventBus.emit(EVENT_TYPES.CONVERSATION_STARTED, {
               callId: message.call?.id,
               phone: message.call?.customer?.number,
             });
+            break;
+
+          // Confirmed against real traffic (tests/fixtures/vapi-real/) —
+          // Vapi's actual start-of-call signal on the phone path.
+          // 'ended' is deliberately a log-only branch: end-of-call-report
+          // always follows and already owns closeCall/CONVERSATION_ENDED,
+          // so duplicating that here would just double the work.
+          case 'status-update': {
+            if (message.status === 'in-progress') {
+              await eventBus.emit(EVENT_TYPES.CONVERSATION_STARTED, {
+                callId: message.call?.id,
+                phone: message.call?.customer?.number,
+              });
+            } else if (message.status === 'ended') {
+              logger.log('vapi_status_update_ended', {
+                call_id: message.call?.id,
+                endedReason: message.endedReason,
+              });
+            } else {
+              logger.log('vapi_status_update', {
+                call_id: message.call?.id,
+                status: message.status,
+              });
+            }
+            break;
+          }
+
+          // Confirmed against real traffic (tests/fixtures/vapi-real/).
+          // Nothing meaningful to do with these yet — logged so they're
+          // distinguishable from a genuinely unknown event type.
+          case 'speech-update':
+            logger.log('vapi_speech_update', {
+              call_id: message.call?.id,
+              status: message.status,
+              role: message.role,
+            });
+            break;
+
+          case 'assistant.started':
+            logger.log('vapi_assistant_started', { call_id: message.call?.id });
             break;
 
           // Vapi's real server message for a tool invocation is 'tool-calls'
@@ -298,9 +343,11 @@ class VapiTransportAdapter extends TransportPort {
 
           // UNVERIFIED: 'transcript' / 'role' / 'transcriptType' are this
           // project's best reading of Vapi's documented per-turn transcript
-          // shape, not confirmed against a live account. Only final
-          // transcripts are persisted — partials would otherwise duplicate
-          // the same turn as it's refined.
+          // shape, not confirmed against a live account — an audit of two
+          // real phone calls (tests/fixtures/vapi-real/) never observed
+          // this event at all; only 'speech-update' (started/stopped, no
+          // text) arrived. Only final transcripts are persisted — partials
+          // would otherwise duplicate the same turn as it's refined.
           case 'transcript': {
             if (message.transcriptType === 'final' && message.transcript) {
               await recordTurn({
