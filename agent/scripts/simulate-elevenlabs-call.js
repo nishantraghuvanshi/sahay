@@ -45,6 +45,12 @@ const DEFAULTS = {
   parent_name: 'कमला',
   drug_name: 'Metformin',
   caregiver_name: 'प्रिया',
+  // Normally computed from the patient's medication rows by
+  // scheduling/call-variables.js. Passed explicitly here so the battery
+  // exercises the branches that depend on them; set either to '' to check the
+  // silent path.
+  next_call_line: 'मैं आपको रात के खाने के बाद, 9 बजे फिर कॉल करूँगी।',
+  food_line: 'यह दवाई खाने के बाद लेनी होती है।',
   scenario: 'took',
   // A dose call that needs more than this has already gone wrong. The schema
   // default is 10000, which makes a run take minutes and then die inside
@@ -76,6 +82,8 @@ async function runScenario(key, scenario, args, credentials) {
     parent_name: args.parent_name,
     drug_name: args.drug_name,
     caregiver_name: args.caregiver_name,
+    next_call_line: args.next_call_line,
+    food_line: args.food_line,
     // The correlation id createCall mints, so a simulated tool call carries
     // the same parameter a real one would.
     kinvox_call_id: `sim-${key}`,

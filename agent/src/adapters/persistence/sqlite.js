@@ -254,6 +254,28 @@ class SqliteRepository extends OutcomeRepositoryPort {
     return row ? _withDefaultTimezone(row) : null;
   }
 
+  /**
+   * Active medications for one patient, in slot order.
+   *
+   * Stopped and excluded rows are filtered here rather than by every caller,
+   * because the consequence of leaking one is specific: the agent would tell a
+   * patient about a dose call that will never come, or ask about a medicine
+   * they were taken off.
+   *
+   * @param {string} patientId
+   * @returns {Promise<Array>} rows from `medications`
+   */
+  async findMedicationsForPatient(patientId) {
+    if (!patientId) return [];
+    return this.db
+      .prepare(
+        `SELECT * FROM medications
+         WHERE patient_id = ? AND excluded = 0 AND stopped_at IS NULL
+         ORDER BY name ASC`
+      )
+      .all(patientId);
+  }
+
   /** @returns {Array} All patients. */
   async listPatients() {
     const rows = this.db.prepare(`${PATIENT_SELECT} ORDER BY p.created_at ASC`).all();

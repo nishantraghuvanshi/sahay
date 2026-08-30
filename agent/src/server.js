@@ -36,6 +36,10 @@ const { apiKeyAuth, authenticateWebSocket } = require('./core/middleware/auth');
 
 // Use cases
 const { getActiveUseCase } = require('./use-cases/registry');
+const {
+  buildScheduleVariables,
+} = require('./use-cases/medication-adherence/scheduling/call-variables');
+const { utcToLocalParts } = require('./utils/time');
 
 // --- Bootstrap ---
 
@@ -234,9 +238,18 @@ app.get('/call', (req, res) => {
 
 // --- Call API ---
 
+/**
+ * Local "HH:MM" for the patient. Used to work out which dose slot an
+ * unscheduled call is about — one placed by hand at 08:45 is about the 08:30
+ * dose, not tonight's. India-only today, matching patients.timezone.
+ */
+function localHHMM(timeZone = 'Asia/Kolkata') {
+  return utcToLocalParts(new Date().toISOString(), timeZone).hhmm;
+}
+
 // Initiate an outbound call
 app.post('/api/call', async (req, res) => {
-  const { phone, name, drug, language, caregiver } = req.body;
+  const { phone, name, drug, language, caregiver, slot } = req.body;
 
   // Validate
   if (!phone || !phone.startsWith('+')) {
@@ -261,7 +274,20 @@ app.post('/api/call', async (req, res) => {
   }
 
   try {
+    // Pulled from the patient's own medication rows rather than from the
+    // request: when the next dose is, and whether this one goes with food.
+    // Both are precomputed here so the agent never has to work them out —
+    // a model inventing a call time nobody will keep is the same defect as
+    // claiming to have contacted the family. Empty means say nothing.
+    const schedule = await buildScheduleVariables({
+      repository,
+      phone,
+      slot,
+      nowHHMM: localHHMM(),
+    });
+
     const variables = {
+      ...schedule,
       parent_name: name,
       drug_name: drug,
       // The prompt templates {{caregiver_name}} into the escalation

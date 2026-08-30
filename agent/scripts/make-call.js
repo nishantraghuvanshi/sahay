@@ -17,6 +17,8 @@
  *   --name    Parent's name (default: DEFAULT_PARENT_NAME from .env)
  *   --drug    Medication name (default: DEFAULT_DRUG_NAME from .env)
  *   --language  Language code: hi or en (default: hi)
+ *   --slot      Dose slot this call is about, "HH:MM". Defaults to the most
+ *               recent slot in the patient's schedule at the current time.
  *   --caregiver Caregiver name spoken in the escalation line
  *               (default: DEFAULT_CAREGIVER_NAME from .env)
  *
@@ -34,6 +36,10 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const SqliteRepository = require('../src/adapters/persistence/sqlite');
 const ConsoleRepository = require('../src/adapters/persistence/console');
 const ProviderRegistry = require('../src/adapters/providers/registry');
+const {
+  buildScheduleVariables,
+} = require('../src/use-cases/medication-adherence/scheduling/call-variables');
+const { utcToLocalParts } = require('../src/utils/time');
 const TransportRegistry = require('../src/adapters/transport/registry');
 
 /**
@@ -107,6 +113,20 @@ async function main() {
 
   const repository = buildRepository();
   transport.repository = repository;
+
+  // Same schedule lookup the /api/call route does, so a call placed by hand
+  // carries the same context a scheduled one would.
+  Object.assign(
+    variables,
+    await buildScheduleVariables({
+      repository,
+      phone,
+      slot: args.slot,
+      nowHHMM: utcToLocalParts(new Date().toISOString(), 'Asia/Kolkata').hhmm,
+    })
+  );
+  if (variables.next_call_line) console.log(`  Next call: ${variables.next_call_line}`);
+  if (variables.food_line) console.log(`  Food: ${variables.food_line}`);
 
   let call;
   try {

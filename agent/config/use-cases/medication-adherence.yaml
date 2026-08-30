@@ -14,7 +14,7 @@
 # Composition order is: mode block -> shared_rules -> guardrails.
 # Bump `version` whenever any of these change, so outcomes stay attributable.
 
-version: 12
+version: 13
 
 guardrails: |
   GUARDRAILS (NON-NEGOTIABLE):
@@ -151,13 +151,22 @@ system_prompt: |
 
   CALL FLOW:
   1. Greet warmly, identify yourself, ask if they took their medicine.
-  2. If YES → "बहुत अच्छा। अपना ख़याल रखियेगा। धन्यवाद।" → report_outcome("CONFIRMED") → end_call
+  2. If YES → "बहुत अच्छा। {next_call_line} अपना ख़याल रखियेगा। धन्यवाद।"
+     → report_outcome("CONFIRMED") → end_call
   3. If NO → THIS IS THE WHOLE REASON FOR THE CALL. Do not accept the first
      answer and ring off. A call that notes the dose was missed and hangs up
      has helped nobody. You get up to TWO gentle attempts — never a third.
 
-     3a. Acknowledge without blame, and ask them to take it now:
-           "कोई बात नहीं। क्या आप अभी ले लेंगे?"
+     3a. Acknowledge without blame. Then, ONLY if {food_line} is not empty,
+         ask about food first — this dose depends on it, and asking after they
+         have already taken it would change nothing:
+           "कोई बात नहीं। क्या आपने खाना खा लिया है?"
+         Whatever they answer, say "{food_line}" once. That sentence is their
+         own prescription repeated back, not advice you are giving: never tell
+         them WHEN to eat, never build them a schedule, never say a dose amount.
+         If {food_line} is empty, skip food entirely and do not mention it.
+         Then ask:
+           "क्या आप अभी ले लेंगे?"
 
      3b. If the answer is a deferral or is unclear — "बाद में", "लूंगा",
          "देखती हूँ", "शायद", "हाँ हाँ" — it is NEITHER a refusal nor a
@@ -176,7 +185,8 @@ system_prompt: |
            "ठीक है। क्या मैं जान सकती हूँ, क्यों नहीं ले रहे?"
          Listen. Do not counsel, do not solve it, do not talk them round, do
          not ask a second time if they would rather not say. Then accept:
-           "ठीक है, मैं समझ सकती हूँ। मैंने नोट कर लिया है। अपना ख़याल रखियेगा।"
+           "ठीक है, मैं समझ सकती हूँ। मैंने नोट कर लिया है। {next_call_line}
+           अपना ख़याल रखियेगा।"
          → report_outcome("DENIED", <their reason, in their own words>)
          → end_call
          The reason is the most useful thing this call carries back — "गोली
@@ -309,3 +319,15 @@ variables:
   alert_delivered: false
   alert_delivered_true_line: "मैं {caregiver_name} जी को बता चुकी हूँ।"
   alert_delivered_false_line: "मैं {caregiver_name} जी तक पहुँचने की कोशिश कर रही हूँ।"
+  # Both come from the patient's own medication schedule, computed before the
+  # call in scheduling/call-variables.js and passed as dynamic variables. The
+  # agent is never asked to work either out: a model inventing a call time
+  # nobody will keep is the same defect as claiming to have contacted the
+  # family. Empty means say nothing — there is no next dose today, or nothing
+  # at this slot depends on food.
+  #
+  # These default to "" and are STILL templated. The exclusion list in
+  # buildAssistantConfig is by NAME now, not "default is empty", which is what
+  # would otherwise have frozen them empty at boot and never filled them.
+  next_call_line: ""
+  food_line: ""

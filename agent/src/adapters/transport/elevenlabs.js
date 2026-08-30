@@ -512,8 +512,24 @@ class ElevenLabsTransportAdapter extends TransportPort {
     //     which is what's actually spoken. Placeholder-ifying them would bake a
     //     raw `{{alert_delivered_false_line}}` string into the guardrail text,
     //     with no per-call dynamic_variable able to reach it.
+    // Excluded BY NAME, never by "its default happens to be empty". The old
+    // rule was `v === '' || CONTROL_FLOW_KEYS.has(k)`, which covered these
+    // three empty-string keys as a side effect — and would have silently
+    // covered every future variable that starts out empty, freezing it at boot
+    // and never filling it per call. next_call_line is exactly that shape: it
+    // is empty precisely when there is no next dose to promise.
     const CONTROL_FLOW_KEYS = new Set([
+      // Gate an empty-vs-non-empty branch in buildFirstMessage/buildSystemPrompt.
+      // A non-empty "{{context_line}}" would flip the branch on every call and
+      // leave a literal placeholder in text meant to be spoken.
+      'context_line',
+      'fields_summary',
+      'missing_field',
+      // Read as a boolean by _resolveAlertDeliveredLine; any non-empty string
+      // is truthy, so a placeholder would always select the "already told your
+      // family" line — the false claim the guardrail exists to prevent.
       'alert_delivered',
+      // Never substituted via their own tag; folded into alert_delivered_line.
       'alert_delivered_true_line',
       'alert_delivered_false_line',
     ]);
@@ -521,7 +537,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
     const placeholders = Object.fromEntries(
       Object.entries(defaults).map(([k, v]) => [
         k,
-        v === '' || CONTROL_FLOW_KEYS.has(k) ? v : `{{${k}}}`,
+        CONTROL_FLOW_KEYS.has(k) ? v : `{{${k}}}`,
       ])
     );
     // Defaults ElevenLabs substitutes for any variable a caller omits.

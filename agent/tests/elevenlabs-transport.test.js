@@ -686,3 +686,53 @@ describe('turn config — how long the agent waits before replying', () => {
     assert.strictEqual(typeof cfg.conversation_config.turn.turn_timeout, 'number');
   });
 });
+
+describe('templating exclusions are by NAME, not by empty default', () => {
+  // The rule used to be "any variable whose default is '' is not templated",
+  // which happened to cover the three control-flow keys that gate an
+  // empty-vs-non-empty branch in the strategy. It also silently covered every
+  // FUTURE variable that starts out empty — such as next_call_line, whose
+  // whole design is to be empty when there is no next dose to promise. That
+  // one would have been frozen empty at boot and never filled per call, with
+  // nothing to show for it: the config looks right and the feature never fires.
+  const STRATEGY_WITH_EMPTIES = {
+    ...STRATEGY,
+    getVariables: () => ({
+      parent_name: 'रोहन',
+      // Genuinely control-flow: the strategy branches on whether these are set.
+      context_line: '',
+      fields_summary: '',
+      missing_field: '',
+      alert_delivered: false,
+      // Ordinary per-call text that merely defaults to empty.
+      next_call_line: '',
+      food_line: '',
+    }),
+  };
+
+  function placeholdersOf() {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY_WITH_EMPTIES, {}, 'https://x');
+    return cfg.conversation_config.agent.dynamic_variables.dynamic_variable_placeholders;
+  }
+
+  test('an ordinary variable with an empty default is still templated', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY_WITH_EMPTIES, {}, 'https://x');
+    // buildFirstMessage/buildSystemPrompt receive the placeholder map; the
+    // stub returns it so the substitution is observable.
+    assert.ok('next_call_line' in placeholdersOf(), 'must get a per-call default');
+    assert.strictEqual(placeholdersOf().next_call_line, '');
+    assert.strictEqual(placeholdersOf().food_line, '');
+    assert.ok(cfg.conversation_config.agent.prompt.prompt.length > 0);
+  });
+
+  test('the control-flow keys are still excluded, by name', () => {
+    // Templating these would flip the branch they gate, or speak a literal
+    // placeholder aloud — ruling R13.
+    const p = placeholdersOf();
+    for (const key of ['context_line', 'fields_summary', 'missing_field', 'alert_delivered']) {
+      assert.strictEqual(key in p, false, `${key} must not become a dynamic variable`);
+    }
+  });
+});
