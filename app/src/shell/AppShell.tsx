@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
+import { useQuery } from '@tanstack/react-query'
 import { useIsDesktop } from './useBreakpoint'
-import { NAV, TABS } from './nav'
+import { NAV, TABS, UPGRADE_PATH } from './nav'
 import { Bar, Dot, Wordmark } from '../ui'
 import { useCareRecord } from '../api/hooks'
+import { getSubscription } from '../api/billing'
 import { LogoutButton } from '../auth/LogoutButton'
 import SessionBar from './SessionBar'
 
@@ -77,6 +79,25 @@ function SkipLink() {
 }
 
 function Sidebar() {
+  /**
+   * Same query key as Settings, so the two share one cached answer rather than
+   * asking twice on every page. In mock mode getSubscription resolves to "no
+   * plan" instead of throwing, which is the honest state for a deployment with
+   * no billing behind it — so Upgrade shows, as it should.
+   */
+  const billing = useQuery({ queryKey: ['billing'], queryFn: getSubscription })
+  const paying =
+    billing.data?.subscription?.status === 'active' || Boolean(billing.data?.pending_order_id)
+
+  /**
+   * Hidden while the answer is still loading, not shown-then-pulled: a link
+   * that appears for 300ms and vanishes under the cursor is worse than one
+   * that arrives a beat late.
+   */
+  const items = NAV.filter((item) =>
+    item.to === UPGRADE_PATH ? billing.isSuccess && !paying : true,
+  )
+
   return (
     <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4 xl:w-[240px] xl:p-5 2xl:w-[264px] 2xl:p-6">
       <div className="flex items-center px-1 pb-4 2xl:pb-5">
@@ -88,7 +109,7 @@ function Sidebar() {
       {/* The tab bar is a <nav>; the sidebar was seven bare links in an <aside>, so it
           did not appear in the landmark list a screen reader navigates by. */}
       <nav aria-label="Main" className="flex flex-col gap-1">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon
         return (
           <NavLink

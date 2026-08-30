@@ -54,6 +54,10 @@ if (typeof URL.createObjectURL !== 'function') {
 if (typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = () => {}
 }
+if (typeof Element.prototype.scrollTo !== 'function') {
+  // AppShell scrolls <main> back to the top on every route change.
+  Element.prototype.scrollTo = () => {}
+}
 
 afterEach(() => {
   cleanup()
