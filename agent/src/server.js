@@ -14,6 +14,9 @@ const { loadProvidersConfig } = require('./core/config/loader');
 const ConversationEngine = require('./core/engine/engine');
 const PluginRegistry = require('./core/plugins/registry');
 const { assertPersistenceSatisfied } = require('./core/persistence-guard');
+const { assertSafeToServe } = require('./core/safety-guard');
+const { asyncRoute, errorMiddleware, installProcessHandlers } = require('./core/errors');
+
 const { createWebhookCapture } = require('./utils/webhook-capture');
 
 // Adapters
@@ -30,6 +33,10 @@ const { apiKeyAuth, authenticateWebSocket } = require('./core/middleware/auth');
 
 // Use cases
 const { getActiveUseCase } = require('./use-cases/registry');
+
+// Attach diagnostic context to fatal errors before any bootstrap work runs,
+// so a failure during config load or DB open is reported with context.
+installProcessHandlers();
 
 // --- Bootstrap ---
 
@@ -52,6 +59,11 @@ const repository = useSqlite
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
 //     without persistence (inbound context, resume-after-drop).
 assertPersistenceSatisfied(useCase, repository);
+
+// 4c. Refuse to serve traffic with authentication or the prompt guardrails
+//     switched off. Both default to off when unconfigured and neither is
+//     visible at runtime, so the check belongs here rather than in a log line.
+assertSafeToServe(process.env);
 
 // 5. Set up plugin registry (after the repository — plugins depend on it)
 const plugins = new PluginRegistry();
@@ -194,7 +206,7 @@ app.get('/call', (req, res) => {
 // --- Call API ---
 
 // Initiate an outbound call
-app.post('/api/call', async (req, res) => {
+app.post('/api/call', asyncRoute(async (req, res) => {
   const { phone, name, drug, language } = req.body;
 
   // Validate
@@ -236,10 +248,10 @@ app.post('/api/call', async (req, res) => {
     }));
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // Get call status (polls Vapi API)
-app.get('/api/call/:callId', async (req, res) => {
+app.get('/api/call/:callId', asyncRoute(async (req, res) => {
   const { callId } = req.params;
   const apiKey = process.env.VAPI_PRIVATE_KEY;
 
@@ -269,12 +281,12 @@ app.get('/api/call/:callId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // --- Call history API (reads from local DB) ---
 
 // List recent calls
-app.get('/api/calls', async (req, res) => {
+app.get('/api/calls', asyncRoute(async (req, res) => {
   try {
     const filters = {
       limit: req.query.limit ? parseInt(req.query.limit, 10) : 50,
@@ -286,10 +298,10 @@ app.get('/api/calls', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // Get a single call with conversation history
-app.get('/api/calls/:callId', async (req, res) => {
+app.get('/api/calls/:callId', asyncRoute(async (req, res) => {
   try {
     const call = await repository.getCall(req.params.callId);
     if (!call) {
@@ -300,7 +312,13 @@ app.get('/api/calls/:callId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}));
+
+// Terminal error handler. Registered AFTER every route on purpose: Express
+// walks one ordered stack, so a handler mounted earlier would catch nothing —
+// the same ordering property that once served patient data before the auth
+// middleware ran.
+app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
