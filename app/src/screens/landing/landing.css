@@ -1,0 +1,702 @@
+/* ---------------------------------------------------------------- landing.css
+   The Voxikin marketing page, ported in from the standalone waitlist site.
+
+   Everything here is scoped under `.vx-landing`. The source stylesheet declared
+   its tokens on `:root` and restyled `body`, `a` and `img` globally — dropped in
+   next to the app, that would have overwritten the Kinvox ramp (both define
+   `--line` and `--ease-out`) for every signed-in screen. Scoping the tokens to
+   the wrapper keeps the marketing page's warmer, sienna-accented language to the
+   one route that wants it, and leaves Tailwind's theme untouched everywhere else.
+
+   The page is deliberately not written in Tailwind utilities: it is a port, and
+   keeping the original class names means a change made on the marketing site can
+   still be moved across by hand without translating it first. */
+
+.vx-landing {
+  --ink: #17171b;
+  --ink-soft: #55555e;
+  /* 5.3:1 on paper. The previous #8a8a94 measured 3.42:1, which fails the
+     4.5:1 floor for the placeholder and fine print that use it. */
+  --ink-faint: #6b6b75;
+  --paper: #ffffff;
+  --ground: #f5f5f7;
+  --line: #e7e7ea;
+  --red: #e5484d;
+  --green: #30a46c;
+  /* Reserved for the hero's generative art. The shader needs a numeric
+     colour of its own, so this mirrors SIENNA in GenerativeOrb.tsx. */
+  --sienna: #a0522d;
+  --sketch: #d9d1c6;
+  --radius-lg: 24px;
+  --radius-md: 14px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Spacing scale, 4px base. The middle steps (12, 20, 40) are what an
+     8-only scale misses and what the hero's rhythm actually needs. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/* Anchor navigation belongs to the document, not to a component — but only
+   while this page is the one on screen. */
+html:has(.vx-landing) {
+  scroll-behavior: smooth;
+}
+
+.vx-landing img {
+  max-width: 100%;
+  display: block;
+}
+
+.vx-landing a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Surfaces the browser draws for us still belong to the design. */
+.vx-landing ::selection {
+  background: rgba(160, 82, 45, 0.17);
+  color: var(--ink);
+}
+
+.vx-landing *:focus-visible {
+  outline: 2px solid var(--sienna);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* The app's global rule leaves room for a serif descender; the marketing page
+   sets its links flush. */
+.vx-landing a:not([class*='no-underline']) {
+  text-underline-offset: auto;
+}
+
+.vx-landing .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The sticky navbar is 60px tall; an anchored section that lands under it has
+   effectively not been navigated to. Replaces the source's `scroll-padding-top`
+   on <html>, which would have applied to every screen in the app. */
+.vx-landing [id] {
+  scroll-margin-top: 84px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.vx-landing .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 600 15px/1 var(--font-body);
+  padding: 14px 22px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.vx-landing .btn--dark {
+  background: var(--ink);
+  color: #fff;
+}
+
+.vx-landing .btn--dark:hover {
+  background: #000;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(23, 23, 27, 0.25);
+}
+
+.vx-landing .btn--light {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.vx-landing .btn--light:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px var(--ink), 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* Press should read as press: the button takes the weight, fast, and
+   releases on the same curve as everything else. */
+.vx-landing .btn:active {
+  transform: translateY(0) scale(0.978);
+  transition-duration: 70ms;
+}
+
+/* ── Navbar ──────────────────────────────────────────────── */
+
+.vx-landing .navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.vx-landing .navbar--scrolled {
+  border-bottom-color: var(--line);
+}
+
+.vx-landing .navbar__inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.vx-landing .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.vx-landing .navbar__links {
+  display: flex;
+  gap: 28px;
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.vx-landing .navbar__links a:hover {
+  color: var(--ink);
+}
+
+.vx-landing .navbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vx-landing .navbar__cta {
+  padding: 11px 18px;
+  font-size: 14px;
+}
+
+/* ── Resume banner ───────────────────────────────────────── */
+
+/* Kept from the app's own landing page: somebody who abandoned onboarding
+   mid-way gets their way back in before they get the pitch again. */
+.vx-landing .resume {
+  display: block;
+  padding: 10px 24px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #7a3d1c;
+  background: #fbf0e9;
+  border-bottom: 1px solid #f0dccf;
+  transition: background 0.15s ease;
+}
+
+.vx-landing .resume:hover {
+  background: #f7e6db;
+}
+
+/* ── Hero ────────────────────────────────────────────────── */
+
+.vx-landing .hero {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-16) var(--space-6) var(--space-20);
+  background:
+    radial-gradient(1100px 520px at 78% -12%, #fdf3f0 0%, transparent 62%),
+    radial-gradient(760px 440px at 10% 6%, #faf6f0 0%, transparent 66%),
+    var(--paper);
+}
+
+.vx-landing .hero__sketch {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--sketch);
+  opacity: 0.62;
+  pointer-events: none;
+  user-select: none;
+  /* The art runs edge to edge, but is masked away under the copy column so
+     the headline and buttons keep their contrast. */
+  -webkit-mask-image: radial-gradient(74% 58% at 73% 48%, transparent 6%, #000 64%);
+  mask-image: radial-gradient(74% 58% at 73% 48%, transparent 6%, #000 64%);
+}
+
+.vx-landing .hero__inner {
+  position: relative;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1fr);
+  /* Stretch, not center: the art fills whatever height the copy defines.
+     A fixed square here made the decorative column dictate the hero's
+     height and left dead space under the call to action. */
+  align-items: stretch;
+  gap: clamp(var(--space-5), 4vw, var(--space-12));
+}
+
+.vx-landing .hero__visual {
+  position: relative;
+  /* A floor so the orb still has presence when the copy column is short. */
+  min-height: 420px;
+}
+
+.vx-landing .orb {
+  position: absolute;
+  inset: 0;
+  animation: vx-orb-in 900ms var(--ease-out) both;
+}
+
+.vx-landing .orb canvas {
+  display: block;
+}
+
+/* Holds the space (and a faint trace of the shape) while the three.js
+   chunk loads, so the column never collapses or flashes empty. */
+.vx-landing .orb--placeholder {
+  inset: 12%;
+  border: 1px solid rgba(160, 82, 45, 0.13);
+  border-radius: 50%;
+  animation: none;
+}
+
+@keyframes vx-orb-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vx-landing .hero__content {
+  position: relative;
+  align-self: center;
+}
+
+.vx-landing .hero__title {
+  font: 600 clamp(40px, 5.4vw, 62px) / 1.08 var(--font-display);
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-5);
+  max-width: 15ch;
+  text-wrap: balance;
+}
+
+.vx-landing .hero__sub {
+  margin: 0 0 var(--space-8);
+  max-width: 46ch;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* Where the waitlist form used to be. The page still asks for exactly one
+   thing; it is now an account rather than an email address. */
+.vx-landing .hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  max-width: 480px;
+}
+
+.vx-landing .hero__privacy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+/* ── Feature sections ────────────────────────────────────── */
+
+.vx-landing .features {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(var(--space-8), 3.4vw, var(--space-12)) clamp(var(--space-5), 2.4vw, var(--space-8));
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-6) var(--space-8);
+}
+
+.vx-landing .feature {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.vx-landing .feature__figure {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--ground);
+  box-shadow: 0 1px 2px rgba(23, 23, 27, 0.05), 0 12px 40px rgba(23, 23, 27, 0.07);
+  transition: transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out);
+}
+
+.vx-landing .feature__figure:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 1px 2px rgba(23, 23, 27, 0.06), 0 22px 56px rgba(23, 23, 27, 0.11);
+}
+
+.vx-landing .feature__figure img {
+  width: 100%;
+  height: auto;
+}
+
+/* The four panels are a sequence — onboard, track, review, alert — so they
+   arrive in that order the first time they're reached. `--armed` is only
+   applied once React has mounted, so a failed script leaves them visible. */
+.vx-landing .features--armed .feature {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.vx-landing .features--armed.features--in .feature {
+  opacity: 1;
+  transform: none;
+  transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out);
+}
+
+.vx-landing .features--armed.features--in .feature:nth-child(2) {
+  transition-delay: 70ms;
+}
+
+.vx-landing .features--armed.features--in .feature:nth-child(3) {
+  transition-delay: 140ms;
+}
+
+.vx-landing .features--armed.features--in .feature:nth-child(4) {
+  transition-delay: 210ms;
+}
+
+/* ── Pricing ─────────────────────────────────────────────── */
+
+/* Not on the waitlist site — there was nothing to buy yet. Carried over from
+   the app's previous landing page because /checkout is live and these three
+   tiers are the only place the page names a price. */
+.vx-landing .pricing {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-6) var(--space-8);
+}
+
+.vx-landing .pricing__head {
+  text-align: center;
+  margin: 0 auto var(--space-10);
+  max-width: 60ch;
+}
+
+.vx-landing .pricing__title {
+  font: 600 clamp(28px, 3.2vw, 38px) / 1.14 var(--font-display);
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-3);
+  text-wrap: balance;
+}
+
+.vx-landing .pricing__lede {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.vx-landing .pricing__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+.vx-landing .tier {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+}
+
+.vx-landing .tier:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 1px 2px rgba(23, 23, 27, 0.05), 0 16px 44px rgba(23, 23, 27, 0.08);
+}
+
+.vx-landing .tier--featured {
+  border-color: var(--ink);
+  box-shadow: 0 1px 2px rgba(23, 23, 27, 0.05), 0 12px 36px rgba(23, 23, 27, 0.07);
+}
+
+.vx-landing .tier__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vx-landing .tier__name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.vx-landing .tier__badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(160, 82, 45, 0.11);
+  color: var(--sienna);
+}
+
+.vx-landing .tier__price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.vx-landing .tier__amount {
+  font: 600 34px/1 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.vx-landing .tier__unit {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.vx-landing .tier__includes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vx-landing .tier__includes li {
+  display: flex;
+  gap: 10px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.vx-landing .tier__includes li::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--sienna);
+}
+
+.vx-landing .tier .btn {
+  margin-top: auto;
+  width: 100%;
+}
+
+.vx-landing .pricing__note {
+  max-width: 62ch;
+  margin: var(--space-6) auto 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+/* ── CTA band ────────────────────────────────────────────── */
+
+.vx-landing .cta-band {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8) var(--space-6) var(--space-20);
+}
+
+/* Slightly heavier than the hero's button: it closes the page. */
+.vx-landing .cta-band__btn {
+  padding: 16px 30px;
+  font-size: 16px;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+
+.vx-landing .footer {
+  border-top: 1px solid var(--line);
+  padding: 40px 24px 32px;
+}
+
+.vx-landing .footer__inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.vx-landing .footer__logo {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.vx-landing .footer__brand p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.vx-landing .footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.vx-landing .footer__links a:hover {
+  color: var(--ink);
+}
+
+.vx-landing .footer__note {
+  max-width: 1180px;
+  margin: 28px auto 0;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+/* ── Motion ──────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Fewer and gentler, not silent: hover and press feedback stays, and only
+     the spatial movement is dropped. */
+  .vx-landing .feature__figure,
+  .vx-landing .tier {
+    transition: none;
+  }
+
+  .vx-landing .feature__figure:hover,
+  .vx-landing .tier:hover {
+    transform: none;
+  }
+
+  .vx-landing .features--armed .feature {
+    transform: none;
+  }
+
+  .vx-landing .features--armed.features--in .feature {
+    transition: opacity 300ms ease;
+  }
+
+  .vx-landing .orb {
+    animation: none;
+  }
+
+  .vx-landing .btn:active {
+    transform: none;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 980px) {
+  .vx-landing .hero__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  /* Headline and buttons come first on narrow screens — the orb is decorative
+     and shouldn't push the call to action below the fold. */
+  .vx-landing .hero__content {
+    order: 1;
+  }
+
+  .vx-landing .hero__visual {
+    order: 2;
+    aspect-ratio: 16 / 11;
+    /* Release the desktop floor — here the aspect ratio sets the height. */
+    min-height: 0;
+    max-height: 340px;
+  }
+
+  .vx-landing .hero__sketch {
+    opacity: 0.45;
+    -webkit-mask-image: radial-gradient(94% 40% at 50% 28%, transparent 4%, #000 72%);
+    mask-image: radial-gradient(94% 40% at 50% 28%, transparent 4%, #000 72%);
+  }
+
+  .vx-landing .pricing__grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 460px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 820px) {
+  .vx-landing .features {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .vx-landing .navbar__links {
+    display: none;
+  }
+
+  .vx-landing .navbar__inner {
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .vx-landing .hero {
+    padding-top: 48px;
+  }
+
+  .vx-landing .hero__actions .btn {
+    flex: 1 1 100%;
+  }
+}
