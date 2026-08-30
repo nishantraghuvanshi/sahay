@@ -10,11 +10,21 @@
  * (so "haan le liya lekin bukhar bhi hai" escalates, not confirms)
  */
 
+// "kha liya" / "खा लिया" are deliberately absent. They mean "ate", and only
+// ever meant "took the tablet" by accident of context — an accident the food
+// question removed. On a real v15 call the agent asked "क्या आपने खाना खा
+// लिया है?", the caller answered about food, report_outcome never fired
+// because they hung up, and this list read the answer as a dose confirmation:
+// the call was persisted CONFIRMED for a dose that was never taken.
+//
+// A false CONFIRMED writes "dose taken" into a caregiver's record and is the
+// worst thing this system can get wrong quietly. A missed confirmation merely
+// falls through to a weaker outcome, which someone can still act on.
 const CONFIRMED_KEYWORDS = [
   // Romanized
-  'haan', 'haa', 'le liya', 'ho gaya', 'kha liya', 'li hai', 'liya hai',
+  'haan', 'haa', 'le liya', 'ho gaya', 'li hai', 'liya hai',
   // Devanagari
-  'हां', 'हाँ', 'ले लिया', 'हो गया', 'खा लिया',
+  'हां', 'हाँ', 'ले लिया', 'हो गया',
 ];
 
 const DENIED_KEYWORDS = [

@@ -73,8 +73,15 @@ function deriveOutcome(callData) {
   const analysisOutcome = checkAnalysis(callData.analysis);
   if (analysisOutcome) return analysisOutcome;
 
-  // 3. Keyword match, scoped to what the caller actually said
-  const keywordOutcome = checkKeywords(extractCallerSpeech(callData));
+  // 3. Keyword match, scoped to what the caller actually said.
+  //
+  // `askedAboutFood` is passed because a bare "हाँ" stops meaning "I took it"
+  // the moment the agent also asked "क्या आपने खाना खा लिया है?" — see
+  // FOOD_QUESTION_MARKERS.
+  const keywordOutcome = checkKeywords(
+    extractCallerSpeech(callData),
+    askedAboutFood(callData)
+  );
   if (keywordOutcome) return keywordOutcome;
 
   // 4. Watchdog (fallback)
@@ -255,7 +262,42 @@ function negatedAt(text, idx, kw) {
  * needs to be routed to ESCALATED_DISTRESS, not CONFIRMED or DENIED.
  * @private
  */
-function checkKeywords(callerText) {
+/**
+ * Phrases that only appear when the agent asked whether the patient had EATEN.
+ * Their presence makes every bare affirmative in the call ambiguous.
+ * @private
+ */
+const FOOD_QUESTION_MARKERS = ['खाना खा लिया', 'khana kha liya'];
+
+/**
+ * Did this call include the food question?
+ *
+ * Looks at the WHOLE transcript, agent turns included — the question is the
+ * agent's, and it is the question that creates the ambiguity, not the answer.
+ * @private
+ */
+function askedAboutFood(callData) {
+  const whole = String((callData && callData.transcript) || '').toLowerCase();
+  return FOOD_QUESTION_MARKERS.some((m) => whole.includes(m));
+}
+
+/**
+ * The only phrases that still confirm a DOSE on a call that also asked about
+ * food. An allowlist, not a denylist: a denylist looked sufficient and was not,
+ * because "liya hai" is a substring of "kha liya hai" — the caller says they
+ * ate, and the matcher reads it as taking a tablet.
+ *
+ * Each of these names the taking. None of them is a bare yes, and none is a
+ * fragment of an eating phrase.
+ */
+const DOSE_SPECIFIC_CONFIRMERS = ['le liya', 'ho gaya', 'ले लिया', 'हो गया'];
+
+/**
+ * @param {string} callerText
+ * @param {boolean} [askedFood] - true when the agent asked whether they ate
+ * @private
+ */
+function checkKeywords(callerText, askedFood = false) {
   if (!callerText || typeof callerText !== 'string') return null;
   const text = callerText.toLowerCase();
 
@@ -275,7 +317,13 @@ function checkKeywords(callerText) {
       reason: 'distress_keyword_detected',
     };
   }
-  if (CONFIRMED_KEYWORDS.some((kw) => text.includes(kw))) {
+  // When the call also asked about food, a bare "हाँ" could be answering
+  // either question and this tier cannot tell which. Only a phrase that names
+  // the taking ("ले लिया", "हो गया") still confirms. A real v15 call was
+  // recorded CONFIRMED because the caller said "हाँ, खाना खा लिया है" — about
+  // food — and nobody had taken anything.
+  const confirmers = askedFood ? DOSE_SPECIFIC_CONFIRMERS : CONFIRMED_KEYWORDS;
+  if (confirmers.some((kw) => text.includes(kw))) {
     return { label: OUTCOMES.CONFIRMED, source: 'keyword_match', reason: 'confirmed_keyword_detected' };
   }
   if (DENIED_KEYWORDS.some((kw) => text.includes(kw))) {

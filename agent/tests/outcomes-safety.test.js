@@ -284,3 +284,61 @@ describe('D4 — an escalation is never masked by an earlier benign report', () 
     assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
   });
 });
+
+describe('D5 — "ate" must not be read as "took the medicine"', () => {
+  // A real call, v15. The agent asked "क्या आपने खाना खा लिया है?" — the food
+  // question added for food-dependent doses — the caller answered about FOOD,
+  // report_outcome never fired because they hung up, and tier-3 keyword
+  // matching read "खा लिया" as a dose confirmation. The call was persisted
+  // CONFIRMED / confirmed_keyword_detected for a dose that was never taken.
+  //
+  // "खा लिया" / "kha liya" mean "ate". They only ever meant "took the tablet"
+  // by accident of context, and the food question removed that accident. A
+  // false CONFIRMED writes "dose taken" into a caregiver's record, which is
+  // the single worst thing this system can get wrong quietly.
+  test('answering the food question does not confirm the dose', () => {
+    const result = deriveOutcome({
+      transcript: 'agent: क्या आपने खाना खा लिया है?\nuser: हाँ, खाना खा लिया है।',
+    });
+    assert.notStrictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('the romanized form is equally not a confirmation', () => {
+    // The agent's question has to be in the transcript, because it is the
+    // question that makes the answer ambiguous. A transcript holding only the
+    // caller's "haan" and no question is indistinguishable from a plain dose
+    // confirmation, and is treated as one.
+    const result = deriveOutcome({
+      transcript: 'agent: khana kha liya hai?\nuser: haan khana kha liya hai',
+    });
+    assert.notStrictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('a bare yes still confirms on a call that never mentioned food', () => {
+    // The narrowing must not cost the commonest real confirmation there is.
+    const result = deriveOutcome({
+      transcript: 'agent: क्या आपने ले लिया है?\nuser: हाँ',
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('a real dose confirmation still confirms', () => {
+    // NB "दवाई ले ली है" matches nothing today — "ले ली" is absent from the
+    // keyword list while "ले लिया" is there. A pre-existing gap, and the safe
+    // direction to be wrong in: a missed confirmation falls through to
+    // NO_ANSWER rather than inventing adherence.
+    for (const said of ['हाँ, ले लिया', 'haan le liya', 'हो गया']) {
+      const result = deriveOutcome({ transcript: `user: ${said}` });
+      assert.strictEqual(result.label, OUTCOMES.CONFIRMED, said);
+    }
+  });
+
+  test('a tool call still wins over any keyword reading', () => {
+    // Tier 1 beats tier 3: an explicit report_outcome is unaffected by this.
+    const result = deriveOutcome({
+      toolCalls: [{ name: 'report_outcome', arguments: { outcome: 'CONFIRMED', reason: 'said so' } }],
+      transcript: 'user: खाना खा लिया है',
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+});
