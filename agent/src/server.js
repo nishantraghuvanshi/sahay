@@ -379,6 +379,44 @@ console.log(JSON.stringify({
 
 app.use(errorMiddleware);
 
+// --- Graceful shutdown ---
+//
+// The Dockerfile runs this in a container, and `docker stop` sends SIGTERM
+// then SIGKILLs 10 seconds later. Without a handler the scheduler's
+// setInterval keeps the event loop alive, so the process never exits on its
+// own and is killed mid-flight — potentially during an outbound dial, which
+// on this system means a real phone call to an elderly patient.
+//
+// Stop the timer first so no NEW dial starts, then stop accepting
+// connections. Anything already in flight finishes on its own; if it does
+// not, the container runtime's own timeout is the backstop.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return; // a second SIGTERM must not re-enter this
+  shuttingDown = true;
+
+  console.log(JSON.stringify({
+    event: 'shutdown_started',
+    signal,
+    schedulerRunning: Boolean(scheduler),
+    timestamp: new Date().toISOString(),
+  }));
+
+  if (scheduler) scheduler.stop();
+  server.close(() => {
+    console.log(JSON.stringify({
+      event: 'shutdown_complete',
+      signal,
+      timestamp: new Date().toISOString(),
+    }));
+    process.exit(0);
+  });
+}
+
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => shutdown(signal));
+}
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(JSON.stringify({
