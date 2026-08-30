@@ -16,8 +16,6 @@ import pytest
 
 os.environ.setdefault("KINVOX_DB", tempfile.mktemp(suffix=".db"))
 os.environ.setdefault("OTP_PEPPER", "a-long-enough-test-pepper-value")
-os.environ.setdefault("DEV_OTP_BYPASS_CODE", "123456")
-os.environ.setdefault("DEV_OTP_BYPASS_NUMBERS", "+919999900001")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -98,6 +96,23 @@ class _StubAgent:
                 )
 
         return _Client()
+
+
+@pytest.fixture(autouse=True)
+def _own_bypass_number(monkeypatch):
+    """Set per test, not at import.
+
+    These were module-level os.environ.setdefault calls, so whichever test file
+    pytest imported first won and the other silently lost its OTP bypass —
+    passing alone and failing in the suite, purely by collection order.
+    """
+    monkeypatch.setenv("DEV_OTP_BYPASS_CODE", "123456")
+    monkeypatch.setenv("DEV_OTP_BYPASS_NUMBERS", "+919999900001")
+    from api.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)

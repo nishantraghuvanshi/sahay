@@ -209,10 +209,35 @@ def _encode(table: str, row: dict) -> dict:
     return out
 
 
+# Tables a REPLACE must never touch, because another table cascades off them.
+#
+# SQLite implements INSERT OR REPLACE as DELETE followed by INSERT, and with
+# foreign keys on, that DELETE fires ON DELETE CASCADE. Rewriting a caregiver
+# row therefore destroyed every auth_sessions row pointing at it: finishing
+# onboarding silently signed the caregiver out, and the next screen answered
+# 401. The caregiver row looked untouched afterwards — same id, updated name —
+# which is why this was invisible until an end-to-end test walked the journey.
+#
+# The auth tables arrived with the origin/main merge; INSERT OR REPLACE predates
+# them, and nothing connected the two.
+_CASCADE_PARENTS = {"caregivers", "patients"}
+
+
 def insert(con: sqlite3.Connection, table: str, row: dict) -> None:
     data = _encode(table, row)
     cols = ", ".join(data)
     marks = ", ".join("?" for _ in data)
+
+    if table in _CASCADE_PARENTS:
+        # Upsert in place: same effect on this row, without deleting it first.
+        assignments = ", ".join(f"{c} = excluded.{c}" for c in data if c != "id")
+        con.execute(
+            f"INSERT INTO {table} ({cols}) VALUES ({marks}) "
+            f"ON CONFLICT(id) DO UPDATE SET {assignments}",
+            tuple(data.values()),
+        )
+        return
+
     con.execute(f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({marks})", tuple(data.values()))
 
 
