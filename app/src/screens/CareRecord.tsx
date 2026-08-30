@@ -85,7 +85,7 @@ export default function CareRecord() {
       {/* ------------------------------------------------------------- identity */}
       <Card className="gap-2">
         <Label>Care record</Label>
-        <h1 className="text-xl leading-tight font-bold break-words">{spokenName}</h1>
+        <h1 className="text-xl leading-tight font-semibold break-words">{spokenName}</h1>
         <div className="text-base text-muted-strong">
           This is how the agent addresses {patient.name} on every call.
         </div>
@@ -125,7 +125,7 @@ export default function CareRecord() {
               {patient.allergies.map((a) => (
                 <Row key={a} className="gap-1.5 rounded-md border-[1.5px] border-ink bg-paper px-2 py-1">
                   <Tag>allergy</Tag>
-                  <span className="text-md font-bold break-words">{a}</span>
+                  <span className="text-md font-semibold break-words">{a}</span>
                 </Row>
               ))}
             </Row>
@@ -136,7 +136,7 @@ export default function CareRecord() {
           </>
         ) : (
           <>
-            <div className="text-lg font-bold">None recorded.</div>
+            <div className="text-lg font-medium">None recorded.</div>
             <div className="text-sm text-muted-strong">
               No allergy has been entered for {spokenName}. That is not the same as “no allergies”
               — add any you know before the next call.
@@ -242,7 +242,7 @@ export default function CareRecord() {
           <>
             <Row className="flex-wrap gap-2">
               <Tag>not signed off</Tag>
-              <span className="text-lg leading-snug font-bold">
+              <span className="text-lg leading-snug font-medium">
                 Not signed off — no call will be placed.
               </span>
             </Row>
@@ -263,7 +263,7 @@ export default function CareRecord() {
             <Divider />
             <Row className="flex-wrap gap-2">
               <Tag>paused</Tag>
-              <span className="text-md font-bold">Calls paused at their request.</span>
+              <span className="text-md font-semibold">Calls paused at their request.</span>
             </Row>
             <div className="text-sm text-muted-strong">
               {spokenName} asked us to stop calling. We do not call again until that is lifted.
@@ -321,7 +321,7 @@ function MedicineRow({ med }: { med: Medication }) {
       {/* name */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <Label className="sm:hidden">Medicine</Label>
-        <span className="text-md font-bold break-words">{med.name}</span>
+        <span className="text-md font-semibold break-words">{med.name}</span>
       </div>
 
       {/* dose */}

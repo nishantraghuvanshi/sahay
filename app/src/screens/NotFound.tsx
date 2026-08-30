@@ -10,7 +10,7 @@ export default function NotFound() {
     <div className="mx-auto flex w-full max-w-md flex-col gap-3 py-10">
       <Card className="gap-3">
         <Label>Nothing here</Label>
-        <h1 className="text-lg font-bold">This page does not exist</h1>
+        <h1 className="text-lg font-semibold">This page does not exist</h1>
         <p className="text-base leading-relaxed text-muted-strong">
           If you were sent a link to someone&rsquo;s care record, it may have been shortened or
           cut off by the app you opened it in. Ask whoever sent it for the full link — a working

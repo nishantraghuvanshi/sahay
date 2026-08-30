@@ -102,7 +102,7 @@ export default function Settings() {
       {/* --------------------------------------------------------------- header */}
       <Card className="gap-2">
         <Label>Settings</Label>
-        <h1 className="text-xl leading-tight font-bold break-words">
+        <h1 className="text-xl leading-tight font-semibold break-words">
           How {spokenName}&rsquo;s calls are set up
         </h1>
         <div className="text-base text-muted-strong">
@@ -188,7 +188,7 @@ export default function Settings() {
           </div>
         ) : (
           <>
-            <div className="text-lg leading-snug font-bold">
+            <div className="text-lg leading-snug font-medium">
               Not signed off — no call will be placed.
             </div>
             <div className="text-sm text-muted-strong">

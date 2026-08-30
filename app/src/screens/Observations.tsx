@@ -154,13 +154,13 @@ export default function Observations() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-      <Link to="/home" className="text-sm font-semibold text-muted-strong lg:hidden">
+      <Link to="/home" className="text-sm text-muted-strong lg:hidden">
         ← Home
       </Link>
       {/* ------------------------------------------------------ what this screen is */}
       <Card className="gap-1.5">
         <Label>What she said</Label>
-        <h1 className="text-md leading-snug font-bold">Her own words, as she said them.</h1>
+        <h1 className="text-md leading-snug font-medium">Her own words, as she said them.</h1>
         <div className="text-sm leading-relaxed text-muted-strong">
           Every line below is stored exactly as it was heard — nothing is translated,
           shortened, summarised or scored. The words are the record.
@@ -256,7 +256,7 @@ function ObservationRow({
         lang={parentLang}
         className={clsx(
           'text-lg leading-relaxed break-words hyphens-none whitespace-pre-wrap sm:text-lg',
-          observation.severity === 'red' ? 'font-bold' : 'font-semibold',
+          observation.severity === 'red' ? 'font-semibold' : '',
         )}
       >
         “{observation.text}”
@@ -269,13 +269,13 @@ function ObservationRow({
             {observation.call_session_id && (
               <Link
                 to={`/calls/${observation.call_session_id}`}
-                className="text-sm font-semibold underline"
+                className="text-sm underline"
               >
                 Heard on this call
               </Link>
             )}
             {escalation && (
-              <Link to={`/alerts/${escalation.id}`} className="text-sm font-semibold underline">
+              <Link to={`/alerts/${escalation.id}`} className="text-sm underline">
                 Escalated to you · {escalation.level}
               </Link>
             )}

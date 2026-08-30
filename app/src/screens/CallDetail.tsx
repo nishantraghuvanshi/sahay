@@ -138,7 +138,7 @@ function BackToCalls({ variant = 'quiet' }: { variant?: 'quiet' | 'button' }) {
       className={clsx(
         variant === 'button'
           ? 'inline-flex items-center justify-center rounded-lg border border-ink px-4 py-2.5 text-base font-semibold'
-          : 'text-sm font-semibold underline',
+          : 'text-sm underline',
       )}
     >
       All calls
@@ -165,7 +165,7 @@ export default function CallDetail() {
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-3">
         <Card emphasis="rule" className="gap-2">
           <Label>Call not found</Label>
-          <div className="text-md font-bold">
+          <div className="text-md font-semibold">
             There is no call in the record with that reference.
           </div>
           <p className="text-sm leading-relaxed break-words text-muted-strong">
@@ -207,7 +207,7 @@ export default function CallDetail() {
           <Label className="ml-auto">{STATUS_WORD[call.status] ?? call.status.replace(/_/g, ' ')}</Label>
         </Row>
 
-        <h1 className="text-lg leading-tight font-bold break-words">
+        <h1 className="text-lg leading-tight font-semibold break-words">
           {!wasAnswered
             ? `We called${who ? ` ${who}` : ''} — nobody picked up`
             : inbound
@@ -233,7 +233,7 @@ export default function CallDetail() {
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
           <Label>Safety check</Label>
           <span
-            className={clsx('text-base font-bold', call.safety_pass === false && 'underline')}
+            className={clsx('text-base font-semibold', call.safety_pass === false && 'underline')}
           >
             {safetyWord(call.safety_pass)}
           </span>
@@ -326,10 +326,10 @@ export default function CallDetail() {
 
       <Row className="flex-wrap gap-x-3 gap-y-1">
         <BackToCalls />
-        <Link to="/doses" className="text-sm font-semibold underline">
+        <Link to="/doses" className="text-sm underline">
           Dose history
         </Link>
-        <Link to="/observations" className="text-sm font-semibold underline">
+        <Link to="/observations" className="text-sm underline">
           What she said
         </Link>
       </Row>
@@ -399,7 +399,7 @@ function NoTranscript({
   return (
     <Card emphasis="rule" className="gap-2">
       <Label>Transcript</Label>
-      <div className="text-md font-bold break-words">
+      <div className="text-md font-semibold break-words">
         There is no transcript, because nobody picked up.
       </div>
       <p className="text-sm leading-relaxed break-words text-muted-strong">
@@ -438,7 +438,7 @@ function DoseLine({ dose, medication }: { dose: DoseEvent; medication: Medicatio
   return (
     <Link to="/doses" className="-mx-1 block rounded px-1 py-1.5 hover:bg-line/40">
       <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-2xs font-bold tracking-wide text-muted-strong">
+        <span className="text-2xs font-medium tracking-wide text-muted-strong">
           {clock(dose.slot_time)}
         </span>
         <span className="text-md font-semibold break-words">
@@ -472,7 +472,7 @@ function ObservationLine({ observation }: { observation: Observation }) {
         lang={parentLang}
         className={clsx(
           'mt-1 text-md leading-relaxed break-words hyphens-none whitespace-pre-wrap',
-          observation.severity === 'red' ? 'font-bold' : 'font-semibold',
+          observation.severity === 'red' ? 'font-semibold' : '',
         )}
       >
         “{observation.text}”

@@ -262,7 +262,7 @@ export default function Calendar() {
           out of the grid above it. */}
       <Card className="gap-2">
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-md font-bold">{selectedHeading}</span>
+          <span className="text-md font-semibold">{selectedHeading}</span>
           <span className="text-sm text-muted-strong">
             {selected.toLocaleDateString([], { day: 'numeric', month: 'short' })}
           </span>
@@ -287,7 +287,7 @@ export default function Calendar() {
             <div key={group.slot}>
               {i > 0 && <Divider />}
               <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 py-2">
-                <span className="pt-2 text-2xs font-bold tracking-wide text-muted-strong">
+                <span className="pt-2 text-2xs font-medium tracking-wide text-muted-strong">
                   {slotLabel(group.slot)}
                 </span>
                 <div className="flex min-w-0 flex-col gap-1.5">
@@ -360,13 +360,13 @@ export default function Calendar() {
                   >
                     <div
                       className={clsx(
-                        'text-2xs font-bold tracking-[0.09em] uppercase',
+                        'text-2xs font-medium tracking-[0.09em] uppercase',
                         isToday ? 'text-white/70' : 'text-muted-strong',
                       )}
                     >
                       {day.toLocaleDateString([], { weekday: 'short' })}
                     </div>
-                    <div className={clsx('text-md', isToday ? 'font-bold' : 'font-semibold')}>
+                    <div className={clsx('text-md', isToday ? 'font-semibold' : '')}>
                       {day.getDate()}
                     </div>
                   </button>
@@ -380,7 +380,7 @@ export default function Calendar() {
                 key={slot}
                 className="grid grid-cols-[3.75rem_repeat(7,minmax(0,1fr))] items-stretch gap-x-1.5 border-b border-line py-1.5"
               >
-                <span className="pt-2 text-2xs font-bold tracking-wide text-muted-strong">{slot}</span>
+                <span className="pt-2 text-2xs font-medium tracking-wide text-muted-strong">{slot}</span>
                 {week.map((day, i) => {
                   const cell = bySlot[i]?.get(slot) ?? []
                   const isToday = dayKey(day) === dayKey(today)
@@ -490,7 +490,7 @@ function Header({
   return (
     <div className="flex flex-col gap-1">
       <Row className="items-baseline gap-2">
-        <h1 className="flex-1 text-lg font-bold">{monthTitle}</h1>
+        <h1 className="flex-1 text-lg font-semibold">{monthTitle}</h1>
         <Label>{range}</Label>
       </Row>
       <p className="text-sm text-muted-strong">
@@ -571,13 +571,13 @@ function DayChip({
     >
       <span
         className={clsx(
-          'text-2xs font-bold tracking-[0.09em] uppercase',
+          'text-2xs font-medium tracking-[0.09em] uppercase',
           selected ? 'text-white/70' : 'text-muted-strong',
         )}
       >
         {day.toLocaleDateString([], { weekday: 'narrow' })}
       </span>
-      <span className={clsx('text-md', isToday ? 'font-bold' : 'font-semibold')}>
+      <span className={clsx('text-md', isToday ? 'font-semibold' : '')}>
         {day.getDate()}
       </span>
       <span className="flex h-3 items-center gap-1">

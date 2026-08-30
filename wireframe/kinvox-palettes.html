@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html{color-scheme:light dark}body{margin:0}</style>
+<title>Eleven Palettes for Kinvox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#EFEAE0; --panel:#FFFDF9; --sunk:#E7E1D5;
+  --fg:#14130E; --fg-2:#5F5A4F; --fg-3:#7D7669;
+  --rule:#D5CEBE; --rule-soft:#E4DFD2; --link:#1B4D3E;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16150F; --panel:#1E1C15; --sunk:#12110C; --fg:#F2EEE3; --fg-2:#C0B9A7;
+  --fg-3:#8E8879; --rule:#37342A; --rule-soft:#2A2820; --link:#8FC3AF;}}
+:root[data-theme="dark"]{
+  --bg:#16150F; --panel:#1E1C15; --sunk:#12110C; --fg:#F2EEE3; --fg-2:#C0B9A7;
+  --fg-3:#8E8879; --rule:#37342A; --rule-soft:#2A2820; --link:#8FC3AF;}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--link);outline-offset:2px;border-radius:2px}
+.tnum{font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px 90px}
+code{font-family:'IBM Plex Mono',monospace;font-size:.88em;background:var(--sunk);padding:1px 5px;border-radius:3px}
+
+.bar{position:sticky;top:0;z-index:30;background:var(--bg);border-bottom:1px solid var(--rule);padding:10px 0}
+.bar .in{max-width:1120px;margin:0 auto;padding:0 28px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.bar p{margin:0;flex:1;min-width:180px;font-size:13px;color:var(--fg-2)}
+.toggle{border:1px solid var(--rule);background:var(--panel);color:var(--fg);border-radius:99px;
+  padding:6px 14px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:background 140ms var(--ease)}
+.toggle:hover{background:var(--sunk)}
+.toggle[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+body.gs .stage,body.gs .strip{filter:grayscale(1)}
+
+.jump{display:flex;gap:4px;flex-wrap:wrap;margin:26px 0 0}
+.jump a{font-family:'IBM Plex Mono',monospace;font-size:12px;text-decoration:none;color:var(--fg-2);
+  border:1px solid var(--rule);border-radius:5px;padding:4px 11px;transition:background 140ms var(--ease)}
+.jump a:hover{background:var(--sunk);color:var(--fg)}
+
+header.mast{padding:60px 0 30px;border-bottom:1px solid var(--rule)}
+header.mast h1{font-family:Newsreader,Georgia,serif;font-weight:300;font-size:clamp(30px,4.4vw,48px);
+  line-height:1.12;letter-spacing:-.018em;margin:0;max-width:18ch;text-wrap:balance}
+header.mast p{max-width:64ch;color:var(--fg-2);margin:18px 0 0;font-size:16px}
+header.mast b{color:var(--fg)}
+
+.opt{padding-top:54px;scroll-margin-top:60px}
+.opt.fam{border-top:1px solid var(--rule);margin-top:34px}
+.opt-head{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;margin-bottom:5px}
+.opt-head .id{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.13em;color:var(--fg-3);text-transform:uppercase}
+.opt-head h2{font-family:Newsreader,Georgia,serif;font-weight:400;font-size:29px;letter-spacing:-.01em;margin:0;line-height:1.2}
+.pill{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  border:1px solid var(--rule);border-radius:99px;padding:2px 9px;color:var(--fg-3)}
+.thesis{max-width:66ch;color:var(--fg-2);margin:0 0 18px}
+
+.strip{display:flex;flex-wrap:wrap;border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:16px}
+.strip div{flex:1 1 104px;min-width:104px}
+.strip div i{display:block;height:40px}
+.strip div span{display:block;padding:6px 8px 8px;font-family:'IBM Plex Mono',monospace;font-size:10px;
+  line-height:1.4;color:var(--fg-3);background:var(--panel);border-top:1px solid var(--rule-soft);letter-spacing:.02em}
+.strip div span b{display:block;color:var(--fg);font-weight:500;font-size:10.5px}
+.strip div span em{font-style:normal;color:var(--fg-3);opacity:.85}
+
+.stage{background:var(--t-canvas);color:var(--t-ink);border:1px solid var(--t-line-strong);border-radius:6px;
+  padding:22px;display:grid;gap:18px;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+@media (max-width:820px){.stage{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cap{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--t-muted);margin-bottom:9px}
+.card{background:var(--t-surface);border:1px solid var(--t-line-strong);border-radius:8px;padding:13px;
+  display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 2px rgb(0 0 0 /.04),0 4px 12px rgb(0 0 0 /.05)}
+.card.rule{border-left:3px solid var(--t-danger)}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--t-muted)}
+.quote{position:relative;padding:2px 0 0 18px;border-left:3px solid var(--t-danger)}
+.quote .qm{position:absolute;left:12px;top:-14px;font-family:Newsreader,Georgia,serif;font-size:72px;
+  line-height:1;color:var(--t-line-strong);z-index:0}
+.quote p{position:relative;z-index:1;margin:0;font-family:Newsreader,Georgia,serif;font-weight:300;
+  font-size:27px;line-height:1.28;letter-spacing:-.01em;max-width:20ch}
+.quote .attr{margin-top:10px;font-size:13px;color:var(--t-muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;
+  letter-spacing:.03em;background:var(--t-ink);color:var(--t-paper)}
+.tag.danger{background:var(--t-danger);color:var(--t-on-danger,#fff)}
+.tag.ok{background:var(--t-ok);color:var(--t-on-ok,#fff)}
+.tag.agent{background:var(--t-accent2);color:var(--t-on-agent,#fff)}
+.tag.out{background:transparent;border:1px solid var(--t-ink);color:var(--t-ink)}
+.tag.out.warn{border-color:var(--t-warn);color:var(--t-warn);background:var(--t-warn-soft)}
+.btn{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:8px 15px;
+  font:inherit;font-size:14px;font-weight:600;cursor:pointer;border:1px solid transparent;
+  background:var(--t-ink);color:var(--t-paper);transition:opacity 140ms var(--ease)}
+.btn:hover{opacity:.86}
+.btn.accent{background:var(--t-accent);color:var(--t-on-accent,#fff)}
+.btn.outline{background:transparent;border-color:var(--t-ink);color:var(--t-ink)}
+.rulecode{font-family:'IBM Plex Mono',monospace;font-size:13px}
+.txline{display:flex;gap:10px;padding:5px 8px;border-radius:4px;font-size:14px;align-items:flex-start}
+.txline .tc{font-size:12px;color:var(--t-muted);width:34px;flex:none;padding-top:2px}
+.txline .who{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;width:42px;
+  flex:none;color:var(--t-muted);padding-top:3px}
+.txline.match{background:var(--t-highlight);box-shadow:inset 3px 0 0 var(--t-danger);font-weight:500;color:var(--t-ink)}
+.thread{position:relative}
+.thread .ln{position:absolute;left:52px;top:6px;bottom:6px;width:1px;background:var(--t-line-strong)}
+.trow{display:flex;padding:6px 0;align-items:flex-start}
+.trow .t{width:44px;flex:none;text-align:right;font-size:13px;color:var(--t-muted);padding-top:2px}
+.trow .n{width:17px;flex:none;display:flex;justify-content:center;padding-top:6px;position:relative;z-index:1}
+.trow .c{flex:1;min-width:0;padding-left:9px;font-size:14.5px}
+.trow .c small{display:block;font-size:12.5px;color:var(--t-muted-strong);margin-top:1px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;outline:3px solid var(--t-canvas)}
+.dot.filled{background:var(--t-ok)}
+.dot.hollow{background:var(--t-paper);border:1.5px solid var(--t-danger)}
+.dot.empty{background:var(--t-fill-empty)}
+.meter{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;max-width:280px}
+.meter i{height:22px;border-radius:3px;border:1.5px solid var(--t-ink);display:block}
+.meter i.k{background:var(--t-ink)}
+.meter i.u{border-color:var(--t-fill-empty)}
+.args{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:14px;border:1px solid var(--rule);
+  border-radius:4px;overflow:hidden;background:var(--rule)}
+@media (max-width:640px){.args{grid-template-columns:1fr}}
+.args div{background:var(--panel);padding:13px 15px}
+.args h3{margin:0 0 5px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--fg-3);font-weight:400}
+.args p{margin:0;font-size:14px;color:var(--fg-2);line-height:1.5}
+.args b{color:var(--fg)}
+.closing{margin-top:56px;padding-top:26px;border-top:1px solid var(--rule)}
+.closing h2{font-family:Newsreader,Georgia,serif;font-weight:400;font-size:27px;margin:0 0 12px}
+.closing p{max-width:66ch;color:var(--fg-2);margin:0 0 12px}
+.closing b{color:var(--fg)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:640px){.wrap,.bar .in{padding-left:18px;padding-right:18px}.quote p{font-size:23px}}
+</style>
+
+</head>
+<body>
+<div class="bar"><div class="in">
+  <p><b>Same components, eleven grounds.</b> Strip the colour to check each still reads by shape and label alone.</p>
+  <button class="toggle" id="gs" aria-pressed="false">Strip all colour</button>
+</div></div>
+<div class="wrap">
+<header class="mast">
+  <h1>Eleven grounds for the same record.</h1>
+  <p>Every option renders the identical Kinvox components &mdash; the P1 quote, the cited rule with its matched transcript line, the day thread, the intake meter, tags and buttons. <b>A</b> is what is built today. <b>B&ndash;E</b> are alternatives. <b>F</b> is your six colours worked into a running system, and <b>G, H, I</b> are derived from it. <b>J</b> is your pastel set rendered honestly, <b>K</b> the same hues pulled to values that can actually carry text.</p>
+</header>
+<nav class="jump"><a href="#A">A</a><a href="#B">B</a><a href="#C">C</a><a href="#D">D</a><a href="#E">E</a><a href="#F">F</a><a href="#G">G</a><a href="#H">H</a><a href="#I">I</a><a href="#J">J</a><a href="#K">K</a></nav>
+<section class="opt" id="A" style="--t-ink:#14130E;--t-muted:#7D7669;--t-muted-strong:#5F5A4F;--t-fill-empty:#C7C1B2;--t-line:#E4DFD2;--t-line-strong:#D0C9B8;--t-canvas:#EFEAE0;--t-surface:#F8F5EF;--t-paper:#FFFDF9;--t-accent:#1B4D3E;--t-accent2:#1B4D3E;--t-ok:#1B4D3E;--t-warn:#8A5A00;--t-warn-soft:#F6EEDC;--t-danger:#A4231C;--t-highlight:#F3E7C4">
+  <div class="opt-head"><span class="id">A</span><h2>The Record</h2><span class="pill">currently built</span></div>
+  <p class="thesis">Warm paper, forest green, marigold. The product is an archival document &mdash; the thing that faithfully keeps what she said.</p>
+  <div class="strip">
+<div><i style="background:#14130E"></i><span><b>ink</b>14130E </span></div>
+<div><i style="background:#5F5A4F"></i><span><b>muted-str</b>5F5A4F </span></div>
+<div><i style="background:#D0C9B8"></i><span><b>line-str</b>D0C9B8 </span></div>
+<div><i style="background:#EFEAE0"></i><span><b>canvas</b>EFEAE0 </span></div>
+<div><i style="background:#FFFDF9"></i><span><b>paper</b>FFFDF9 </span></div>
+<div><i style="background:#1B4D3E"></i><span><b>accent / ok</b>1B4D3E </span></div>
+<div><i style="background:#8A5A00"></i><span><b>warn</b>8A5A00 </span></div>
+<div><i style="background:#A4231C"></i><span><b>danger</b>A4231C </span></div>
+<div><i style="background:#F3E7C4"></i><span><b>highlight</b>F3E7C4 </span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>Distinctive against every health dashboard on earth. The warm ground flatters the serif quote, which is the one thing that must feel important.</p></div>
+    <div><h3>Against</h3><p>Warm cream plus a serif is <b>the</b> current AI-generated house style. A judge who has seen ten of these today may pattern-match. Least medical of the set.</p></div>
+  </div>
+</section>
+<section class="opt" id="B" style="--t-ink:#131A1C;--t-muted:#6E7C7E;--t-muted-strong:#4C585A;--t-fill-empty:#BCC9CB;--t-line:#DCE4E5;--t-line-strong:#C6D2D4;--t-canvas:#E9EEEF;--t-surface:#F5F8F8;--t-paper:#FFFFFF;--t-accent:#0E4F52;--t-accent2:#0E4F52;--t-ok:#14624B;--t-warn:#8A5A00;--t-warn-soft:#F6EEDC;--t-danger:#B0241D;--t-highlight:#FBEFC7">
+  <div class="opt-head"><span class="id">B</span><h2>Clinical Calm</h2></div>
+  <p class="thesis">Cool paper, slate neutrals, deep teal. The product is a medical instrument &mdash; sober, precise, the thing a doctor would not wince at.</p>
+  <div class="strip">
+<div><i style="background:#131A1C"></i><span><b>ink</b>131A1C </span></div>
+<div><i style="background:#4C585A"></i><span><b>muted-str</b>4C585A </span></div>
+<div><i style="background:#C6D2D4"></i><span><b>line-str</b>C6D2D4 </span></div>
+<div><i style="background:#E9EEEF"></i><span><b>canvas</b>E9EEEF </span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF </span></div>
+<div><i style="background:#0E4F52"></i><span><b>accent</b>0E4F52 </span></div>
+<div><i style="background:#8A5A00"></i><span><b>warn</b>8A5A00 </span></div>
+<div><i style="background:#B0241D"></i><span><b>danger</b>B0241D </span></div>
+<div><i style="background:#FBEFC7"></i><span><b>highlight</b>FBEFC7 </span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>Reads instantly as a health product, which lowers the trust cost for a caregiver handing over their parent's prescription. The one warm thing on the page is the marked transcript line.</p></div>
+    <div><h3>Against</h3><p>Closest of the set to generic health SaaS. The serif quote sits less comfortably on a cool ground. Risks feeling like a hospital portal rather than something a family uses.</p></div>
+  </div>
+</section>
+<section class="opt" id="C" style="--t-ink:#EDEFEA;--t-muted:#757C77;--t-muted-strong:#A9B0AB;--t-fill-empty:#3A403D;--t-line:#2C302E;--t-line-strong:#3A403D;--t-canvas:#101210;--t-surface:#191C1A;--t-paper:#212523;--t-accent:#8FC3AA;--t-accent2:#8FC3AA;--t-ok:#8FC3AA;--t-warn:#E0B563;--t-warn-soft:#332C1B;--t-danger:#E97D6E;--t-highlight:#3B3220">
+  <div class="opt-head"><span class="id">C</span><h2>Night Line</h2><span class="pill dark">dark ground</span></div>
+  <p class="thesis">Dark-first, and argued rather than fashionable: the hero moment is a 2 AM inbound call, opened in bed at the lowest brightness a phone has.</p>
+  <div class="strip">
+<div><i style="background:#101210"></i><span><b>canvas</b>101210 </span></div>
+<div><i style="background:#191C1A"></i><span><b>surface</b>191C1A </span></div>
+<div><i style="background:#212523"></i><span><b>paper</b>212523 </span></div>
+<div><i style="background:#3A403D"></i><span><b>line-str</b>3A403D </span></div>
+<div><i style="background:#EDEFEA"></i><span><b>ink</b>EDEFEA </span></div>
+<div><i style="background:#8FC3AA"></i><span><b>accent / ok</b>8FC3AA </span></div>
+<div><i style="background:#E0B563"></i><span><b>warn</b>E0B563 </span></div>
+<div><i style="background:#E97D6E"></i><span><b>danger</b>E97D6E </span></div>
+<div><i style="background:#3B3220"></i><span><b>highlight</b>3B3220 </span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>The only option whose ground is justified by the product's own hero scenario. Photographs beautifully &mdash; a dark demo video reads as more finished than a light one.</p></div>
+    <div><h3>Against</h3><p><b>Costs the most.</b> All 17 screens were built light-only; every card, dot and border needs a dark counterpart, and the handoff view genuinely should stay light. Realistically a second theme, not the first.</p></div>
+  </div>
+</section>
+<section class="opt" id="D" style="--t-ink:#16161E;--t-muted:#71707E;--t-muted-strong:#4F4E5C;--t-fill-empty:#C2C0CE;--t-line:#E0DEE8;--t-line-strong:#CBC8D6;--t-canvas:#EDECF1;--t-surface:#F6F5F9;--t-paper:#FFFFFF;--t-accent:#2B3A8F;--t-accent2:#2B3A8F;--t-ok:#1B6B4F;--t-warn:#93610A;--t-warn-soft:#F7EFDC;--t-danger:#B02318;--t-highlight:#FBE6A8">
+  <div class="opt-head"><span class="id">D</span><h2>Indigo &amp; Marigold</h2></div>
+  <p class="thesis">Neel and haldi &mdash; the oldest colour pairing in the Indian household, and the least likely here to look like anything else in the room.</p>
+  <div class="strip">
+<div><i style="background:#16161E"></i><span><b>ink</b>16161E </span></div>
+<div><i style="background:#4F4E5C"></i><span><b>muted-str</b>4F4E5C </span></div>
+<div><i style="background:#CBC8D6"></i><span><b>line-str</b>CBC8D6 </span></div>
+<div><i style="background:#EDECF1"></i><span><b>canvas</b>EDECF1 </span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF </span></div>
+<div><i style="background:#2B3A8F"></i><span><b>accent</b>2B3A8F </span></div>
+<div><i style="background:#1B6B4F"></i><span><b>ok</b>1B6B4F </span></div>
+<div><i style="background:#93610A"></i><span><b>warn</b>93610A </span></div>
+<div><i style="background:#B02318"></i><span><b>danger</b>B02318 </span></div>
+<div><i style="background:#FBE6A8"></i><span><b>highlight</b>FBE6A8 </span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>Rooted in the market it serves without being a costume. Indigo is calm and authoritative where teal is merely medical; marigold reads as care and ritual rather than warning yellow.</p></div>
+    <div><h3>Against</h3><p>Indigo drifts toward generic-tech if the saturation slips. <code>ok</code> green and <code>accent</code> indigo are two hues doing separate jobs, so it is one step less disciplined than A or E.</p></div>
+  </div>
+</section>
+<section class="opt" id="E" style="--t-ink:#111111;--t-muted:#77776F;--t-muted-strong:#55554E;--t-fill-empty:#C8C8C1;--t-line:#E3E3DE;--t-line-strong:#CFCFC8;--t-canvas:#F0F0ED;--t-surface:#F8F8F5;--t-paper:#FFFFFF;--t-accent:#111111;--t-accent2:#111111;--t-ok:#111111;--t-warn:#55554E;--t-warn-soft:#EDEDE8;--t-danger:#C42217;--t-highlight:#F7E0DD">
+  <div class="opt-head"><span class="id">E</span><h2>One Signal</h2></div>
+  <p class="thesis">No brand hue at all. Red is the only colour anywhere in the product, and it means exactly one thing: this needs you.</p>
+  <div class="strip">
+<div><i style="background:#111111"></i><span><b>ink</b>111111 </span></div>
+<div><i style="background:#55554E"></i><span><b>muted-str</b>55554E </span></div>
+<div><i style="background:#CFCFC8"></i><span><b>line-str</b>CFCFC8 </span></div>
+<div><i style="background:#F0F0ED"></i><span><b>canvas</b>F0F0ED </span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF </span></div>
+<div><i style="background:repeating-linear-gradient(45deg,#ccc,#ccc 4px,#eee 4px,#eee 8px)"></i><span><b>accent</b>= ink </span></div>
+<div><i style="background:repeating-linear-gradient(45deg,#ccc,#ccc 4px,#eee 4px,#eee 8px)"></i><span><b>warn</b>= ink </span></div>
+<div><i style="background:#C42217"></i><span><b>danger</b>C42217 </span></div>
+<div><i style="background:#F7E0DD"></i><span><b>highlight</b>F7E0DD </span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>The most disciplined idea here, and the one that argues with the product rather than decorating it: a system built on capture, never interpret earns a palette where colour <b>means</b> something.</p></div>
+    <div><h3>Against</h3><p>The landing page has no accent to sell with, and the app looks austere in a fast scroll. <code>watch</code> loses its own hue and leans entirely on outline plus label.</p></div>
+  </div>
+</section>
+<section class="opt fam" id="F" style="--t-ink:#1A1712;--t-muted:#8A8070;--t-muted-strong:#5E564A;--t-fill-empty:#CFC3A8;--t-line:#EADFC9;--t-line-strong:#DCCEB2;--t-canvas:#F9F0E0;--t-surface:#FFFCF6;--t-paper:#FFFFFF;--t-accent:#3674B5;--t-accent2:#578FCA;--t-ok:#3674B5;--t-warn:#8A6100;--t-warn-soft:#FDF0CE;--t-danger:#CC3A63;--t-highlight:#FADA7A">
+  <div class="opt-head"><span class="id">F &middot; yours</span><h2>Cornflower &amp; Cream</h2></div>
+  <p class="thesis">Your six, worked up into a running system. A cool blue accent on a warm cream ground &mdash; an unusual tension, and the reason this one does not look like standard SaaS blue.</p>
+  <div class="strip">
+<div><i style="background:#F9F0E0"></i><span><b>canvas</b>F9F0E0 <em>yours</em></span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF <em>yours</em></span></div>
+<div><i style="background:#3674B5"></i><span><b>accent / ok</b>3674B5 <em>yours</em></span></div>
+<div><i style="background:#578FCA"></i><span><b>agent</b>578FCA <em>yours</em></span></div>
+<div><i style="background:#CC3A63"></i><span><b>danger</b>CC3A63 <em>yours</em></span></div>
+<div><i style="background:#FADA7A"></i><span><b>highlight</b>FADA7A <em>yours</em></span></div>
+<div><i style="background:#1A1712"></i><span><b>ink</b>1A1712 <em>added</em></span></div>
+<div><i style="background:#5E564A"></i><span><b>muted-str</b>5E564A <em>added</em></span></div>
+<div><i style="background:#DCCEB2"></i><span><b>line-str</b>DCCEB2 <em>added</em></span></div>
+<div><i style="background:#8A6100"></i><span><b>warn</b>8A6100 <em>added</em></span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p><b>Four of the six do real work now.</b> The cream ground is warm where the accent is cool, which is a tension almost nobody ships &mdash; it stops the blue reading as fintech. <code>#CC3A63</code> is 4.8:1, so it can genuinely carry <code>P1</code> as text, and the yellow at 12.7:1 behind ink is the strongest highlight of any option here.</p></div>
+    <div><h3>Against</h3><p>Still needs an ink, three greys, two borders and a <code>warn</code> invented &mdash; six colours is most of a palette, not all of it. The rose danger is friendlier than a true red, which is a real question for a chest-pain alert: it reads <i>notice</i> more than <i>now</i>.</p></div>
+  </div>
+</section>
+<section class="opt fam" id="G" style="--t-ink:#16130D;--t-muted:#857A66;--t-muted-strong:#57503F;--t-fill-empty:#C6B999;--t-line:#E6D9BE;--t-line-strong:#D3C2A0;--t-canvas:#F3E8D2;--t-surface:#FBF5E9;--t-paper:#FFFFFF;--t-accent:#1F4E82;--t-accent2:#3E77B0;--t-ok:#1F4E82;--t-warn:#7A5400;--t-warn-soft:#F7EAC9;--t-danger:#A62B4E;--t-highlight:#F2CE63">
+  <div class="opt-head"><span class="id">G &middot; derived</span><h2>Deepened</h2></div>
+  <p class="thesis">Your exact hues, pushed darker and less saturated. Same family, more authority &mdash; what F looks like once it stops trying to be friendly.</p>
+  <div class="strip">
+<div><i style="background:#F3E8D2"></i><span><b>canvas</b>F3E8D2 <em>deeper cream</em></span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF <em>yours</em></span></div>
+<div><i style="background:#1F4E82"></i><span><b>accent / ok</b>1F4E82 <em>deeper blue</em></span></div>
+<div><i style="background:#3E77B0"></i><span><b>agent</b>3E77B0 <em>yours, dimmed</em></span></div>
+<div><i style="background:#A62B4E"></i><span><b>danger</b>A62B4E <em>deeper rose</em></span></div>
+<div><i style="background:#F2CE63"></i><span><b>highlight</b>F2CE63 <em>deeper yellow</em></span></div>
+<div><i style="background:#16130D"></i><span><b>ink</b>16130D <em>added</em></span></div>
+<div><i style="background:#57503F"></i><span><b>muted-str</b>57503F <em>added</em></span></div>
+<div><i style="background:#D3C2A0"></i><span><b>line-str</b>D3C2A0 <em>added</em></span></div>
+<div><i style="background:#7A5400"></i><span><b>warn</b>7A5400 <em>added</em></span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>Every value carries more weight without changing the identity. <code>#1F4E82</code> is 7.9:1 on white so it can set body text, not only buttons. The deeper cream gives cards something to sit <i>on</i> &mdash; in F the ground and the card fill are nearly the same value, which flattens the whole layout.</p></div>
+    <div><h3>Against</h3><p>Loses the lightness that made your original set feel approachable. Reads more corporate; a caregiver product can afford to be warm.</p></div>
+  </div>
+</section>
+<section class="opt fam" id="H" style="--t-ink:#1A1512;--t-muted:#8C7F72;--t-muted-strong:#60544A;--t-fill-empty:#D2C4B0;--t-line:#ECE0CE;--t-line-strong:#DDCDB6;--t-canvas:#F9F0E0;--t-surface:#FFFCF6;--t-paper:#FFFFFF;--t-accent:#CC3A63;--t-accent2:#3674B5;--t-ok:#3674B5;--t-warn:#8A6100;--t-warn-soft:#FDF0CE;--t-danger:#8E1B33;--t-highlight:#FADA7A">
+  <div class="opt-head"><span class="id">H &middot; derived</span><h2>Rose Led</h2></div>
+  <p class="thesis">Same six hexes, roles swapped: rose becomes the brand and blue becomes the calm. A care product led by rose feels human rather than institutional.</p>
+  <div class="strip">
+<div><i style="background:#F9F0E0"></i><span><b>canvas</b>F9F0E0 <em>yours</em></span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF <em>yours</em></span></div>
+<div><i style="background:#CC3A63"></i><span><b>accent</b>CC3A63 <em>yours, promoted</em></span></div>
+<div><i style="background:#3674B5"></i><span><b>ok / agent</b>3674B5 <em>yours, demoted</em></span></div>
+<div><i style="background:#FADA7A"></i><span><b>highlight</b>FADA7A <em>yours</em></span></div>
+<div><i style="background:#8E1B33"></i><span><b>danger</b>8E1B33 <em>added &mdash; must clear the accent</em></span></div>
+<div><i style="background:#1A1512"></i><span><b>ink</b>1A1512 <em>added</em></span></div>
+<div><i style="background:#60544A"></i><span><b>muted-str</b>60544A <em>added</em></span></div>
+<div><i style="background:#DDCDB6"></i><span><b>line-str</b>DDCDB6 <em>added</em></span></div>
+<div><i style="background:#8A6100"></i><span><b>warn</b>8A6100 <em>added</em></span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>The warmest and most human of every option on this page. Rose on cream is a care register, not a software register &mdash; and blue then does real work as <code>ok</code> and <code>agent</code> instead of just being the brand.</p></div>
+    <div><h3>Against</h3><p><b>The structural problem:</b> once rose is the brand, <code>danger</code> has to move somewhere darker to stay distinct, and <code>#8E1B33</code> beside <code>#CC3A63</code> is a distinction people will miss at a glance. In a product whose job is flagging, an accent that resembles the alert is a real cost. Press <i>strip all colour</i> and check this one hardest.</p></div>
+  </div>
+</section>
+<section class="opt fam" id="I" style="--t-ink:#F4ECDD;--t-muted:#7C8189;--t-muted-strong:#A9AFB7;--t-fill-empty:#3B3F47;--t-line:#2E3138;--t-line-strong:#3B3F47;--t-canvas:#15161A;--t-surface:#1D1F24;--t-paper:#24272D;--t-accent:#7FAEDD;--t-accent2:#7FAEDD;--t-ok:#7FAEDD;--t-warn:#F2D07A;--t-warn-soft:#38301C;--t-danger:#E8718F;--t-highlight:#3E3320">
+  <div class="opt-head"><span class="id">I &middot; derived</span><h2>Cornflower Night</h2><span class="pill dark">dark ground</span></div>
+  <p class="thesis">Your palette after dark. The cream becomes the text, the blue lifts to carry on a dark ground, and the yellow stays exactly where it was &mdash; marking the line that fired.</p>
+  <div class="strip">
+<div><i style="background:#15161A"></i><span><b>canvas</b>15161A <em>added</em></span></div>
+<div><i style="background:#1D1F24"></i><span><b>surface</b>1D1F24 <em>added</em></span></div>
+<div><i style="background:#24272D"></i><span><b>paper</b>24272D <em>added</em></span></div>
+<div><i style="background:#F4ECDD"></i><span><b>ink</b>F4ECDD <em>your cream, promoted</em></span></div>
+<div><i style="background:#7FAEDD"></i><span><b>accent / ok</b>7FAEDD <em>your blue, lifted</em></span></div>
+<div><i style="background:#F2D07A"></i><span><b>warn</b>F2D07A <em>your yellow</em></span></div>
+<div><i style="background:#E8718F"></i><span><b>danger</b>E8718F <em>your rose, lifted</em></span></div>
+<div><i style="background:#3E3320"></i><span><b>highlight</b>3E3320 <em>added</em></span></div>
+<div><i style="background:#3B3F47"></i><span><b>line-str</b>3B3F47 <em>added</em></span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>The cream is doing something clever here &mdash; as body text on a cool dark ground it keeps the warmth of your palette without any warm surface. Pairs naturally with F as a light/dark pair, which is the cheapest way to end up with two themes.</p></div>
+    <div><h3>Against</h3><p>Same cost as C: 17 screens were built light-only, and the handoff view should stay light regardless. Ship it second, not first.</p></div>
+  </div>
+</section>
+<section class="opt fam" id="J" style="--t-ink:#1E1611;--t-muted:#8C7A66;--t-muted-strong:#5E4F3F;--t-fill-empty:#D8C2A6;--t-line:#FFD9AE;--t-line-strong:#DD9E59;--t-canvas:#FFE1BB;--t-surface:#FFF4E6;--t-paper:#FFFFFF;--t-accent:#FF80C7;--t-accent2:#FFBDA3;--t-ok:#8CE4FF;--t-warn:#DD9E59;--t-warn-soft:#FFE1BB;--t-danger:#BC2D1F;--t-highlight:#FAFFC4;--t-on-accent:#2A1220;--t-on-ok:#0A2A33;--t-on-agent:#3A1D10">
+  <div class="opt-head"><span class="id">J &middot; yours</span><h2>Candy</h2></div>
+  <p class="thesis">Your seven pastels used as literally as they can be. Pink leads, cyan confirms, caramel warns, lime marks the fired line. Only two values are invented &mdash; and one of them is the red, because there is no red in the set.</p>
+  <div class="strip">
+<div><i style="background:#FFE1BB"></i><span><b>canvas</b>FFE1BB <em>yours</em></span></div>
+<div><i style="background:#DD9E59"></i><span><b>line-str</b>DD9E59 <em>yours</em></span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF <em>yours</em></span></div>
+<div><i style="background:#FF80C7"></i><span><b>accent</b>FF80C7 <em>yours</em></span></div>
+<div><i style="background:#FFBDA3"></i><span><b>agent</b>FFBDA3 <em>yours</em></span></div>
+<div><i style="background:#8CE4FF"></i><span><b>ok</b>8CE4FF <em>yours</em></span></div>
+<div><i style="background:#DD9E59"></i><span><b>warn</b>DD9E59 <em>yours &middot; 2.3:1</em></span></div>
+<div><i style="background:#FAFFC4"></i><span><b>highlight</b>FAFFC4 <em>yours</em></span></div>
+<div><i style="background:#1E1611"></i><span><b>ink</b>1E1611 <em>added</em></span></div>
+<div><i style="background:#BC2D1F"></i><span><b>danger</b>BC2D1F <em>added &mdash; no red in the set</em></span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>Warm, unthreatening, and nothing else in elder-care software looks like this. The lime <code>#FAFFC4</code> at 17:1 behind ink is the single best highlight value on this entire page &mdash; keep it whatever else you decide. Buttons and chips still work if their text goes dark instead of white, which is what they are doing here.</p></div>
+    <div><h3>Against</h3><p><b>None of the seven can carry text.</b> Best of them is 2.3:1 on white, against 4.5 required &mdash; so the ink, all four greys and the red had to be invented, and what you are looking at is mostly not your palette. Two harder problems: <code>warn</code> is illegible as text, so <i>watch</i> severity has no readable colour at all; and a P1 chest-pain alert sitting in a candy ground reads as a notification about a discount. Look at the quote block and ask whether it carries the weight of what she said.</p></div>
+  </div>
+</section>
+<section class="opt fam" id="K" style="--t-ink:#1E1611;--t-muted:#8C7A66;--t-muted-strong:#5E4F3F;--t-fill-empty:#D8C2A6;--t-line:#F2E3D0;--t-line-strong:#E0C9AC;--t-canvas:#FBEEDC;--t-surface:#FFF9F1;--t-paper:#FFFFFF;--t-accent:#A83A76;--t-accent2:#0F6C87;--t-ok:#0F6C87;--t-warn:#8A5A22;--t-warn-soft:#F8EAD4;--t-danger:#BC2D1F;--t-highlight:#FAFFC4">
+  <div class="opt-head"><span class="id">K &middot; derived</span><h2>Candy, Grown Up</h2></div>
+  <p class="thesis">The same seven hues, kept at their angles and pulled down to values that work. Nothing here is a new colour &mdash; it is your palette with the brightness turned into contrast.</p>
+  <div class="strip">
+<div><i style="background:#FBEEDC"></i><span><b>canvas</b>FBEEDC <em>from #FFE1BB</em></span></div>
+<div><i style="background:#E0C9AC"></i><span><b>line-str</b>E0C9AC <em>from #DD9E59</em></span></div>
+<div><i style="background:#FFFFFF"></i><span><b>paper</b>FFFFFF <em>yours</em></span></div>
+<div><i style="background:#A83A76"></i><span><b>accent</b>A83A76 <em>from #FF80C7 &middot; 5.9:1</em></span></div>
+<div><i style="background:#0F6C87"></i><span><b>ok / agent</b>0F6C87 <em>from #8CE4FF &middot; 6.0:1</em></span></div>
+<div><i style="background:#8A5A22"></i><span><b>warn</b>8A5A22 <em>from #DD9E59 &middot; 5.9:1</em></span></div>
+<div><i style="background:#FAFFC4"></i><span><b>highlight</b>FAFFC4 <em>yours, untouched</em></span></div>
+<div><i style="background:#BC2D1F"></i><span><b>danger</b>BC2D1F <em>added</em></span></div>
+<div><i style="background:#1E1611"></i><span><b>ink</b>1E1611 <em>added</em></span></div>
+<div><i style="background:#5E4F3F"></i><span><b>muted-str</b>5E4F3F <em>added</em></span></div>
+</div>
+  <div class="stage">
+  <div class="col">
+    <div>
+      <div class="cap">Quote &middot; severity red</div>
+      <div class="quote"><span class="qm">&ldquo;</span>
+        <p>Chest feels tight when I walk.</p>
+        <div class="attr"><span class="tag danger">red</span> Mom &middot; check-in call #214 &middot; 1:35 PM</div>
+      </div>
+    </div>
+    <div class="card rule">
+      <div class="lbl">Why this was flagged</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tag danger">P1</span><span class="rulecode">rule: chest complaint with age over 40</span>
+      </div>
+      <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+      <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div>
+      <div class="cap">Thread</div>
+      <div class="thread"><div class="ln"></div>
+        <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="dot filled"></span></span><span class="c">Metformin 500 mg<small>taken &middot; confirmed on the call</small></span></div>
+        <div class="trow"><span class="t tnum">13:35</span><span class="n"><span class="dot hollow"></span></span><span class="c">Flagged P1<small>agent call #214</small></span></div>
+        <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="dot empty"></span></span><span class="c">Amlodipine 5 mg<small>upcoming &middot; after food</small></span></div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Intake &middot; 6 of 12 already known</div>
+      <div class="meter"><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i class="k"></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i></div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="tag danger">P1</span><span class="tag out warn">watch</span><span class="tag ok">taken</span><span class="tag agent">agent</span><span class="tag out">edited</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn">Mark taken</button><button class="btn outline">Call Mom</button><button class="btn accent">Start free</button>
+    </div>
+  </div>
+</div>
+  <div class="args">
+    <div><h3>For</h3><p>Every one of your hues survives and now does real work: the pink can set a button label, the cyan can be <code>ok</code> text, the caramel can carry <i>watch</i>. It keeps the warmth of J while being legible to a 68-year-old&rsquo;s adult child reading at 2 AM &mdash; and your lime highlight is the one value that needed no change at all.</p></div>
+    <div><h3>Against</h3><p>A magenta accent and a red <code>danger</code> live closer together than is comfortable; a filled <code>P1</code> beside a filled CTA is a glance apart, not a look apart. Same structural risk as H. Beyond that it is the most usable thing derived from either of your sets &mdash; but it is warm and pink, which is a strong personality to commit a medical alert to.</p></div>
+  </div>
+</section><div class="closing">
+  <h2>Where I land</h2>
+  <p><b>F, with one change: take G&rsquo;s ground.</b> Your six hold up better than I expected &mdash; a cool blue accent on a warm cream ground is a tension almost nobody ships, and it is the single thing keeping this off the standard SaaS-blue shelf. But in F the canvas <code>#F9F0E0</code> and the card fill are close enough in value that cards stop reading as raised. G&rsquo;s deeper cream <code>#F3E8D2</code> fixes that without touching your hues.</p>
+  <p><b>One real decision left: is rose the right danger?</b> <code>#CC3A63</code> is friendly &mdash; it reads <i>notice</i> where a chest-pain alert wants <i>now</i>. That is a defensible product choice for a family app that should not frighten people, and a wrong one if the P1 has to cut through. Swapping it for <code>#B3261E</code> keeps everything else intact. Your call, and it is the only place on this page where the palette can actually cost someone something.</p>
+  <p><b>H is the most interesting and the most dangerous.</b> Rose-led is the warmest register here, but promoting rose to the brand forces <code>danger</code> down to <code>#8E1B33</code>, and those two are hard to tell apart at a glance. In a product whose whole job is flagging, an accent that resembles the alert is a genuine flaw. Press <i>strip all colour</i> on H before deciding &mdash; it is the one that needs it.</p>
+  <p><b>I pairs with F for free.</b> If dark mode ever happens, it is already drawn, and your cream becomes the body text rather than being thrown away.</p>
+  <p><b>On the pastel set (J):</b> the honest reading is that it is an illustration palette, not an interface one &mdash; every value sits in the top fifth of the range, so there is nothing left to build hierarchy with. <b>K</b> is the version I would actually defend: same seven hues, same warmth, pulled down until they can carry text. If you like J, ship K.</p>
+  <p><b>And take the lime either way.</b> <code>#FAFFC4</code> at 17:1 behind ink is the best highlight value on this page, better than my marigold and better than your <code>#FADA7A</code>. It costs one token to adopt into whichever palette wins.</p>
+  <p>The greyscale button at the top is the acceptance test on every option: press it and every dose status, severity and step state must still be readable. The app already enforces that in code, and no palette gets to break it.</p>
+</div>
+</div>
+<script>
+(function(){var b=document.getElementById('gs');
+b.addEventListener('click',function(){var on=document.body.classList.toggle('gs');
+b.setAttribute('aria-pressed',on?'true':'false');
+b.textContent=on?'Bring colour back':'Strip all colour';});})();
+</script>
+
+</body>
+</html>

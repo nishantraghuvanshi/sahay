@@ -63,6 +63,16 @@
   --shadow-card: 0 1px 2px rgba(58, 44, 20, 0.05), 0 2px 10px rgba(58, 44, 20, 0.05);
   --shadow-lift: 0 6px 16px rgba(58, 44, 20, 0.1), 0 14px 40px rgba(58, 44, 20, 0.1);
 
+  /* radius — four steps, and radius carries hierarchy: the closer a surface is to
+     the content, the tighter it gets. `rounded-full` is NOT a step on this scale —
+     it is reserved for things that are actually circular or capsular: status dots,
+     the meter bar, the wordmark i-dot, the quote spine, the tab-bar mark and the
+     step-progress segments. A fully round button or chip reads as a toy. */
+  --radius-sm: 4px;   /* tags, badges */
+  --radius-md: 6px;   /* inputs, chips */
+  --radius-lg: 8px;   /* buttons */
+  --radius-xl: 12px;  /* cards */
+
   /* motion — settling, never springy */
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
@@ -269,14 +279,13 @@ a:not([class*='no-underline']) {
 }
 
 /* --------------------------------------------- sign-in entrance choreography
-   Each element starts blurred and displaced, then settles. `both` matters: it
-   holds the *from* state before the delay elapses (no flash of finished layout)
-   and the *to* state after — which is also what makes the reduced-motion clamp
-   below land on the final frame instead of an invisible one. */
+   Each element starts displaced, then settles. `both` matters: it holds the *from*
+   state before the delay elapses (no flash of finished layout) and the *to* state
+   after — which is also what makes the reduced-motion clamp below land on the final
+   frame instead of an invisible one. */
 @keyframes fadeSlideIn {
   to {
     opacity: 1;
-    filter: blur(0px);
     transform: translateY(0px);
   }
 }
@@ -284,52 +293,39 @@ a:not([class*='no-underline']) {
 @keyframes slideRightIn {
   to {
     opacity: 1;
-    filter: blur(0px);
     transform: translateX(0px);
   }
 }
 
-@keyframes testimonialIn {
-  to {
-    opacity: 1;
-    filter: blur(0px);
-    transform: translateY(0px) scale(1);
-  }
-}
+/* The auth screens came in from a stock sign-in block whose entrance ran 0.7-0.9s
+   per element on a ladder that reached 1400ms — nearly two seconds before a login
+   form finished assembling itself, for a user who opens this app anxious and in a
+   hurry. Durations now match the system's entrance beat (340ms, DESIGN.md: never
+   above 340ms) and the whole ladder lands inside 300ms. The blur-in went with it:
+   a form resolving out of frosted glass is a flourish this product has not earned.
+   Order is preserved, so the eye is still led down the form. */
 
 .animate-element {
   opacity: 0;
-  filter: blur(4px);
-  transform: translateY(12px);
-  animation: fadeSlideIn 0.7s var(--ease-out) both;
+  transform: translateY(8px);
+  animation: fadeSlideIn 0.34s var(--ease-out) both;
 }
 
 .animate-slide-right {
   opacity: 0;
-  filter: blur(8px);
-  transform: translateX(32px);
-  animation: slideRightIn 0.9s var(--ease-out) both;
+  transform: translateX(24px);
+  animation: slideRightIn 0.34s var(--ease-out) both;
 }
 
-.animate-testimonial {
-  opacity: 0;
-  filter: blur(6px);
-  transform: translateY(20px) scale(0.96);
-  animation: testimonialIn 0.8s var(--ease-out) both;
-}
-
-.animate-delay-100 { animation-delay: 100ms; }
-.animate-delay-200 { animation-delay: 200ms; }
-.animate-delay-300 { animation-delay: 300ms; }
-.animate-delay-400 { animation-delay: 400ms; }
-.animate-delay-500 { animation-delay: 500ms; }
-.animate-delay-600 { animation-delay: 600ms; }
-.animate-delay-700 { animation-delay: 700ms; }
-.animate-delay-800 { animation-delay: 800ms; }
-.animate-delay-900 { animation-delay: 900ms; }
-.animate-delay-1000 { animation-delay: 1000ms; }
-.animate-delay-1200 { animation-delay: 1200ms; }
-.animate-delay-1400 { animation-delay: 1400ms; }
+.animate-delay-100 { animation-delay: 40ms; }
+.animate-delay-200 { animation-delay: 70ms; }
+.animate-delay-300 { animation-delay: 100ms; }
+.animate-delay-400 { animation-delay: 130ms; }
+.animate-delay-500 { animation-delay: 160ms; }
+.animate-delay-600 { animation-delay: 190ms; }
+.animate-delay-700 { animation-delay: 220ms; }
+.animate-delay-800 { animation-delay: 250ms; }
+.animate-delay-900 { animation-delay: 280ms; }
 
 /* The one checkbox the design system draws itself, so it can be accent-coloured
    and sized for a thumb instead of inheriting the OS control. */
@@ -339,7 +335,7 @@ a:not([class*='no-underline']) {
   height: 1.15rem;
   flex: none;
   border: 1px solid var(--color-line-strong);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   display: inline-grid;
   place-content: center;
@@ -368,9 +364,7 @@ a:not([class*='no-underline']) {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-element,
-  .animate-slide-right,
-  .animate-testimonial {
+  .animate-slide-right {
     animation-delay: 0ms !important;
-    filter: none;
   }
 }

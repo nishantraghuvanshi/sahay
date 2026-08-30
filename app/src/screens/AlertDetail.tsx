@@ -293,10 +293,10 @@ export default function AlertDetail() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
       {/* -------------------------------------------------------------- header */}
       <Row className="flex-wrap gap-x-3">
-        <Link to="/alerts" className="text-sm font-semibold underline">
+        <Link to="/alerts" className="text-sm underline">
           ‹ All alerts
         </Link>
-        <Link to="/observations" className="ml-auto text-sm font-semibold underline">
+        <Link to="/observations" className="ml-auto text-sm underline">
           What she said ›
         </Link>
       </Row>
@@ -310,7 +310,7 @@ export default function AlertDetail() {
 
         <h1
           lang={parentLang}
-          className="text-xl leading-snug font-bold break-words hyphens-none sm:text-2xl"
+          className="text-xl leading-snug font-medium break-words hyphens-none sm:text-2xl"
         >
           {chiefComplaint ? `“${chiefComplaint}”` : `${escalation.level} alert raised`}
         </h1>
@@ -323,7 +323,7 @@ export default function AlertDetail() {
 
         {call && (
           <Row>
-            <Link to={`/calls/${call.id}`} className="text-sm font-semibold underline">
+            <Link to={`/calls/${call.id}`} className="text-sm underline">
               Open the whole call
             </Link>
           </Row>
@@ -339,7 +339,7 @@ export default function AlertDetail() {
               <Label className="flex-1">Why this was flagged</Label>
               <Tag tone={levelTone}>{escalation.level}</Tag>
             </Row>
-            <div className="text-sm leading-relaxed font-bold break-words sm:text-md">
+            <div className="text-sm leading-relaxed font-semibold break-words sm:text-md">
               {escalation.reason}
             </div>
             {intakeRecord?.priority_rule && intakeRecord.priority_rule !== escalation.reason && (
@@ -388,7 +388,7 @@ export default function AlertDetail() {
                       className={clsx(
                         'min-w-0 flex-1 rounded text-base leading-relaxed break-words hyphens-none whitespace-pre-wrap',
                         line.agent && !matched && 'text-muted-strong',
-                        matched && 'rounded bg-highlight px-1.5 py-0.5 font-bold',
+                        matched && 'rounded bg-highlight px-1.5 py-0.5 font-semibold',
                       )}
                     >
                       {line.text}
@@ -407,7 +407,7 @@ export default function AlertDetail() {
             })}
 
             {lines.length > shown.lines.length && call && (
-              <Link to={`/calls/${call.id}`} className="text-sm font-semibold underline">
+              <Link to={`/calls/${call.id}`} className="text-sm underline">
                 Full transcript ›
               </Link>
             )}
@@ -597,7 +597,7 @@ function IntakeFieldRow({ spec, value }: { spec: FieldSpec; value: string | null
   return (
     <div className="flex flex-col gap-1 border-b border-line py-2 last:border-b-0">
       <Row className="items-start gap-2">
-        <span className="w-4 shrink-0 text-2xs font-bold text-muted-strong tabular-nums">{spec.n}</span>
+        <span className="w-4 shrink-0 text-2xs font-medium text-muted-strong tabular-nums">{spec.n}</span>
         <span className="min-w-0 flex-1 text-sm font-semibold">{spec.label}</span>
         <span className="shrink-0">
           {/* Filled = the agent had to ask. Outlined = we already held it. */}

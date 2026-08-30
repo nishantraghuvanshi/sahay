@@ -119,14 +119,14 @@ export default function Consent() {
         >
           &larr;
         </button>
-        <h1 className="min-w-0 flex-1 text-lg font-bold sm:text-xl">Before we call {name}</h1>
+        <h1 className="min-w-0 flex-1 text-lg font-semibold sm:text-xl">Before we call {name}</h1>
         <Label className="shrink-0">4 / 4</Label>
       </header>
 
       <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr] lg:items-start">
         <div className="flex flex-col gap-3">
           <Card emphasis="none" className="gap-1.5">
-            <div className="text-lg leading-snug font-bold">
+            <div className="text-lg leading-snug font-medium">
               First we ring {address} once, just to introduce ourselves
             </div>
             <p className="text-base leading-relaxed text-muted-strong">
@@ -358,7 +358,7 @@ function TimeSheet({
       >
         <div className="mx-auto h-1 w-8 rounded bg-line-strong sm:hidden" />
         <Row>
-          <span className="flex-1 text-md font-bold">When are they usually free?</span>
+          <span className="flex-1 text-md font-semibold">When are they usually free?</span>
           <button type="button" aria-label="Close" onClick={onClose} className="px-1 text-muted-strong">
             ✕
           </button>

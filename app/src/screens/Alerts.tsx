@@ -183,7 +183,7 @@ export default function Alerts() {
       {/* ------------------------------------------------------- what this screen is */}
       <div className="flex flex-col gap-1">
         <Row className="items-baseline gap-2">
-          <h1 className="flex-1 text-lg font-bold">Alerts</h1>
+          <h1 className="flex-1 text-lg font-semibold">Alerts</h1>
           <Label>
             {all.length} {all.length === 1 ? 'alert' : 'alerts'}
           </Label>
@@ -231,7 +231,7 @@ export default function Alerts() {
         /* Deliberately different from the above: the record is not empty, this view is. */
         <Card emphasis="border" className="items-start gap-2">
           <Label>Nothing in this view</Label>
-          <div className="text-md font-bold">
+          <div className="text-md font-semibold">
             No {level === 'all' ? '' : `${level} `}alerts {windowWord}.
           </div>
           <p className="text-sm leading-relaxed text-muted-strong">
@@ -313,7 +313,7 @@ function AlertRow({
       <p
         className={clsx(
           'text-lg leading-snug break-words hyphens-none whitespace-pre-wrap sm:text-lg',
-          escalation.level === 'P1' ? 'font-bold' : 'font-semibold',
+          escalation.level === 'P1' ? 'font-semibold' : '',
         )}
       >
         {escalation.reason}
@@ -352,7 +352,7 @@ function AlertRow({
         </span>
       </div>
 
-      <Link to={`/alerts/${escalation.id}`} className="text-sm font-semibold underline">
+      <Link to={`/alerts/${escalation.id}`} className="text-sm underline">
         {escalation.intake_record_id ? 'Open the intake record' : 'Open this alert'} ›
       </Link>
     </Card>

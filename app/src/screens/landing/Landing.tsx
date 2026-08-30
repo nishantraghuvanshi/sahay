@@ -117,7 +117,7 @@ function Hero() {
         </Tag>
 
         {/* Plex Sans, not Newsreader — DESIGN.md:247, the serif is care content only. */}
-        <h1 className="max-w-[15ch] text-3xl leading-[1.12] font-bold tracking-[-0.02em] text-balance lg:text-4xl">
+        <h1 className="max-w-[15ch] text-3xl leading-[1.12] font-medium tracking-[-0.02em] text-balance lg:text-4xl">
           Keep an eye on your parent&rsquo;s medicines
         </h1>
         <p className="max-w-[46ch] text-md text-muted-strong">
@@ -135,13 +135,13 @@ function Hero() {
         </div>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <ValueCard icon={<ScanLine size={18} />} title="Scan the prescription">
+          <ValueCard icon={<ScanLine size={18} strokeWidth={1.5} />} title="Scan the prescription">
             We read dose, timing and food rules.
           </ValueCard>
-          <ValueCard icon={<PhoneCall size={18} />} title="Agent calls your parent">
+          <ValueCard icon={<PhoneCall size={18} strokeWidth={1.5} />} title="Agent calls your parent">
             In their language, in your window.
           </ValueCard>
-          <ValueCard icon={<BellRing size={18} />} title="You only hear what matters">
+          <ValueCard icon={<BellRing size={18} strokeWidth={1.5} />} title="You only hear what matters">
             Missed dose, no answer, anything she says that needs you.
           </ValueCard>
         </div>
@@ -165,7 +165,7 @@ function Hero() {
 
       {/* right — the real auth column, 376px as drawn */}
       <div className="flex w-full flex-col gap-3 bg-surface px-5 py-10 sm:px-8 lg:w-[376px] lg:shrink-0 lg:px-[34px] lg:py-11">
-        <div className="text-lg font-bold">Create your account</div>
+        <div className="text-lg font-medium">Create your account</div>
         <p className="text-sm text-muted-strong">One account, one parent to start.</p>
         <div className="h-1" />
         <AuthSteps variant="inset" />
@@ -214,7 +214,7 @@ function Section({
       <div className="mx-auto flex max-w-6xl flex-col gap-5">
         <div className="flex flex-col gap-2">
           <Label>{eyebrow}</Label>
-          <h2 className="max-w-[22ch] text-2xl leading-tight font-bold tracking-[-0.015em] text-balance">
+          <h2 className="max-w-[22ch] text-2xl leading-tight font-medium tracking-[-0.015em] text-balance">
             {title}
           </h2>
           {lede && <p className="max-w-[62ch] text-md text-muted-strong">{lede}</p>}
@@ -377,7 +377,7 @@ function Pricing() {
               {t.featured && <Tag tone="accent">most families</Tag>}
             </div>
             <div className="flex items-baseline gap-1.5">
-              <span className="tnum text-2xl font-bold tracking-[-0.02em]">{t.price}</span>
+              <span className="tnum text-2xl font-medium tracking-[-0.02em]">{t.price}</span>
               <span className="text-sm text-muted-strong">{t.unit}</span>
             </div>
             <ul className="flex flex-col gap-1.5">

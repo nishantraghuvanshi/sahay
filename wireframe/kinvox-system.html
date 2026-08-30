@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html{color-scheme:light dark}body{margin:0}img{max-width:100%}</style>
+<title>Kinvox Record System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Devanagari:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+/* ============================================================
+   Kinvox brand tokens — ABSOLUTE.
+   These never respond to the viewer's theme: this page is the
+   specimen, so a swatch must always show its true value.
+   ============================================================ */
+:root{
+  --k-ink:#14130E;      --k-ink-soft:#3A382F;
+  --k-muted-strong:#5F5A4F; --k-muted:#7D7669;
+  --k-fill-empty:#C7C1B2;   --k-fill:#DCD6C8;
+  --k-line-strong:#D0C9B8;  --k-line:#E4DFD2;
+  --k-canvas:#EFEAE0;   --k-surface:#F8F5EF;  --k-paper:#FFFDF9;
+  --k-accent:#1B4D3E;   --k-accent-soft:#E6EDE9;
+  --k-ok:#1B4D3E;
+  --k-warn:#8A5A00;     --k-warn-soft:#F6EEDC;
+  --k-danger:#A4231C;   --k-danger-soft:#F7E7E4;
+  --k-highlight:#F3E7C4;
+
+  --shadow-card:0 1px 2px rgb(20 19 14 / .04), 0 4px 12px rgb(20 19 14 / .05);
+  --shadow-lift:0 2px 4px rgb(20 19 14 / .05), 0 12px 32px rgb(20 19 14 / .09);
+  --ease-out:cubic-bezier(.22,.61,.36,1);
+  --dur-fast:140ms; --dur-base:240ms; --dur-slow:420ms;
+
+  /* page chrome — light */
+  --bg:#EFEAE0; --panel:#FFFDF9; --sunk:#E7E1D5;
+  --fg:#14130E; --fg-2:#5F5A4F; --fg-3:#7D7669;
+  --rule:#D5CEBE; --rule-soft:#E4DFD2; --link:#1B4D3E;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16150F; --panel:#1E1C15; --sunk:#12110C;
+    --fg:#F2EEE3; --fg-2:#C0B9A7; --fg-3:#8E8879;
+    --rule:#37342A; --rule-soft:#2A2820; --link:#8FC3AF;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16150F; --panel:#1E1C15; --sunk:#12110C;
+  --fg:#F2EEE3; --fg-2:#C0B9A7; --fg-3:#8E8879;
+  --rule:#37342A; --rule-soft:#2A2820; --link:#8FC3AF;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:'IBM Plex Sans',system-ui,sans-serif;
+  font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+:lang(hi),:lang(mr){font-family:'IBM Plex Sans Devanagari','IBM Plex Sans',system-ui,sans-serif}
+:focus-visible{outline:2px solid var(--link); outline-offset:2px; border-radius:2px}
+.tnum{font-variant-numeric:tabular-nums}
+
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px 96px}
+
+/* ---------- masthead ---------- */
+.mast{padding:72px 0 40px;border-bottom:1px solid var(--rule)}
+.mark{display:inline-block;position:relative;padding-bottom:7px}
+.mark b{
+  font-family:Newsreader,Georgia,serif;font-weight:400;
+  font-size:38px;letter-spacing:-.015em;line-height:1;display:block;
+}
+.mark::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--fg)}
+.mark i{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--k-accent);
+  left:22px;bottom:-1.5px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .mark i{background:var(--link)}}
+:root[data-theme="dark"] .mark i{background:var(--link)}
+
+.mast h1{
+  font-family:Newsreader,Georgia,serif;font-weight:300;
+  font-size:clamp(30px,4.4vw,50px);line-height:1.12;letter-spacing:-.018em;
+  margin:26px 0 0;max-width:16ch;text-wrap:balance;
+}
+.mast h1 em{font-style:italic;color:var(--fg-2)}
+.mast p{max-width:62ch;color:var(--fg-2);margin:18px 0 0;font-size:16px}
+.mast .meta{display:flex;flex-wrap:wrap;gap:20px;margin-top:30px;
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--fg-3)}
+
+/* ---------- section scaffolding ---------- */
+section{padding-top:60px}
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--fg-3);
+  display:flex;align-items:center;gap:14px;margin-bottom:8px;
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule-soft)}
+h2{font-family:Newsreader,Georgia,serif;font-weight:400;font-size:29px;
+  letter-spacing:-.01em;margin:0 0 10px;line-height:1.2}
+.lede{max-width:66ch;color:var(--fg-2);margin:0 0 26px}
+.note{max-width:66ch;color:var(--fg-2);font-size:14px;margin:22px 0 0;
+  padding-left:14px;border-left:2px solid var(--rule)}
+.note b{color:var(--fg);font-weight:600}
+code{font-family:'IBM Plex Mono',monospace;font-size:.88em;
+  background:var(--sunk);padding:1px 5px;border-radius:3px}
+
+/* ---------- swatches ---------- */
+.ramp{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:2px;
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden;background:var(--rule)}
+.sw{background:var(--panel);padding:0}
+.sw .chip{height:76px;border-bottom:1px solid var(--rule-soft)}
+.sw .body{padding:10px 12px 13px}
+.sw .tok{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;
+  letter-spacing:.01em;display:block}
+.sw .hex{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--fg-3);
+  text-transform:uppercase;display:block;margin-top:1px}
+.sw .role{font-size:12.5px;color:var(--fg-2);margin-top:7px;line-height:1.42}
+.sw .was{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--fg-3);
+  margin-top:5px;text-transform:uppercase;letter-spacing:.04em}
+
+/* ---------- type specimen ---------- */
+.faces{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.face{background:var(--panel);padding:22px}
+.face .sample{font-size:40px;line-height:1.1;margin-bottom:14px;color:var(--fg)}
+.face .name{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--fg-3)}
+.face .use{font-size:13.5px;color:var(--fg-2);margin-top:6px;line-height:1.45}
+.f-display{font-family:Newsreader,Georgia,serif;font-weight:300}
+.f-ui{font-family:'IBM Plex Sans',sans-serif;font-weight:500}
+.f-deva{font-family:'IBM Plex Sans Devanagari',sans-serif;font-weight:400;font-size:34px}
+
+.scale{border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-top:26px;background:var(--panel)}
+.scale .row{display:flex;align-items:baseline;gap:20px;padding:11px 18px;
+  border-bottom:1px solid var(--rule-soft)}
+.scale .row:last-child{border-bottom:0}
+.scale .k{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--fg-3);
+  width:78px;flex:none;letter-spacing:.05em}
+.scale .was{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--fg-3);
+  width:96px;flex:none;text-align:right}
+.scale .spec{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+
+/* ============================================================
+   STAGE — components render on Kinvox's real ground.
+   The app is light-only, so these stay light in both themes.
+   ============================================================ */
+.stage{
+  background:var(--k-canvas); color:var(--k-ink);
+  border:1px solid var(--k-line-strong); border-radius:6px;
+  padding:26px; display:flex; flex-direction:column; gap:26px;
+}
+.stage.tight{padding:20px}
+.stage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.cap{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--k-muted);margin-bottom:11px}
+.cap b{color:var(--k-ink);font-weight:600}
+
+/* Kinvox atoms */
+.k-card{background:var(--k-surface);border:1px solid var(--k-line-strong);
+  border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:9px;
+  box-shadow:var(--shadow-card)}
+.k-card.primary{border:1.5px solid var(--k-ink);background:var(--k-paper)}
+.k-card.rule{border-left:3px solid var(--k-ink)}
+.k-card.alert{border-left:3px solid var(--k-danger);background:var(--k-danger-soft)}
+.k-lbl{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--k-muted)}
+.k-tag{display:inline-flex;align-items:center;border-radius:4px;padding:2px 6px;
+  font-size:11px;font-weight:600;letter-spacing:.03em;background:var(--k-ink);color:#fff}
+.k-tag.danger{background:var(--k-danger)}
+.k-tag.warn{background:var(--k-warn)}
+.k-tag.ok{background:var(--k-ok)}
+.k-tag.accent{background:var(--k-accent)}
+.k-tag.out{background:transparent;border:1px solid var(--k-ink);color:var(--k-ink)}
+.k-tag.out.warn{border-color:var(--k-warn);color:var(--k-warn);background:var(--k-warn-soft)}
+.k-tag.out.danger{border-color:var(--k-danger);color:var(--k-danger);background:transparent}
+.k-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:8px;padding:9px 16px;font-size:14px;font-weight:600;font-family:inherit;
+  border:1px solid transparent;background:var(--k-ink);color:#fff;cursor:pointer;
+  transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),
+             border-color var(--dur-fast) var(--ease-out)}
+.k-btn:hover{background:#2C2A20}
+.k-btn:active{background:#000}
+.k-btn.outline{background:transparent;border-color:var(--k-ink);color:var(--k-ink)}
+.k-btn.outline:hover{background:var(--k-line)}
+.k-btn.quiet{background:transparent;border-color:transparent;color:var(--k-muted-strong);font-weight:500}
+.k-btn.quiet:hover{background:var(--k-line);color:var(--k-ink)}
+.k-btn.accent{background:var(--k-accent)}
+.k-btn.accent:hover{background:#164033}
+.k-btn[disabled]{opacity:.4;pointer-events:none}
+.k-input{width:100%;border:1px solid var(--k-line-strong);background:var(--k-paper);
+  border-radius:6px;padding:9px 11px;font:inherit;font-size:15px;color:var(--k-ink);
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out)}
+.k-input::placeholder{color:var(--k-muted)}
+.k-input:focus{outline:none;border-color:var(--k-accent);box-shadow:0 0 0 3px var(--k-accent-soft)}
+
+/* dots — shape carries the meaning, colour is added on top */
+.k-dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+.k-dot.filled{background:var(--k-ok)}
+.k-dot.hollow{background:var(--k-paper);border:1.5px solid var(--k-danger)}
+.k-dot.empty{background:var(--k-fill-empty)}
+.dotrow{display:flex;align-items:center;gap:7px;font-size:14px}
+.dotrow span:last-child{color:var(--k-muted-strong)}
+
+/* ① QuoteBlock */
+.quote{position:relative;padding:4px 0 0 20px;border-left:3px solid var(--k-line-strong)}
+.quote.red{border-left-color:var(--k-danger)}
+.quote.watch{border-left-color:var(--k-warn)}
+.quote .mark{position:absolute;left:14px;top:-16px;font-family:Newsreader,Georgia,serif;
+  font-size:84px;line-height:1;color:var(--k-line-strong);pointer-events:none;z-index:0}
+.quote p{position:relative;z-index:1;margin:0;font-family:Newsreader,Georgia,serif;
+  font-weight:300;font-size:30px;line-height:1.28;letter-spacing:-.01em;max-width:22ch}
+.quote p:lang(hi){font-family:'IBM Plex Sans Devanagari',sans-serif;font-weight:400;
+  font-size:25px;line-height:1.5}
+.quote .attr{margin-top:12px;font-size:13px;color:var(--k-muted);display:flex;
+  align-items:center;gap:9px;flex-wrap:wrap}
+
+/* ② Thread */
+.thread{position:relative;padding-left:0}
+.thread .line{position:absolute;left:57px;top:6px;bottom:6px;width:1px;background:var(--k-line-strong)}
+.trow{display:flex;gap:0;align-items:flex-start;padding:8px 0;position:relative}
+.trow .t{width:48px;flex:none;text-align:right;font-size:13px;color:var(--k-muted);padding-top:2px}
+.trow .n{width:18px;flex:none;display:flex;justify-content:center;padding-top:6px;position:relative;z-index:1}
+.trow .n .k-dot{outline:3px solid var(--k-canvas)}
+.trow .c{flex:1;min-width:0;padding-left:10px;font-size:15px}
+.trow .c small{display:block;font-size:13px;color:var(--k-muted-strong);margin-top:1px}
+.trow.new{animation:arrive var(--dur-slow) var(--ease-out) both, flash 2.4s var(--ease-out) 1 .2s}
+@keyframes arrive{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
+@keyframes flash{0%,45%{background:var(--k-highlight)}100%{background:transparent}}
+
+/* ③ IntakeMeter */
+.meter{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;max-width:340px}
+.cell{height:26px;border-radius:3px;border:1.5px solid var(--k-ink);
+  animation:fillin var(--dur-base) var(--ease-out) both}
+.cell.known{background:var(--k-ink)}
+.cell.asked{background:transparent}
+.cell.unknown{background:transparent;border-color:var(--k-fill-empty)}
+@keyframes fillin{from{opacity:0;transform:scaleY(.4)}to{opacity:1;transform:none}}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--k-muted-strong);margin-top:12px}
+.legend span{display:flex;align-items:center;gap:7px}
+.legend i{width:13px;height:13px;border-radius:3px;border:1.5px solid var(--k-ink);display:block}
+.legend i.known{background:var(--k-ink)}
+.legend i.unknown{border-color:var(--k-fill-empty)}
+
+/* ④ EscalationClock */
+.clock{display:flex;align-items:center;gap:14px}
+.clock svg{flex:none;transform:rotate(-90deg)}
+.clock .ring-bg{stroke:var(--k-line-strong)}
+.clock .ring-fg{stroke:var(--k-danger);stroke-linecap:round;
+  transition:stroke-dashoffset 1s linear}
+.clock .txt{font-size:15px}
+.clock .txt small{display:block;font-size:13px;color:var(--k-muted-strong);margin-top:1px}
+
+/* ⑤ LiveCallCard */
+.live{border:1.5px solid var(--k-accent);background:var(--k-paper);border-radius:8px;
+  padding:14px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-card)}
+.pulse{width:38px;height:38px;border-radius:50%;background:var(--k-accent-soft);
+  display:grid;place-items:center;position:relative;flex:none}
+.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;
+  border:1.5px solid var(--k-accent);animation:pulse 2s var(--ease-out) infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+.pulse b{width:9px;height:9px;border-radius:50%;background:var(--k-accent)}
+.wave{display:flex;align-items:center;gap:3px;height:26px}
+.wave i{width:3px;border-radius:2px;background:var(--k-accent);height:7px;
+  animation:bar 1.2s var(--ease-out) infinite}
+.wave i:nth-child(2){animation-delay:.15s}
+.wave i:nth-child(3){animation-delay:.3s}
+.wave i:nth-child(4){animation-delay:.45s}
+.wave i:nth-child(5){animation-delay:.6s}
+@keyframes bar{0%,100%{height:7px}50%{height:24px}}
+
+/* ⑥ TranscriptPlayer */
+.tx{display:flex;flex-direction:column;gap:1px}
+.txline{display:flex;gap:12px;padding:6px 9px;border-radius:4px;font-size:14.5px;align-items:flex-start}
+.txline .tc{font-size:12.5px;color:var(--k-muted);width:38px;flex:none;padding-top:2px}
+.txline .who{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  width:46px;flex:none;color:var(--k-muted);padding-top:3px}
+.txline.match{background:var(--k-highlight);box-shadow:inset 3px 0 0 var(--k-danger);font-weight:500}
+.scrub{height:4px;border-radius:2px;background:var(--k-fill);position:relative;margin:12px 0 4px}
+.scrub b{position:absolute;left:0;top:0;bottom:0;width:38%;background:var(--k-ink);border-radius:2px}
+.scrub i{position:absolute;left:38%;top:-4px;width:12px;height:12px;border-radius:50%;
+  background:var(--k-ink);margin-left:-6px}
+
+/* ⑦ StatCount */
+.stat b{font-family:Newsreader,Georgia,serif;font-weight:400;font-size:44px;
+  line-height:1;letter-spacing:-.02em;display:block}
+.stat span{font-size:14px;color:var(--k-muted-strong)}
+
+/* ---------- motion table ---------- */
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--panel);
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--fg-3);font-weight:400}
+tr:last-child td{border-bottom:0}
+td:last-child{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--fg-2);white-space:nowrap}
+.tablewrap{overflow-x:auto}
+
+/* ---------- greyscale proof ---------- */
+.bar{position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--rule);padding:11px 0;margin-bottom:-1px}
+.bar .in{max-width:1080px;margin:0 auto;padding:0 28px;display:flex;align-items:center;
+  gap:14px;flex-wrap:wrap}
+.bar p{margin:0;font-size:13px;color:var(--fg-2);flex:1;min-width:220px}
+.toggle{border:1px solid var(--rule);background:var(--panel);color:var(--fg);
+  border-radius:99px;padding:6px 14px;font:inherit;font-size:13px;font-weight:500;
+  cursor:pointer;transition:background var(--dur-fast) var(--ease-out)}
+.toggle:hover{background:var(--sunk)}
+.toggle[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+body.gs .stage,body.gs .ramp,body.gs .faces{filter:grayscale(1)}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media (max-width:640px){
+  .wrap{padding:0 18px 64px}
+  .bar .in{padding:0 18px}
+  .quote p{font-size:24px}
+  .scale .was{display:none}
+}
+</style>
+</head>
+<body>
+
+
+<div class="bar">
+  <div class="in">
+    <p><b>Proof, not assumption:</b> every status colour sits on a mark that already has its own shape and text label.</p>
+    <button class="toggle" id="gs" aria-pressed="false">Strip all colour</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header class="mast">
+  <span class="mark"><b>Kinvox</b><i></i></span>
+  <h1>The record is the product. <em>So the design is a document.</em></h1>
+  <p>Kinvox calls an ageing parent on schedule, and picks up when she calls in. It captures what she said, verbatim, and cites the rule that fired — never a diagnosis. This page is the visual system that has to carry that: warm paper, hairlines, and her own words set larger than anything around them.</p>
+  <div class="meta">
+    <span>Direction · The Record</span>
+    <span>Motif · The line</span>
+    <span>Replaces · grey-box wireframe</span>
+  </div>
+</header>
+
+<section>
+  <div class="eyebrow">Neutrals</div>
+  <h2>A warm paper ramp</h2>
+  <p class="lede">Every existing token is warmed and the relationships between them are kept, so nothing needs relayout. Pure <code>#fff</code> becomes a paper white and every grey picks up the same yellow bias — the change is small per swatch and total in aggregate.</p>
+
+  <div class="ramp">
+    <div class="sw"><div class="chip" style="background:#14130E"></div><div class="body"><span class="tok">ink</span><span class="hex">#14130E</span><span class="role">Body text, filled buttons, active nav, taken dots</span><span class="was">was #1a1a1a</span></div></div>
+    <div class="sw"><div class="chip" style="background:#3A382F"></div><div class="body"><span class="tok">ink-soft</span><span class="hex">#3A382F</span><span class="role">Secondary headings</span><span class="was">new</span></div></div>
+    <div class="sw"><div class="chip" style="background:#5F5A4F"></div><div class="body"><span class="tok">muted-strong</span><span class="hex">#5F5A4F</span><span class="role">Body support text</span><span class="was">was #6d6d6d</span></div></div>
+    <div class="sw"><div class="chip" style="background:#7D7669"></div><div class="body"><span class="tok">muted</span><span class="hex">#7D7669</span><span class="role">Caps labels, timestamps, metadata</span><span class="was">was #8d8d8d</span></div></div>
+    <div class="sw"><div class="chip" style="background:#C7C1B2"></div><div class="body"><span class="tok">fill-empty</span><span class="hex">#C7C1B2</span><span class="role">Upcoming or inactive dot</span><span class="was">was a stray hex</span></div></div>
+    <div class="sw"><div class="chip" style="background:#DCD6C8"></div><div class="body"><span class="tok">fill</span><span class="hex">#DCD6C8</span><span class="role">Skeleton bars, meter track</span><span class="was">was #dedede</span></div></div>
+    <div class="sw"><div class="chip" style="background:#D0C9B8"></div><div class="body"><span class="tok">line-strong</span><span class="hex">#D0C9B8</span><span class="role">Card and input borders</span><span class="was">was #d8d8d4</span></div></div>
+    <div class="sw"><div class="chip" style="background:#E4DFD2"></div><div class="body"><span class="tok">line</span><span class="hex">#E4DFD2</span><span class="role">Dividers, row rules, and the motif hairline</span><span class="was">was #e4e4e0</span></div></div>
+    <div class="sw"><div class="chip" style="background:#EFEAE0"></div><div class="body"><span class="tok">canvas</span><span class="hex">#EFEAE0</span><span class="role">Page ground</span><span class="was">was #f0eee9</span></div></div>
+    <div class="sw"><div class="chip" style="background:#F8F5EF"></div><div class="body"><span class="tok">surface</span><span class="hex">#F8F5EF</span><span class="role">Card fill</span><span class="was">was #fafaf8</span></div></div>
+    <div class="sw"><div class="chip" style="background:#FFFDF9"></div><div class="body"><span class="tok">paper</span><span class="hex">#FFFDF9</span><span class="role">Raised surface, inputs, bottom sheet</span><span class="was">was #ffffff</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Accent — one, and it is not blue</div>
+  <h2>Deep forest green</h2>
+  <p class="lede">Green rather than the reflexive clinical blue: it reads calm and trusted, it doubles honestly as the “confirmed” status, and it sits properly on warm paper where blue goes cold and sour.</p>
+
+  <div class="ramp" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+    <div class="sw"><div class="chip" style="background:#1B4D3E"></div><div class="body"><span class="tok">accent</span><span class="hex">#1B4D3E</span><span class="role">Brand, landing CTA, active nav, focus ring</span></div></div>
+    <div class="sw"><div class="chip" style="background:#E6EDE9"></div><div class="body"><span class="tok">accent-soft</span><span class="hex">#E6EDE9</span><span class="role">Fill behind selected chips and the active nav row</span></div></div>
+  </div>
+
+  <p class="note"><b>The primary button stays ink-filled.</b> The wireframe spec sets “one accent: black”, and the whole severity language is built on ink-on-white weight. Accent is spent on the landing CTA, active nav and focus rings only — so the logic the app already has survives intact.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Status</div>
+  <h2>Added on top of shape, never replacing it</h2>
+  <p class="lede">Three status colours and one highlight. Each is applied to a mark that already carries a distinct shape and a text label — so the screen still reads in a greyscale screen recording, and for a colour-blind viewer.</p>
+
+  <div class="ramp" style="grid-template-columns:repeat(auto-fit,minmax(168px,1fr))">
+    <div class="sw"><div class="chip" style="background:#1B4D3E"></div><div class="body"><span class="tok">ok</span><span class="hex">#1B4D3E</span><span class="role">Confirmed, taken, step complete, consent ticked</span></div></div>
+    <div class="sw"><div class="chip" style="background:#8A5A00"></div><div class="body"><span class="tok">warn</span><span class="hex">#8A5A00</span><span class="role">Watch severity, no answer, unknown</span></div></div>
+    <div class="sw"><div class="chip" style="background:#F6EEDC"></div><div class="body"><span class="tok">warn-soft</span><span class="hex">#F6EEDC</span><span class="role">Watch chip fill</span></div></div>
+    <div class="sw"><div class="chip" style="background:#A4231C"></div><div class="body"><span class="tok">danger</span><span class="hex">#A4231C</span><span class="role">P1, red severity, missed dose, critical alert</span></div></div>
+    <div class="sw"><div class="chip" style="background:#F7E7E4"></div><div class="body"><span class="tok">danger-soft</span><span class="hex">#F7E7E4</span><span class="role">Critical card tint</span></div></div>
+    <div class="sw"><div class="chip" style="background:#F3E7C4"></div><div class="body"><span class="tok">highlight</span><span class="hex">#F3E7C4</span><span class="role">The transcript line that fired the rule</span></div></div>
+  </div>
+
+  <p class="note"><b>Vermilion, not fire-engine red.</b> <code>danger</code> belongs to the paper it sits on. <code>warn</code> is a dark ochre — dark enough to set as text at 6.5:1, so it can carry a word rather than only decorate one. And <code>highlight</code> is a pale marigold: the marked passage in a record. Today that matched line uses the same grey as the skeleton bars, so the most important line on the most important screen currently reads as a loading placeholder.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Typography</div>
+  <h2>One family for both scripts she speaks</h2>
+  <p class="lede">The app loads no webfont today. It needs three roles — and the Devanagari one is not a nicety: the verbatim Hindi quote is the product’s centrepiece, and a Latin-only UI face silently drops it to a system fallback while everything around it is set properly.</p>
+
+  <div class="faces">
+    <div class="face">
+      <div class="sample f-display">Chest feels tight</div>
+      <div class="name">Newsreader</div>
+      <div class="use">Display. Quotes, the landing hero, screen titles, the one hero number per screen. An editorial face built for reading, not for looking expensive.</div>
+    </div>
+    <div class="face">
+      <div class="sample f-ui">Mark taken</div>
+      <div class="name">IBM Plex Sans</div>
+      <div class="use">UI. Everything else. Engineered and institutional rather than neutral — it suits a record, and its numerals are properly tabular.</div>
+    </div>
+    <div class="face">
+      <div class="sample f-deva" lang="hi">छाती में जकड़न</div>
+      <div class="name">IBM Plex Sans Devanagari</div>
+      <div class="use">Bound to <code>:lang(hi)</code> and <code>:lang(mr)</code>. Same designer, same system, so a Hindi quote and its English attribution finally look like one document.</div>
+    </div>
+  </div>
+
+  <p class="note">The wireframe spec is explicit that its 11px frames are <b>proportions, not pixel values</b> — “body 11 → 14 … never render the 8.5px label at 8.5px in production.” The app ships 11px as body and 9px as its caps label. Correcting that is compliance, not a departure.</p>
+
+  <div class="scale">
+    <div class="row"><span class="k">4xl · 56</span><span class="spec f-display" style="font-size:44px">She can answer a phone</span><span class="was">new</span></div>
+    <div class="row"><span class="k">3xl · 40</span><span class="spec f-display" style="font-size:34px">Nothing was re-asked</span><span class="was">was 27</span></div>
+    <div class="row"><span class="k">2xl · 30</span><span class="spec f-display" style="font-size:28px">“Chest feels tight when I walk.”</span><span class="was">was 22</span></div>
+    <div class="row"><span class="k">xl · 24</span><span class="spec f-display" style="font-size:23px">31 of 36 doses</span><span class="was">was 18–21</span></div>
+    <div class="row"><span class="k">lg · 20</span><span class="spec" style="font-size:20px;font-weight:600">Why this was flagged</span><span class="was">was 15–17</span></div>
+    <div class="row"><span class="k">md · 17</span><span class="spec" style="font-size:17px;font-weight:500">Metformin 500 mg · after food</span><span class="was">was 13, 14</span></div>
+    <div class="row"><span class="k">base · 15</span><span class="spec" style="font-size:15px">We call Mom shortly after 9:00 PM if it is still unconfirmed.</span><span class="was">was 12, 12.5</span></div>
+    <div class="row"><span class="k">sm · 14</span><span class="spec" style="font-size:14px;color:var(--fg-2)">Retried twice · voicemail left</span><span class="was">was 11</span></div>
+    <div class="row"><span class="k">xs · 13</span><span class="spec tnum" style="font-size:13px;color:var(--fg-3)">Today · 1:35 PM · agent call #214 · 2 min 11 s</span><span class="was">was 10.5</span></div>
+    <div class="row"><span class="k">2xs · 11</span><span class="spec" style="font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--fg-3)">Told to</span><span class="was">was 9, 10</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Elements · the product’s ideas, given a form</div>
+  <h2>Nine new pieces</h2>
+  <p class="lede">The app’s three best ideas — what she said, the rule that fired, the six fields it already knew — are all currently 11px grey body text. These are live renders on Kinvox’s real paper ground.</p>
+
+  <div class="stage">
+    <div>
+      <div class="cap"><b>① QuoteBlock</b> — her words, larger than anything around them</div>
+      <div class="stage-grid">
+        <div class="quote red">
+          <span class="mark">“</span>
+          <p>Chest feels tight when I walk.</p>
+          <div class="attr"><span class="k-tag danger">red</span> Mom · check-in call #214 · 1:35 PM</div>
+        </div>
+        <div class="quote watch">
+          <span class="mark">“</span>
+          <p lang="hi">रात भर नींद नहीं आई, घुटना दुखता रहा।</p>
+          <div class="attr"><span class="k-tag out warn">watch</span> Mom · check-in call #213 · 8:05 AM</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" style="margin-top:16px">
+    <div class="stage-grid">
+      <div>
+        <div class="cap"><b>② Thread</b> — the motif made literal. The newest row arrived from the 5-second poll.</div>
+        <div class="thread">
+          <div class="line"></div>
+          <div class="trow"><span class="t tnum">6:40</span><span class="n"><span class="k-dot filled"></span></span><span class="c">Metformin 500 mg <small>taken · confirmed on the call</small></span></div>
+          <div class="trow"><span class="t tnum">8:05</span><span class="n"><span class="k-dot filled"></span></span><span class="c">Check-in call #213 <small>2 min 11 s · Hindi</small></span></div>
+          <div class="trow new"><span class="t tnum">13:35</span><span class="n"><span class="k-dot hollow"></span></span><span class="c">“Chest feels tight when I walk.” <small>flagged P1 · agent call #214</small></span></div>
+          <div class="trow"><span class="t tnum">13:37</span><span class="n"><span class="k-dot filled"></span></span><span class="c">You were notified <small>WhatsApp · delivered</small></span></div>
+          <div class="trow"><span class="t tnum">21:00</span><span class="n"><span class="k-dot empty"></span></span><span class="c">Amlodipine 5 mg <small>upcoming · after food</small></span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="cap"><b>③ IntakeMeter</b> — the hero claim, currently absent from the UI entirely</div>
+        <div class="meter">
+          <div class="cell known" style="animation-delay:0ms"></div>
+          <div class="cell known" style="animation-delay:40ms"></div>
+          <div class="cell known" style="animation-delay:80ms"></div>
+          <div class="cell known" style="animation-delay:120ms"></div>
+          <div class="cell known" style="animation-delay:160ms"></div>
+          <div class="cell known" style="animation-delay:200ms"></div>
+          <div class="cell asked" style="animation-delay:240ms"></div>
+          <div class="cell asked" style="animation-delay:280ms"></div>
+          <div class="cell asked" style="animation-delay:320ms"></div>
+          <div class="cell asked" style="animation-delay:360ms"></div>
+          <div class="cell asked" style="animation-delay:400ms"></div>
+          <div class="cell unknown" style="animation-delay:440ms"></div>
+        </div>
+        <div class="legend">
+          <span><i class="known"></i> from the record</span>
+          <span><i></i> asked on the call</span>
+          <span><i class="unknown"></i> still unknown</span>
+        </div>
+        <p style="margin:14px 0 0;font-size:17px;font-weight:500;max-width:30ch">Six of twelve already known. Nothing was re-asked.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" style="margin-top:16px">
+    <div class="stage-grid">
+      <div>
+        <div class="cap"><b>④ EscalationClock</b> — the spec requires a <i>visible</i> countdown; today it is static text</div>
+        <div class="k-card">
+          <div class="k-lbl">Told to</div>
+          <div class="dotrow"><span class="k-dot filled"></span><span>You · WhatsApp — 1:37 PM · delivered</span></div>
+          <div class="clock">
+            <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="ring-bg" cx="22" cy="22" r="18" fill="none" stroke-width="3"></circle>
+              <circle class="ring-fg" id="ring" cx="22" cy="22" r="18" fill="none" stroke-width="3"
+                stroke-dasharray="113.1" stroke-dashoffset="28"></circle>
+            </svg>
+            <span class="txt">Priya · <span class="tnum" id="cd">in 9 min</span><small>sister · notified automatically if unresolved</small></span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="cap"><b>⑤ LiveCallCard</b> — the strongest moment available in the demo video</div>
+        <div class="live">
+          <span class="pulse"><b></b></span>
+          <span style="flex:1;min-width:0">
+            <span style="display:block;font-size:15px;font-weight:600">Mom · check-in call</span>
+            <span style="display:block;font-size:13px;color:var(--k-muted-strong)">Hindi · agent “warm” · in progress</span>
+          </span>
+          <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="tnum" id="elapsed" style="font-size:17px;font-weight:500">00:47</span>
+        </div>
+        <div class="cap" style="margin:22px 0 11px"><b>⑦ StatCount</b></div>
+        <div class="stat"><b class="tnum" id="stat">31</b><span>of 36 doses confirmed this week</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" style="margin-top:16px">
+    <div>
+      <div class="cap"><b>⑥ TranscriptPlayer</b> — the matched line marked in marigold with a danger rule, auto-scrolled into view</div>
+      <div class="k-card rule">
+        <div class="k-lbl">Why this was flagged</div>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span class="k-tag danger">P1</span>
+          <code style="font-size:14px;background:transparent;padding:0">rule: chest complaint with age over 40</code>
+        </div>
+        <div style="font-size:14px;color:var(--k-muted-strong)">Triggered on the words she used. No interpretation, no diagnosis.</div>
+        <div class="tx" style="margin-top:6px">
+          <div class="txline"><span class="tc tnum">1:31</span><span class="who">agent</span><span>Aapne subah ki dawai le li?</span></div>
+          <div class="txline"><span class="tc tnum">1:33</span><span class="who">mom</span><span>Haan, le li beta.</span></div>
+          <div class="txline match"><span class="tc tnum">1:35</span><span class="who">mom</span><span>Chalne par chhaati mein jakadan hoti hai.</span></div>
+          <div class="txline"><span class="tc tnum">1:37</span><span class="who">agent</span><span>Main abhi Rohit ko bata deti hoon.</span></div>
+        </div>
+        <div class="scrub" aria-hidden="true"><b></b><i></i></div>
+        <div style="display:flex;gap:9px;align-items:center;font-size:13px;color:var(--k-muted)">
+          <span class="tnum">0:52</span><span style="flex:1"></span><span class="tnum">2:11</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" style="margin-top:16px">
+    <div class="stage-grid">
+      <div>
+        <div class="cap">Atoms · <b>Tag</b> tones</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <span class="k-tag">priority</span>
+          <span class="k-tag danger">P1</span>
+          <span class="k-tag warn">no answer</span>
+          <span class="k-tag ok">taken</span>
+          <span class="k-tag accent">agent</span>
+          <span class="k-tag out">edited</span>
+          <span class="k-tag out warn">watch</span>
+          <span class="k-tag out danger">unresolved</span>
+        </div>
+
+        <div class="cap" style="margin:22px 0 11px">Atoms · <b>Dot</b> — three marks, each with its label</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <span class="dotrow"><span class="k-dot filled"></span><span>taken</span></span>
+          <span class="dotrow"><span class="k-dot hollow"></span><span>missed</span></span>
+          <span class="dotrow"><span class="k-dot empty"></span><span>upcoming</span></span>
+        </div>
+      </div>
+
+      <div>
+        <div class="cap">Atoms · <b>Button</b>, with states it has never had</div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+          <button class="k-btn">Mark taken</button>
+          <button class="k-btn outline">Call Mom</button>
+          <button class="k-btn quiet">Schedule a call</button>
+          <button class="k-btn" disabled>Continue to Consent</button>
+        </div>
+        <div style="font-size:13px;color:var(--k-muted-strong);margin-top:9px">Disabled still states its reason beside it — “2 left”.</div>
+
+        <div class="cap" style="margin:22px 0 11px">Atoms · <b>Input</b> — one control, one focus ring</div>
+        <input class="k-input" placeholder="Parent’s phone — the agent calls this">
+        <div class="cap" style="margin:22px 0 11px">Atoms · <b>Card</b> emphases</div>
+        <div style="display:grid;gap:9px">
+          <div class="k-card" style="padding:11px">Default surface</div>
+          <div class="k-card primary" style="padding:11px">Primary — “the one thing here”</div>
+          <div class="k-card rule" style="padding:11px">Attention — needs review, cited rule</div>
+          <div class="k-card alert" style="padding:11px">Critical</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><b>⑧ DeviceFrame</b> and <b>⑨ Wordmark</b> are not shown here in isolation — the wordmark is at the top of this page, and the device frame only exists to hold real screenshots on the landing page.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Motion</div>
+  <h2>Slow and settling</h2>
+  <p class="lede">No spring, no bounce, nothing over 500 ms. Every animation answers one question: what changed? There are currently zero transitions, zero keyframes and five hover rules in about 7,600 lines.</p>
+
+  <div class="tablewrap">
+  <table>
+    <tr><th>Where</th><th>What</th><th>Duration</th></tr>
+    <tr><td>Route change</td><td>Fade with an 8px rise</td><td>240ms</td></tr>
+    <tr><td>List screens</td><td>Children stagger in, 30ms apart</td><td>240ms</td></tr>
+    <tr><td><b>Home, 5s poll</b></td><td>New Thread entry slides in and flashes marigold — the reason the poll exists is that the record visibly changes on camera during a call, and today nothing moves</td><td>420ms</td></tr>
+    <tr><td>Live call</td><td>Waveform bars, pulsing ring</td><td>1.2s loop</td></tr>
+    <tr><td>Escalation clock</td><td>Ring sweep, real seconds</td><td>continuous</td></tr>
+    <tr><td>IntakeMeter</td><td>Cells fill, 40ms stagger</td><td>240ms</td></tr>
+    <tr><td>Step cards</td><td>Unlock cross-fades — today the opacity snaps</td><td>240ms</td></tr>
+    <tr><td>Buttons, chips, nav</td><td>Colour on hover and active</td><td>140ms</td></tr>
+  </table>
+  </div>
+
+  <p class="note">All of it sits behind <code>prefers-reduced-motion: reduce</code>. This page honours that too — if your system asks for reduced motion, nothing above is moving.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('gs');
+  btn.addEventListener('click', function(){
+    var on = document.body.classList.toggle('gs');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.textContent = on ? 'Bring colour back' : 'Strip all colour';
+  });
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) return;
+
+  // elapsed call timer
+  var el = document.getElementById('elapsed'), s = 47;
+  setInterval(function(){
+    s++;
+    el.textContent = String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+  }, 1000);
+
+  // escalation ring — real seconds, resets so the demo keeps showing it
+  var ring = document.getElementById('ring'), cd = document.getElementById('cd');
+  var C = 113.1, total = 540, left = 528;
+  setInterval(function(){
+    left = left <= 0 ? total : left - 1;
+    ring.setAttribute('stroke-dashoffset', String(C * (1 - left/total)));
+    var m = Math.floor(left/60), sec = left%60;
+    cd.textContent = m > 0 ? 'in ' + m + ' min' : 'in ' + sec + ' s';
+  }, 1000);
+
+  // count-up when the stat scrolls into view
+  var stat = document.getElementById('stat');
+  new IntersectionObserver(function(entries, obs){
+    entries.forEach(function(e){
+      if (!e.isIntersecting) return;
+      obs.unobserve(e.target);
+      var n = 0, target = 31;
+      var t = setInterval(function(){
+        n += 1; stat.textContent = n;
+        if (n >= target) clearInterval(t);
+      }, 26);
+    });
+  }, {threshold:.6}).observe(stat);
+})();
+</script>
+
+</body>
+</html>

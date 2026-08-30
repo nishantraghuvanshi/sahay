@@ -462,7 +462,7 @@ export function AuthSteps({
             <button
               type="button"
               onClick={current.back.run}
-              className="self-start text-sm font-semibold text-muted-strong underline"
+              className="self-start text-sm text-muted-strong underline"
             >
               {current.back.label}
             </button>
@@ -676,7 +676,7 @@ function Resend({
         <button
           type="button"
           disabled={busy}
-          className="text-sm font-semibold underline disabled:opacity-50"
+          className="text-sm underline disabled:opacity-50"
           onClick={onResend}
         >
           {busy ? 'Sending…' : 'Resend code'}

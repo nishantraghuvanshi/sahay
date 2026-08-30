@@ -76,7 +76,7 @@ export default function Home() {
           Desktop has the sidebar for both, so this row is phone-only. */}
       <Row className="lg:hidden">
         <div className="flex-1 min-w-0">
-          <div className="text-md font-bold truncate">{name}</div>
+          <div className="text-md font-semibold truncate">{name}</div>
           <div className="text-xs text-muted-strong">
             {openCount > 0 ? `${openCount} open ${openCount === 1 ? 'alert' : 'alerts'}` : 'On track today'}
           </div>
@@ -84,9 +84,9 @@ export default function Home() {
         <Link
           to="/settings"
           aria-label="Settings"
-          className="grid size-11 place-items-center rounded-full text-muted-strong hover:bg-fill/60 hover:text-ink"
+          className="grid size-11 place-items-center rounded-lg text-muted-strong hover:bg-fill/60 hover:text-ink"
         >
-          <SettingsIcon className="size-5" strokeWidth={2} />
+          <SettingsIcon className="size-5" strokeWidth={1.5} />
         </Link>
       </Row>
 
@@ -103,7 +103,7 @@ export default function Home() {
               {openAlert.sent_at ? relativeTime(new Date(openAlert.sent_at)) : 'just now'}
             </Label>
           </Row>
-          <div className="text-md leading-snug font-bold break-words">{openAlert.reason}</div>
+          <div className="text-md leading-snug font-semibold break-words">{openAlert.reason}</div>
           <div className="text-xs text-muted-strong">
             Told to {openAlert.sent_to} by {openAlert.channel} · {openAlert.delivery_status}
           </div>
@@ -116,7 +116,7 @@ export default function Home() {
             </Button>
           </Row>
           {openCount > 1 && (
-            <Link to="/alerts" className="text-xs font-semibold underline">
+            <Link to="/alerts" className="text-xs underline">
               {openCount} open alerts ›
             </Link>
           )}
@@ -214,7 +214,7 @@ export default function Home() {
             <div className="flex flex-col">
               {summary.data?.items.map((item, i) => <SummaryRow key={`${item.at}:${i}`} item={item} />)}
             </div>
-            <Link to="/calendar" className="text-xs font-semibold underline">
+            <Link to="/calendar" className="text-xs underline">
               Open calendar ›
             </Link>
           </Card>
@@ -232,7 +232,7 @@ export default function Home() {
                     minute: '2-digit',
                   })}
                 </Label>
-                <Link to={`/calls/${lastCall.id}`} className="text-xs font-semibold underline">
+                <Link to={`/calls/${lastCall.id}`} className="text-xs underline">
                   Transcript ›
                 </Link>
               </Row>
@@ -278,7 +278,7 @@ export default function Home() {
             ) : (
               <div className="text-sm text-muted-strong">Nothing flagged this week.</div>
             )}
-            <Link to="/observations" className="text-xs font-semibold underline">
+            <Link to="/observations" className="text-xs underline">
               View all ›
             </Link>
           </Card>
@@ -287,7 +287,7 @@ export default function Home() {
           <Card className="kv-rise gap-2.5" >
             <Row>
               <Label className="flex-1">Care record</Label>
-              <Link to="/record" className="text-xs font-semibold text-accent hover:underline">
+              <Link to="/record" className="text-xs text-accent hover:underline">
                 Open
               </Link>
             </Row>
@@ -305,7 +305,7 @@ export default function Home() {
                 <span className="flex-1 text-xs text-muted-strong">{patient.doctor_name}</span>
                 <a
                   href={`tel:${patient.doctor_phone}`}
-                  className="rounded-full border border-line-strong bg-paper px-3 py-1.5 text-xs font-medium hover:border-ink"
+                  className="rounded-md border border-line-strong bg-paper px-3 py-1.5 text-xs font-medium hover:border-ink"
                 >
                   Call
                 </a>
@@ -325,7 +325,7 @@ function SummaryRow({ item }: { item: DaySummaryItem }) {
 
   const body = (
     <Row className="items-start gap-3 py-1.5">
-      <span className="tnum w-12 shrink-0 pt-px text-2xs font-bold tracking-wide text-muted-strong">
+      <span className="tnum w-12 shrink-0 pt-px text-2xs font-medium tracking-wide text-muted-strong">
         {time}
       </span>
       <span
@@ -391,34 +391,34 @@ function HomeSkeleton() {
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start">
         <div className="flex flex-col gap-4">
           <Card emphasis="border" className="gap-3">
-            <div className="kv-shimmer h-3 w-32 rounded-full" />
+            <div className="kv-shimmer h-3 w-32 rounded-md" />
             <div className="kv-shimmer h-9 w-3/4 rounded-lg" />
-            <div className="kv-shimmer h-3 w-24 rounded-full" />
+            <div className="kv-shimmer h-3 w-24 rounded-md" />
             <div className="flex gap-2 pt-1">
-              <div className="kv-shimmer h-11 flex-1 rounded-full" />
-              <div className="kv-shimmer h-11 flex-1 rounded-full" />
+              <div className="kv-shimmer h-11 flex-1 rounded-lg" />
+              <div className="kv-shimmer h-11 flex-1 rounded-lg" />
             </div>
           </Card>
           <Card className="gap-3">
-            <div className="kv-shimmer h-3 w-40 rounded-full" />
+            <div className="kv-shimmer h-3 w-40 rounded-md" />
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-3 py-1">
-                <div className="kv-shimmer h-3 w-10 rounded-full" />
+                <div className="kv-shimmer h-3 w-10 rounded-md" />
                 <div className="kv-shimmer size-2.5 rounded-full" />
-                <div className="kv-shimmer h-3 flex-1 rounded-full" />
+                <div className="kv-shimmer h-3 flex-1 rounded-md" />
               </div>
             ))}
           </Card>
         </div>
         <div className="flex flex-col gap-4">
           <Card emphasis="rule" className="gap-3">
-            <div className="kv-shimmer h-3 w-28 rounded-full" />
+            <div className="kv-shimmer h-3 w-28 rounded-md" />
             <div className="kv-shimmer h-5 w-full rounded-lg" />
             <div className="kv-shimmer h-5 w-2/3 rounded-lg" />
           </Card>
           <Card className="gap-3">
-            <div className="kv-shimmer h-3 w-24 rounded-full" />
-            <div className="kv-shimmer h-3 w-1/2 rounded-full" />
+            <div className="kv-shimmer h-3 w-24 rounded-md" />
+            <div className="kv-shimmer h-3 w-1/2 rounded-md" />
           </Card>
         </div>
       </div>

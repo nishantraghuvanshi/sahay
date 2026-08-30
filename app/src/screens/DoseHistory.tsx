@@ -124,7 +124,7 @@ export default function DoseHistory() {
       {/* ------------------------------------------------------------- header */}
       <div className="flex flex-col gap-1">
         <Row className="items-baseline gap-2">
-          <h1 className="flex-1 text-lg font-bold">Dose history</h1>
+          <h1 className="flex-1 text-lg font-semibold">Dose history</h1>
           <Label>
             {events.length} {events.length === 1 ? 'record' : 'records'}
           </Label>
@@ -171,7 +171,7 @@ export default function DoseHistory() {
             <Card key={group.key} className="gap-2" emphasis={isToday ? 'border' : 'none'}>
               {/* day header — the count is read straight off the rows below it */}
               <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="text-md font-bold">{dayHeading(group.day, today)}</span>
+                <span className="text-md font-semibold">{dayHeading(group.day, today)}</span>
                 <span className="text-sm text-muted-strong">
                   {group.day.toLocaleDateString([], { day: 'numeric', month: 'short' })}
                 </span>
@@ -248,7 +248,7 @@ export default function DoseHistory() {
 function DoseRow({ event, medication }: { event: DoseEvent; medication: Medication | undefined }) {
   const body = (
     <div className="grid grid-cols-[3.75rem_minmax(0,1fr)] gap-x-3 py-2.5 sm:py-2">
-      <span className="pt-0.5 text-2xs font-bold tracking-wide text-muted-strong">
+      <span className="pt-0.5 text-2xs font-medium tracking-wide text-muted-strong">
         {clock(event.slot_time)}
       </span>
 

@@ -118,7 +118,7 @@ function Value({ text }: { text: string | null }) {
 /** Small-caps section heading. Level is explicit so the reading order stays sane. */
 function Heading({ children, id }: { children: string; id?: string }) {
   return (
-    <h2 id={id} className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
+    <h2 id={id} className="text-[10px] font-medium tracking-[0.10em] text-muted-strong uppercase">
       {children}
     </h2>
   )
@@ -268,7 +268,7 @@ function Record({ view }: { view: HandoffView }) {
 
       <dl className="mt-2 grid grid-cols-1 gap-x-2 gap-y-1 rounded-md min-[360px]:grid-cols-3 border border-line-strong px-3 py-2">
         <div>
-          <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
+          <dt className="text-[10px] font-medium tracking-[0.10em] text-muted-strong uppercase">
             Started
           </dt>
           <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
@@ -276,7 +276,7 @@ function Record({ view }: { view: HandoffView }) {
           </dd>
         </div>
         <div>
-          <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
+          <dt className="text-[10px] font-medium tracking-[0.10em] text-muted-strong uppercase">
             Responsive
           </dt>
           <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
@@ -284,7 +284,7 @@ function Record({ view }: { view: HandoffView }) {
           </dd>
         </div>
         <div>
-          <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
+          <dt className="text-[10px] font-medium tracking-[0.10em] text-muted-strong uppercase">
             Breathing
           </dt>
           <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
@@ -319,7 +319,7 @@ function Record({ view }: { view: HandoffView }) {
           href={`tel:${callback.replace(/[^\d+]/g, '')}`}
           className="mt-2 flex min-h-[54px] items-center justify-between rounded-md border-2 border-ink px-3 py-2"
         >
-          <span className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
+          <span className="text-[10px] font-medium tracking-[0.10em] text-muted-strong uppercase">
             Call
             <br />
             back

@@ -27,7 +27,7 @@ export default function KitchenSink() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 pb-10">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold">Kitchen sink</h1>
+        <h1 className="text-xl font-semibold">Kitchen sink</h1>
         <p className="text-sm text-muted-strong">
           Primitives ported from the wireframe atoms. Compare side by side with{' '}
           <code>wireframe/*.dc.html</code>. Try <code>?fail=doses</code> and <code>?empty=1</code>.
@@ -138,7 +138,7 @@ function MockReadout() {
   return (
     <Card>
       <Row>
-        <span className="text-md font-bold">
+        <span className="text-md font-semibold">
           {p.name}
           {p.honorific ? `-${p.honorific}` : ''} · {p.age}
         </span>
@@ -180,7 +180,7 @@ function MockReadout() {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-md border border-line bg-paper px-2 py-1.5">
-      <div className="text-lg font-bold">{value}</div>
+      <div className="text-lg font-medium">{value}</div>
       <Label>{label}</Label>
     </div>
   )

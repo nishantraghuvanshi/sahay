@@ -419,7 +419,7 @@ export default function MedicinesEdit() {
         >
           ←
         </button>
-        <h1 className="flex-1 text-lg font-bold">Change medicines</h1>
+        <h1 className="flex-1 text-lg font-semibold">Change medicines</h1>
         <Label>
           {active} {active === 1 ? 'med' : 'meds'}
         </Label>
@@ -439,7 +439,7 @@ export default function MedicinesEdit() {
             aria-pressed={tab === key}
             onClick={() => setTab(key)}
             className={clsx(
-              'flex-1 rounded-full border px-3 py-2 text-base font-semibold',
+              'flex-1 rounded-md border px-3 py-2 text-base font-semibold',
               tab === key
                 ? 'border-ink bg-ink text-white'
                 : 'border-line-strong bg-paper text-muted-strong',
@@ -714,7 +714,7 @@ export default function MedicinesEdit() {
  */
 function DiffChip({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex max-w-full items-center rounded-full border border-line-strong bg-paper px-2.5 py-1 text-sm break-words">
+    <span className="inline-flex max-w-full items-center rounded-md border border-line-strong bg-paper px-2.5 py-1 text-sm break-words">
       {children}
     </span>
   )
@@ -826,7 +826,7 @@ function MedicineRow({
                     onChange={(e) => onSetSlot(i, e.target.value)}
                     onBlur={() => onEditSlot(null)}
                     onKeyDown={(e) => e.key === 'Enter' && onEditSlot(null)}
-                    className="rounded-full border border-ink bg-paper px-2 py-0.5 text-sm"
+                    className="rounded-md border border-ink bg-paper px-2 py-0.5 text-sm"
                   />
                   <button
                     type="button"

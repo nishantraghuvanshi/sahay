@@ -144,7 +144,7 @@ export default function Prescription() {
         >
           ←
         </button>
-        <h1 className="flex-1 text-lg font-bold">Add prescription</h1>
+        <h1 className="flex-1 text-lg font-semibold">Add prescription</h1>
         <Label>2 / 4</Label>
       </Row>
 

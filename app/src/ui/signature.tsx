@@ -143,25 +143,25 @@ export function IntakeMeter({
           <span
             key={i}
             className={clsx(
-              'h-6 rounded-[3px] border-[1.5px]',
-              kind === 'known' && 'border-ink bg-ink',
-              kind === 'asked' && 'border-ink bg-transparent',
-              kind === 'unknown' && 'border-fill-empty bg-transparent',
+              'h-6 rounded-sm border',
+              kind === 'known' && 'border-accent bg-accent',
+              kind === 'asked' && 'border-accent bg-transparent',
+              kind === 'unknown' && 'border-line-strong bg-transparent',
             )}
           />
         ))}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-strong">
         <span className="flex items-center gap-1.5">
-          <span className="size-3 rounded-[3px] border-[1.5px] border-ink bg-ink" />
+          <span className="size-3 rounded-sm border border-accent bg-accent" />
           from the record
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-3 rounded-[3px] border-[1.5px] border-ink" />
+          <span className="size-3 rounded-sm border border-accent" />
           asked on the call
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-3 rounded-[3px] border-[1.5px] border-fill-empty" />
+          <span className="size-3 rounded-sm border border-line-strong" />
           still unknown
         </span>
       </div>

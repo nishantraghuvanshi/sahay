@@ -28,7 +28,7 @@ export function LogoutButton({ className }: { className?: string }) {
       onClick={handleLogout}
       className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-strong transition-colors duration-150 hover:bg-fill/60 hover:text-ink ${className ?? ''}`}
     >
-      <LogOut className="size-[18px] shrink-0" strokeWidth={2} />
+      <LogOut className="size-[18px] shrink-0" strokeWidth={1.5} />
       Log out
     </button>
   )

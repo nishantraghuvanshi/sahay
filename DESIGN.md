@@ -54,7 +54,6 @@ rounded:
   md: "6px"
   lg: "8px"
   xl: "12px"
-  2xl: "16px"
   full: "9999px"
 spacing:
   2xs: "4px"
@@ -67,7 +66,7 @@ components:
   button-primary:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.paper}"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.lg}"
     padding: "10px 20px"
     height: "44px"
   button-primary-hover:
@@ -75,7 +74,7 @@ components:
   button-accent:
     backgroundColor: "{colors.accent}"
     textColor: "#ffffff"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.lg}"
     padding: "10px 20px"
     height: "44px"
   button-accent-hover:
@@ -83,37 +82,37 @@ components:
   button-outline:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.lg}"
     padding: "10px 20px"
     height: "44px"
   chip:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.md}"
     padding: "4px 14px"
     height: "34px"
   chip-on:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.paper}"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.md}"
     padding: "4px 14px"
     height: "34px"
   tag:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.md}"
+    backgroundColor: "{colors.fill}"
+    textColor: "{colors.ink-soft}"
+    rounded: "{rounded.sm}"
     padding: "2px 6px"
   card:
     backgroundColor: "{colors.surface}"
-    rounded: "{rounded.2xl}"
+    rounded: "{rounded.xl}"
     padding: "16px"
   card-emphasis-border:
     backgroundColor: "{colors.paper}"
-    rounded: "{rounded.2xl}"
+    rounded: "{rounded.xl}"
     padding: "16px"
   card-emphasis-danger:
     backgroundColor: "{colors.danger-soft}"
-    rounded: "{rounded.2xl}"
+    rounded: "{rounded.xl}"
     padding: "16px"
   input:
     backgroundColor: "{colors.paper}"
@@ -166,9 +165,14 @@ the severity spine on a quote, and the rule between sections. Depth comes from s
 cream tones and hairline borders far more than from shadow; the two shadows that exist are
 warm-tinted (`rgba(58, 44, 20, …)`) so they never go blue-grey on cream.
 
-The form language is softer than a ledger usually is. Cards are generously rounded (16px)
-and buttons and chips are fully round — the record is warm stationery, not a spreadsheet.
-Radius carries hierarchy: the further a surface is from the content, the softer it gets.
+The form language is softer than a ledger usually is, but it is not round. Cards are 12px,
+buttons 8px, chips and inputs 6px, tags 4px — the record is warm stationery, not a
+spreadsheet and not a toy. Radius carries hierarchy: the further a surface is from the
+content, the softer it gets. `rounded-full` is not a step on that scale; it is reserved for
+things that are actually circular or capsular — status dots, the meter bar, the wordmark
+i-dot, the quote spine, the tab-bar mark, the step-progress segments. Buttons and chips
+were fully round until 30 Aug 2026, and a page of 44px pills is what made the product read
+as a toy rather than an instrument.
 
 This is a medical-adjacent product with a safety posture: the system never decorates
 meaning into colour alone, never invents a score, and never pretends the app itself can
@@ -182,8 +186,8 @@ dial a phone.
   `:lang(hi)` / `:lang(mr)` / `:lang(pa)`.
 - Exactly three status marks — filled, outlined, muted — reused for doses, delivery,
   steps, radios and checkboxes.
-- Fully round buttons and chips; 16px cards; 6px inputs. Rounder than a form, softer than
-  a dashboard.
+- 8px buttons; 6px chips and inputs; 12px cards; 4px tags. Softer than a form, tighter
+  than a toy.
 - Two warm shadows; borders and tone-steps do most of the depth work.
 - Settling motion, 150ms for state and 340ms for entrances, never springy;
   `prefers-reduced-motion` collapses everything.
@@ -279,11 +283,29 @@ The scale is tokenized in `@theme`, each step carrying its own line-height:
   reason, the empty-state title, an open alert's headline.
 - **Body** (400, 15px `text-base`, IBM Plex Sans): default, set on `body`. Secondary body
   drops to 14px `text-sm` in `muted-strong`; metadata to 13px `text-xs`.
-- **Label** (700, 11px `text-2xs`, 0.08em tracking, UPPERCASE, `muted-strong`): section
+- **Label** (500, 11px `text-2xs`, 0.08em tracking, UPPERCASE, `muted-strong`): section
   labels, timestamps in card headers, tab bar captions. 11px exists *only* for these —
   never body copy.
 
 ### Named Rules
+**The Four Weights Rule.** There are four roles and no others:
+
+| Role | Weight | Applies to |
+|---|---|---|
+| Body | 400 — omit the utility | paragraph text, descriptions, secondary lines, **inline links** |
+| Metadata | `font-medium` | timestamps, captions, `Label`, uppercase micro-labels |
+| Title | `font-semibold` | screen `h1`, card and row titles, buttons, `role="alert"` messages |
+| Display | `font-medium` | large Newsreader hero lines — a serif carries weight optically |
+
+`font-bold` and `font-extrabold` do not appear in `app/src` outside `Handoff.tsx`, which is
+a print sheet a stranger opens cold at a clinic desk and where legibility outranks restraint.
+
+Two corollaries that were the actual bugs. **An underline is already the emphasis** — an
+inline link does not also take 600, or a screen of links reads as a screen of buttons. And
+**emphasis pairs step 600 against 400, never 700 against 600**: on 30 Aug 2026 severity,
+P1 and today-in-calendar were all drawn as bold-vs-semibold, a difference nobody perceives,
+on a page where 189 of 205 weight utilities were already 600 or more. When everything is
+bold, nothing is emphasised.
 **The Earned Serif Rule.** Newsreader appears only on care content: verbatim quotes,
 medicine names, the one hero line per screen, and the wordmark. It is never decoration,
 never a routine screen title, never sprinkled.
@@ -365,19 +387,27 @@ cards on one screen means neither leads.
 
 ## Shapes
 
-Radius carries hierarchy, and it is softer than a record-keeping product usually goes:
+Radius carries hierarchy. It is softer than a record-keeping product usually goes, and
+tighter than it went before 30 Aug 2026. Four tokens, declared in `app/src/index.css`:
 
-| Role | Radius | Class |
+| Token | Radius | Role |
 |---|---|---|
-| Buttons, chips, status dots, meter bar, the tab bar's active mark | full | `rounded-full` |
-| Cards | 16px | `rounded-2xl` |
-| Sidebar nav rows, the patient card | 12px | `rounded-xl` |
-| `Field`, `Placeholder`, inline row hovers | 8px | `rounded-lg` |
-| Inputs, selects, OTP boxes, Tag badges, small icon buttons | 6px | `rounded-md` |
-| Intake meter cells | 3px | `rounded-[3px]` |
+| `--radius-xl` | 12px | Cards, sidebar nav rows, the patient card, the hero panel |
+| `--radius-lg` | 8px | Buttons, `Field`, `Placeholder`, inline row hovers, icon buttons |
+| `--radius-md` | 6px | Chips, inputs, selects, OTP boxes, skeleton bars |
+| `--radius-sm` | 4px | `Tag` badges, intake meter cells |
 
-Borders are 1px `line-strong` by default; emphasis raises them to 1.5px `ink`, never a new
-colour. Dividers are 1px `line`.
+`rounded-full` is **not** a step on this scale. It is reserved for things that are actually
+circular or capsular, and the list is closed: status dots, the `Bar` meter, the wordmark
+i-dot, the `QuoteBlock` severity spine, the tab bar's active mark, the step-progress
+segments, the sr-only skip link. Anything else that reaches for it is drifting back toward
+the pill language this system left behind.
+
+Borders are 1px `line-strong` by default. 1.5px `ink` survives only where it is structural
+(the `Button` base, which needs a constant border width so variants do not change size);
+emphasis is now carried by `--shadow-lift` and a tone step, not by a black outline — a
+hairline card that lifts reads as considered, a thick-outlined one reads as a sticker.
+Dividers are 1px `line`.
 
 The signature silhouette is the **left mark**: a 4px left border carrying state — accent
 on a `rule` card, danger on a `danger` card — set against a 1px border on the other three
@@ -385,6 +415,12 @@ sides. `QuoteBlock` carries the same idea as a 3px rounded severity spine.
 
 **The One Left Mark Rule.** A card carries at most one left mark. Nested content that has
 its own spine (a `QuoteBlock`) sits in a card without one.
+
+**The Thin Stroke Rule.** Lucide draws with round caps and joins, so its default
+`strokeWidth={2}` reads as a toy icon set at the 18-22px sizes this app uses. Icons are
+`1.5` at rest and `2` when a nav item is active. Nothing goes above 2 — the mobile tab bar
+sat at 2.5 and the desktop sidebar at 2.4 until 30 Aug 2026, each with a bold label beside
+it, which is three signals for one piece of state.
 
 The hairline is the brand's geometry: the wordmark's underline, the day thread's 1px spine
 (dots punch through it with a 3px `surface` outline), and `Divider`.
@@ -398,7 +434,7 @@ label.
 
 ### Buttons
 Confident, quiet capsules — ink first, blue only when the accent earns it.
-- **Shape:** fully round (`rounded-full`), 20px × 10px padding, 14px semibold, `min-height: 44px`.
+- **Shape:** 8px (`rounded-lg`), 20px × 10px padding, 14px semibold, `min-height: 44px`.
 - **Primary:** `ink` fill, `paper` text; hover `ink-soft`.
 - **Accent:** `accent` fill, white text; hover `accent-2`.
 - **Outline:** transparent with a 1.5px `ink` border; hover washes `ink/5`.
@@ -415,7 +451,7 @@ Confident, quiet capsules — ink first, blue only when the accent earns it.
   keep `href` for `tel:`.
 
 ### Chips
-- **Style:** fully round, `paper` ground, 1px `line-strong` border, 13px medium, 34px tall,
+- **Style:** 6px (`rounded-md`), `paper` ground, 1px `line-strong` border, 13px medium, 34px tall,
   14px horizontal padding.
 - **State:** selected (`on`) inverts to `ink` fill / `paper` text; interactive chips get
   `aria-pressed`, hover raises the border to `ink`, and `active:scale-[0.97]`.

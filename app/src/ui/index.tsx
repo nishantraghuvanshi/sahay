@@ -31,8 +31,8 @@ export function Card({
   return (
     <div
       className={clsx(
-        'flex flex-col gap-2.5 rounded-2xl border p-4 transition-shadow duration-200',
-        emphasis === 'border' && 'border-[1.5px] border-ink bg-paper shadow-[var(--shadow-lift)]',
+        'flex flex-col gap-2.5 rounded-xl border p-4 transition-shadow duration-200',
+        emphasis === 'border' && 'border-line-strong bg-paper shadow-[var(--shadow-lift)]',
         emphasis === 'rule' &&
           'border-line-strong border-l-[4px] border-l-accent bg-surface shadow-[var(--shadow-card)]',
         emphasis === 'danger' &&
@@ -54,7 +54,7 @@ export function Label({ className, children }: Div) {
   return (
     <div
       className={clsx(
-        'text-2xs font-bold tracking-[0.08em] text-muted-strong uppercase',
+        'text-2xs font-medium tracking-[0.08em] text-muted-strong uppercase',
         className,
       )}
     >
@@ -76,11 +76,10 @@ export function Chip({
       {...(onClick && on !== undefined ? { 'aria-pressed': on } : {})}
       onClick={onClick}
       className={clsx(
-        'inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 ease-[var(--ease-out)]',
+        'inline-flex items-center rounded-md border px-3 py-1 text-xs font-medium whitespace-nowrap transition-[background-color,border-color,color] duration-150 ease-[var(--ease-out)]',
         on
-          ? 'border-ink bg-ink text-paper'
-          : 'border-line-strong bg-paper text-ink hover:border-ink',
-        onClick && 'active:scale-[0.97]',
+          ? 'border-ink bg-ink text-paper active:bg-ink-soft'
+          : 'border-line-strong bg-paper text-ink hover:border-ink active:bg-fill',
         // A chip you can press is a control and takes the 44px floor; a chip that only
         // reads a value is text and stays compact, so rows of them do not sprawl.
         onClick ? 'min-h-[44px]' : 'min-h-[34px]',
@@ -100,7 +99,7 @@ export function Tag({
   className,
 }: Div & { outline?: boolean; tone?: 'ink' | 'danger' | 'warn' | 'accent' }) {
   const solid: Record<string, string> = {
-    ink: 'bg-ink text-paper',
+    ink: 'bg-fill text-ink-soft',
     danger: 'bg-danger text-paper',
     warn: 'bg-warn text-paper',
     accent: 'bg-accent text-paper',
@@ -114,7 +113,7 @@ export function Tag({
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-extrabold tracking-wide',
+        'inline-flex items-center rounded-sm px-1.5 py-0.5 text-2xs font-semibold tracking-wide',
         outline ? outlined[tone] : solid[tone],
         className,
       )}
@@ -149,13 +148,16 @@ export function Button({
     // default colour here instead loses to nothing and silently erases the outline
     // variant's ink hairline, since Tailwind resolves the conflict by stylesheet
     // order, not by the order of these arguments.
-    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-[1.5px] px-4 py-2.5 text-center text-sm font-semibold sm:px-5 transition-[transform,background-color,box-shadow,border-color] duration-150 ease-[var(--ease-out)]',
-    !disabled && 'active:scale-[0.98]',
-    !disabled && variant === 'primary' && 'border-transparent bg-ink text-paper hover:bg-ink-soft',
-    !disabled && variant === 'accent' && 'border-transparent bg-accent text-white hover:bg-accent-2',
+    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border-[1.5px] px-4 py-2.5 text-center text-sm font-semibold sm:px-5 transition-[background-color,box-shadow,border-color] duration-150 ease-[var(--ease-out)]',
+    !disabled &&
+      variant === 'primary' &&
+      'border-transparent bg-ink text-paper hover:bg-ink-soft active:bg-ink-soft',
+    !disabled &&
+      variant === 'accent' &&
+      'border-transparent bg-accent text-white hover:bg-accent-2 active:bg-accent-2',
     !disabled &&
       variant === 'outline' &&
-      'border-ink bg-transparent text-ink hover:bg-ink/[0.05]',
+      'border-ink bg-transparent text-ink hover:bg-ink/[0.05] active:bg-ink/[0.1]',
     disabled && 'cursor-not-allowed border-transparent bg-fill text-muted-strong',
     className,
   )
@@ -228,20 +230,17 @@ export function Bar({
   )
 }
 
-/** Hatched placeholder — images, scans, logos. */
+/** Placeholder — images, scans, logos. */
 export function Placeholder({ className, children }: Div) {
   return (
     <div
+      // This used to be a 45° stripe hatch. Diagonal stripes are comic-strip texture;
+      // a dashed hairline on a stepped ground says "nothing here yet" just as clearly
+      // and does not shout while it says it.
       className={clsx(
-        'flex items-center justify-center rounded-lg border border-line-strong text-center text-xs text-muted-strong',
+        'flex items-center justify-center rounded-lg border border-dashed border-line-strong bg-canvas text-center text-xs text-muted-strong',
         className,
       )}
-      // The hatch is the only place in the app that drew its own colours. Both stripes
-      // are ramp steps now, so it follows the palette instead of shadowing it.
-      style={{
-        backgroundImage:
-          'repeating-linear-gradient(45deg,var(--color-canvas),var(--color-canvas) 6px,var(--color-fill) 6px,var(--color-fill) 12px)',
-      }}
     >
       {children}
     </div>
@@ -285,7 +284,7 @@ function dotClass(kind: 'filled' | 'hollow' | 'empty', tone: DotTone = 'ink') {
   return clsx(
     'inline-block size-2.5 shrink-0 rounded-full',
     kind === 'filled' && solid[tone],
-    kind === 'hollow' && clsx('border-2 bg-paper', ring[tone]),
+    kind === 'hollow' && clsx('border-[1.5px] bg-paper', ring[tone]),
     kind === 'empty' && 'bg-fill-empty',
   )
 }
@@ -366,7 +365,7 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
 export function EmptyBlock({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
     <Card className="items-center gap-2.5 border-dashed py-10 text-center">
-      <div className="font-display text-lg font-semibold">{title}</div>
+      <div className="font-display text-lg font-medium">{title}</div>
       <div className="max-w-xs text-xs leading-relaxed text-muted-strong">{body}</div>
       {action}
     </Card>

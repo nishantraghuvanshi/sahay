@@ -42,7 +42,7 @@ export default function Signup() {
           <button
             type="button"
             onClick={() => navigate('/login')}
-            className="font-semibold text-violet-400 hover:underline"
+            className="text-accent hover:underline"
           >
             Sign in
           </button>

@@ -44,7 +44,7 @@ export default function Parent() {
         >
           &larr;
         </button>
-        <h1 className="min-w-0 flex-1 text-lg font-bold sm:text-xl">Who are we caring for?</h1>
+        <h1 className="min-w-0 flex-1 text-lg font-semibold sm:text-xl">Who are we caring for?</h1>
         <Label className="shrink-0">1 / 4</Label>
       </header>
       <p className="-mt-1 text-base text-muted-strong">
@@ -387,7 +387,7 @@ function AddChip({ label, onAdd }: { label: string; onAdd: (value: string) => vo
           if (e.key === 'Escape') setOpen(false)
         }}
         onBlur={commit}
-        className="w-32 rounded-full border border-ink bg-paper px-2.5 py-1 text-sm outline-none"
+        className="w-32 rounded-md border border-ink bg-paper px-2.5 py-1 text-sm outline-none"
       />
     </span>
   )

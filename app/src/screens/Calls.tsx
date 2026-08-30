@@ -126,7 +126,7 @@ export default function Calls() {
       {/* ------------------------------------------------------------- header */}
       <div className="flex flex-col gap-1">
         <Row className="items-baseline gap-2">
-          <h1 className="flex-1 text-lg font-bold">Calls</h1>
+          <h1 className="flex-1 text-lg font-semibold">Calls</h1>
           <Label>
             {all.length} {all.length === 1 ? 'call' : 'calls'}
           </Label>
@@ -241,7 +241,7 @@ function CallRow({
         {/* direction · when · how long */}
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
           {inbound ? <Tag>they called</Tag> : <Tag outline>we called</Tag>}
-          <span className="text-md font-bold">{absoluteLabel(at, now)}</span>
+          <span className="text-md font-semibold">{absoluteLabel(at, now)}</span>
           <span className="text-sm text-muted-strong">{relativeHint(at, now)}</span>
           <span className="ml-auto shrink-0 text-sm font-semibold">
             {!wasAnswered ? 'no answer' : ms !== null ? spanWords(ms) : 'still open'}
@@ -290,7 +290,7 @@ function CallRow({
             <span
               className={clsx(
                 'min-w-0 flex-1 text-sm break-words',
-                call.safety_pass === false && 'font-bold',
+                call.safety_pass === false && 'font-semibold',
               )}
             >
               {safetyWord(call.safety_pass)}
@@ -302,7 +302,7 @@ function CallRow({
           </Row>
         </div>
 
-        <span className="text-sm font-semibold underline">Open this call</span>
+        <span className="text-sm underline">Open this call</span>
       </Card>
     </Link>
   )

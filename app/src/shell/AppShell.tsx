@@ -99,7 +99,7 @@ function Sidebar() {
           >
             {({ isActive }) => (
               <>
-                <Icon className="size-[18px] shrink-0" strokeWidth={isActive ? 2.4 : 2} />
+                <Icon className="size-[18px] shrink-0" strokeWidth={isActive ? 2 : 1.5} />
                 {item.label}
               </>
             )}
@@ -168,7 +168,7 @@ function PatientCard() {
 function TopBar() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-6">
-      <span className="font-display text-lg font-semibold tracking-tight">Kinvox</span>
+      <span className="font-display text-lg font-medium tracking-tight">Kinvox</span>
       <span className="text-xs text-muted-strong">the care line, at a glance</span>
     </header>
   )
@@ -195,8 +195,8 @@ function TabBar() {
                 {isActive && (
                   <span className="absolute top-0 h-[3px] w-9 rounded-b-full bg-accent" />
                 )}
-                <Icon className="size-[22px]" strokeWidth={isActive ? 2.5 : 2} />
-                <span className={clsx(isActive && 'font-bold')}>{tab.label}</span>
+                <Icon className="size-[22px]" strokeWidth={isActive ? 2 : 1.5} />
+                <span>{tab.label}</span>
               </>
             )}
           </NavLink>

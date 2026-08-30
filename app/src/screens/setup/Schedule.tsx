@@ -116,7 +116,7 @@ export default function Schedule() {
         >
           ←
         </button>
-        <h1 className="text-md font-bold">Review schedule</h1>
+        <h1 className="text-md font-semibold">Review schedule</h1>
         <Label className="ml-auto">3 / 4</Label>
       </header>
 
@@ -305,7 +305,7 @@ function MedicineRow({
                     onChange={(e) => onSetSlot(i, e.target.value)}
                     onBlur={() => onEditSlot(null)}
                     onKeyDown={(e) => e.key === 'Enter' && onEditSlot(null)}
-                    className="rounded-full border border-ink bg-paper px-2 py-0.5 text-sm"
+                    className="rounded-md border border-ink bg-paper px-2 py-0.5 text-sm"
                   />
                   <button
                     type="button"
