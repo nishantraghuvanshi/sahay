@@ -1,7 +1,7 @@
 {
   "name": "elderly-voice-agent",
   "version": "0.1.0",
-  "description": "Modular voice agent for elderly medication adherence \u2014 Vapi + Sarvam AI bridge server with plug-and-play provider abstraction",
+  "description": "Modular voice agent for elderly medication adherence — Vapi + Sarvam AI bridge server with plug-and-play provider abstraction",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
@@ -14,7 +14,8 @@
     "simulate": "node scripts/run-simulation.js",
     "generate-tools": "node scripts/generate-tools.js",
     "setup-elevenlabs": "node scripts/setup-elevenlabs-agent.js",
-    "setup-elevenlabs-webhook": "node scripts/setup-elevenlabs-webhook.js"
+    "setup-elevenlabs-webhook": "node scripts/setup-elevenlabs-webhook.js",
+    "simulate-elevenlabs": "node scripts/simulate-elevenlabs-call.js"
   },
   "dependencies": {
     "express": "^4.19.0",
