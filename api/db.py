@@ -310,14 +310,31 @@ def init(reset: bool = False) -> None:
 
     Fails closed: a configured path that is evidently not a filesystem path
     (a Postgres/MySQL/etc connection string — see agent/postgresql:/... in
-    this working tree) is refused before anything is created OR DESTROYED,
-    and an existing-but-incompatible database (wrong primary-key type, or a
-    pre-rename column name) is refused with nothing written. See
-    schema_version.check_and_migrate for the verdict logic — this used to
-    run the full schema script unconditionally before that check, which
-    would have created any wholly-new table on an incompatible database
-    (CREATE TABLE IF NOT EXISTS is a no-op only for tables that already
-    exist) before refusal had a chance to run.
+    this working tree) is refused before anything is created OR DESTROYED.
+
+    Beyond that, what "refused" means depends on WHICH refusal fires, and the
+    two are not the same guarantee:
+
+      - A pre-rename column name, a mismatched primary-key type, or a
+        user_version from the future is refused with NOTHING WRITTEN. Those
+        checks all run before the first statement is executed, so the file on
+        disk is left byte-identical. (This used to run the full schema script
+        unconditionally before that check, which would have created any
+        wholly-new table on an incompatible database — CREATE TABLE IF NOT
+        EXISTS is a no-op only for tables that already exist — before refusal
+        had a chance to run.)
+      - An incomplete migration (a column SQLite cannot safely ALTER in, or
+        an index that depended on one) is refused AFTER the schema script has
+        run: columns that could be added safely have been added, and any
+        wholly-new table and index has been created. Only PRAGMA
+        user_version is withheld, so the refusal repeats deterministically on
+        every subsequent open instead of the gap becoming permanent and
+        invisible.
+
+    This docstring used to say an incompatible database is "refused with
+    nothing written" without qualification — true before the
+    incomplete-migration refusal existed, false after it. See
+    schema_version.check_and_migrate for the verdict logic.
 
     Fix round 1, finding 2: assert_filesystem_path used to run AFTER
     `reset and DB_PATH.exists(): DB_PATH.unlink()` — so `init(reset=True)`

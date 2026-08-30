@@ -30,12 +30,10 @@ def test_init_reset_with_a_url_shaped_path_refuses_and_deletes_nothing(tmp_path,
     # A file that already exists at the configured (bad) path — if the old
     # ordering bug were still present, `reset=True` would unlink this before
     # ever reaching the filesystem-path check. `Path("postgresql://a:b@c")`
-    # must be built as a RELATIVE path from the process's own cwd (matching
-    # agent/postgresql:/... in the real working tree) rather than joined
-    # onto an absolute tmp_path — an absolute prefix in front of it would
-    # stop the value from *starting* with the scheme, which is exactly what
-    # assert_filesystem_path checks, and the test would pass for the wrong
-    # reason (never actually exercising the guard).
+    # is built as a RELATIVE path from the process's own cwd so it reproduces
+    # agent/postgresql:/... in the real working tree exactly — the collapsed
+    # single-slash form that assert_filesystem_path once rejected while the
+    # Node redactor still printed it in clear.
     monkeypatch.chdir(tmp_path)
     raw = "postgresql://kinvox:secret@localhost:5432/kinvox"
     existing = Path(raw)  # pathlib collapses "//" to "/" the moment this is built

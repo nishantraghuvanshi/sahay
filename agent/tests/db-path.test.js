@@ -2,6 +2,8 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   redactCredentials,
@@ -17,26 +19,98 @@ const {
  * real evidence of what happens without this), fail closed before anything
  * is created, and never let a legitimate path — including one with ':' or
  * '@' in it — get caught.
+ *
+ * The table of inputs lives in api/fixtures/db-path-cases.json, NOT here,
+ * and api/tests/test_db_path.py reads the same file. That fixture is the
+ * only thing keeping agent/src/utils/db-path.js and api/db_path.py in step.
+ * They were previously "kept in step by the tests on each side" and drifted
+ * anyway — Node keying redaction on "://" and Python on ":/" — so Node
+ * printed `postgresql:/user:PASSWORD@host/db` verbatim while Python mangled
+ * `C:/Users/x/data.db`. Neither suite ever ran the other's inputs, and four
+ * review rounds passed over it. Add a case to the fixture, never to one side.
  */
 
-describe('assertFilesystemPath', () => {
-  test('rejects a postgresql:// connection string', () => {
-    assert.throws(
-      () => assertFilesystemPath('postgresql://kinvox:kinvox@localhost:5432/kinvox', 'DB_PATH'),
-      NotAFilesystemPathError
-    );
+const FIXTURE = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'fixtures', 'db-path-cases.json'), 'utf8')
+);
+
+describe('the shared cross-runtime fixture (api/fixtures/db-path-cases.json)', () => {
+  test('is present and non-trivial — an empty fixture must not read as a pass', () => {
+    assert.ok(Array.isArray(FIXTURE.cases), 'fixture has no cases[]');
+    assert.ok(FIXTURE.cases.length >= 30, `expected 30+ shared cases, got ${FIXTURE.cases.length}`);
+    assert.ok(FIXTURE.cases.some((c) => c.connection_string), 'no connection-string cases');
+    assert.ok(FIXTURE.cases.some((c) => !c.connection_string), 'no passthrough cases');
+    assert.ok(Array.isArray(FIXTURE.redos) && FIXTURE.redos.length > 0, 'fixture has no redos[]');
   });
 
-  test('rejects any <scheme>:// value, not just postgresql', () => {
-    for (const scheme of ['postgres', 'mysql', 'sqlite', 'mongodb']) {
-      assert.throws(
-        () => assertFilesystemPath(`${scheme}://user:pass@host/db`, 'DATABASE_URL'),
-        NotAFilesystemPathError,
-        `expected ${scheme}:// to be rejected`
-      );
+  test('every case the fixture calls a connection string carries the four shapes finding 1 named', () => {
+    const inputs = new Set(FIXTURE.cases.map((c) => c.input));
+    for (const required of [
+      'postgresql://kinvox:SECRETPW@localhost:5432/kinvox',
+      'postgresql:/kinvox:SECRETPW@localhost:5432/kinvox',
+      ':/user:SECRET@host',
+      '://user:SECRET@host',
+      '1abc:/user:SECRET@host',
+      '$$$://user:SECRET@host',
+      'C:/Users/x/data.db',
+    ]) {
+      assert.ok(inputs.has(required), `fixture is missing the required case ${JSON.stringify(required)}`);
     }
   });
+});
 
+describe('redactCredentials — every case in the shared fixture', () => {
+  for (const c of FIXTURE.cases) {
+    test(`${c.connection_string ? 'coarsens' : 'passes through byte-identical'}: ${c.label}`, () => {
+      const got = redactCredentials(c.input);
+      assert.strictEqual(got, c.expected);
+      if (!c.connection_string) {
+        // Not merely "equal": the same string, so a real path can never be
+        // corrupted into pointing at a different database.
+        assert.strictEqual(got, c.input);
+        return;
+      }
+      for (const forbidden of c.forbidden || []) {
+        assert.ok(!got.includes(forbidden), `${JSON.stringify(forbidden)} survived into ${got}`);
+      }
+      // The structural guarantee, checked by construction rather than by
+      // pattern: userinfo cannot exist in the output at all.
+      assert.ok(!got.includes('@'), `an authority delimiter survived into ${got}`);
+    });
+  }
+});
+
+describe('assertFilesystemPath — the same fixture, the same predicate', () => {
+  for (const c of FIXTURE.cases) {
+    test(`${c.connection_string ? 'rejects' : 'accepts'}: ${c.label}`, () => {
+      if (!c.connection_string) {
+        assert.doesNotThrow(() => assertFilesystemPath(c.input, 'DB_PATH'));
+        return;
+      }
+      let error = null;
+      try {
+        assertFilesystemPath(c.input, 'DB_PATH');
+      } catch (e) {
+        error = e;
+      }
+      assert.ok(error instanceof NotAFilesystemPathError, 'expected NotAFilesystemPathError');
+      // Finding 1's self-inflicted half: the guard rejected on ":/+" but
+      // rendered the offending value through a redactor that only understood
+      // "://", so the password it exists to protect was printed in clear.
+      // The message must carry the SAME redaction the fixture pins.
+      assert.ok(
+        error.message.includes(c.expected),
+        `message does not render the value through redactCredentials: ${error.message}`
+      );
+      for (const forbidden of c.forbidden || []) {
+        assert.ok(!error.message.includes(forbidden), `leaked into the message: ${error.message}`);
+      }
+      assert.ok(!error.message.includes('@'), `an authority delimiter survived: ${error.message}`);
+    });
+  }
+});
+
+describe('assertFilesystemPath — message shape (wording is per-runtime, not shared)', () => {
   test('the error names the variable that was set', () => {
     assert.throws(
       () => assertFilesystemPath('postgresql://a:b@c/d', 'DATABASE_URL'),
@@ -47,132 +121,45 @@ describe('assertFilesystemPath', () => {
   test('falls back to a generic label when no variable name is given', () => {
     assert.throws(() => assertFilesystemPath('postgresql://a:b@c/d'), /configured database path/);
   });
-
-  test('the error message never contains the raw password', () => {
-    try {
-      assertFilesystemPath('postgresql://kinvox:supersecret@localhost:5432/kinvox', 'DB_PATH');
-      assert.fail('expected a throw');
-    } catch (e) {
-      assert.ok(!e.message.includes('supersecret'), `password leaked: ${e.message}`);
-    }
-  });
-
-  test('a plain absolute filesystem path is accepted', () => {
-    assert.doesNotThrow(() => assertFilesystemPath('/data/voiceagent.db'));
-  });
-
-  test('a path containing ":" is accepted — a legal filesystem character', () => {
-    assert.doesNotThrow(() => assertFilesystemPath('/tmp/backup:2026-08-30/x.db'));
-  });
-
-  test('a path containing "@" is accepted — the addendum\'s named example', () => {
-    assert.doesNotThrow(() => assertFilesystemPath('/tmp/a@b/x.db'));
-  });
-
-  test('a relative path is accepted', () => {
-    assert.doesNotThrow(() => assertFilesystemPath('./data/voiceagent.db'));
-  });
 });
 
-describe('redactCredentials', () => {
-  test('collapses everything after scheme:// so no password character survives', () => {
-    const redacted = redactCredentials('postgresql://kinvox:secretpw@localhost:5432/kinvox');
-    assert.ok(!redacted.includes('secretpw'));
-    assert.ok(redacted.startsWith('postgresql://'));
-  });
-
-  // Round 4: a malformed-scheme input class every one of the three prior
-  // rounds also missed, because redactCredentials fell through to
-  // `return str` whenever the text before "://" wasn't a well-formed
-  // scheme (empty, digit-led, or punctuation) instead of coarsening it —
-  // the exact conditional the "coarsen by construction" ruling forbids.
-  const LEAKING_INPUTS = [
-    ['no scheme at all before ://', '://user:SECRET@host'],
-    ['a digit-led scheme', '1abc://user:SECRET@host'],
-    ['a punctuation-led scheme', '$$$://user:SECRET@host'],
-    ['a scheme-shaped run after a real path prefix', '/mnt/1x://user:SECRET@host'],
+describe('redactCredentials — inputs whose coercion is language-specific, so not shareable', () => {
+  // String(null) is 'null' but str(None) is 'None'; String(undefined) has no
+  // Python counterpart at all. These cannot live in the shared fixture, so
+  // each side asserts "never throws" locally.
+  const EDGE_INPUTS = [
+    ['null', null],
+    ['undefined', undefined],
+    ['a number', 5],
   ];
-  for (const [label, input] of LEAKING_INPUTS) {
-    test(`${label} is still coarsened, not returned raw`, () => {
-      const redacted = redactCredentials(input);
-      assert.ok(!redacted.includes('SECRET'), `leaked: ${redacted}`);
-      assert.ok(!redacted.includes('user:'), `leaked: ${redacted}`);
-      // Not merely "the secret is gone": nothing of the original survives,
-      // because a prefix that isn't a clean scheme may itself be a
-      // mis-split credential.
-      assert.strictEqual(redacted, '<redacted>://<redacted>');
+  for (const [label, input] of EDGE_INPUTS) {
+    test(label, () => {
+      assert.doesNotThrow(() => redactCredentials(input));
     });
   }
+});
 
-  test('postgresql://u:s@h collapses to postgresql://<redacted>', () => {
-    assert.strictEqual(redactCredentials('postgresql://u:s@h'), 'postgresql://<redacted>');
-  });
-
-  test('sqlite:///abs/path.db (no authority) is coarsened too', () => {
-    assert.strictEqual(redactCredentials('sqlite:///abs/path.db'), 'sqlite://<redacted>');
-  });
-
-  test('an embedded scheme:// after a real path prefix redacts the secret, never rewrites into a false path', () => {
-    const redacted = redactCredentials('/mnt/backups/scp://deploy:build@2024/release.db');
-    assert.ok(!redacted.includes('build'));
-    assert.ok(!redacted.includes('2024'));
-  });
-
-  test('a plain filesystem path passes through byte-identical', () => {
-    assert.strictEqual(redactCredentials('/data/voiceagent.db'), '/data/voiceagent.db');
-  });
-
-  test('a path with "@" but no "://" passes through byte-identical', () => {
-    assert.strictEqual(redactCredentials('/tmp/a@b/x.db'), '/tmp/a@b/x.db');
-  });
-
-  test('a path with ":" but no "://" passes through byte-identical', () => {
-    assert.strictEqual(redactCredentials('/tmp/a:b/x.db'), '/tmp/a:b/x.db');
-  });
-
-  test('a relative path passes through byte-identical', () => {
-    assert.strictEqual(redactCredentials('./data/v.db'), './data/v.db');
-  });
-
-  describe('never throws', () => {
-    const EDGE_INPUTS = [
-      ['null', null],
-      ['undefined', undefined],
-      ['a number', 5],
-      ['an empty string', ''],
-      ['a lone "://"', '://'],
-      ['a null byte', '\u0000abc://x'],
-      ['whitespace-padded', '   \t ://x   '],
-      ['unicode', 'ünïcödé://x'],
-      ['multi-megabyte with no "://"', 'a'.repeat(4000000)],
-    ];
-    for (const [label, input] of EDGE_INPUTS) {
-      test(label, () => {
-        assert.doesNotThrow(() => redactCredentials(input));
-      });
+describe('no ReDoS — the budgets in the shared fixture', () => {
+  // Best of five: the budgets are tight enough that a single unlucky GC or
+  // scheduler slice would dominate, and the thing under test is whether the
+  // algorithm is linear, not how busy the machine is.
+  function bestMs(fn, runs = 5) {
+    let best = Infinity;
+    for (let i = 0; i < runs; i++) {
+      const start = process.hrtime.bigint();
+      fn();
+      best = Math.min(best, Number(process.hrtime.bigint() - start) / 1e6);
     }
-  });
+    return best;
+  }
 
-  test('no ReDoS: a long scheme-char run with no "://" stays fast', () => {
-    const huge = 'a'.repeat(4000000);
-    const start = Date.now();
-    redactCredentials(huge);
-    assert.ok(Date.now() - start < 1000, 'redactCredentials(4M chars, no ://) took too long');
-  });
-
-  test('no ReDoS: a long scheme-char run immediately before "://" stays fast', () => {
-    const huge = `${'a'.repeat(4000000)}://x`;
-    const start = Date.now();
-    redactCredentials(huge);
-    assert.ok(Date.now() - start < 1000, 'redactCredentials(4M scheme chars + ://) took too long');
-  });
-
-  test('no ReDoS: many repetitions of "a://" stays fast', () => {
-    const huge = 'a://'.repeat(1000000);
-    const start = Date.now();
-    redactCredentials(huge);
-    assert.ok(Date.now() - start < 1000, 'redactCredentials(1M reps of a://) took too long');
-  });
+  for (const c of FIXTURE.redos) {
+    test(`${c.label} completes within ${c.max_ms}ms`, () => {
+      const input = c.unit.repeat(c.count) + c.suffix;
+      const ms = bestMs(() => redactCredentials(input));
+      assert.ok(ms < c.max_ms, `took ${ms.toFixed(3)}ms, budget ${c.max_ms}ms`);
+    });
+  }
 });
 
 describe('resolveConfiguredDbPath', () => {

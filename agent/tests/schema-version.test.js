@@ -312,3 +312,113 @@ describe('verdict: incompatible', () => {
     assert.deepStrictEqual(beforeBytes, afterBytes);
   });
 });
+
+/**
+ * The shared cross-runtime parity fixture. api/fixtures/schema-verdict-cases.json
+ * lists database shape -> expected verdict, and api/tests/test_schema_version.py
+ * runs the SAME table against api/schema_version.py.
+ *
+ * This exists because the sibling pair of this module (utils/db-path.js and
+ * api/db_path.py) was also "kept in step by the tests on each side" — and
+ * drifted for four review rounds, in opposite directions, because neither
+ * suite ever ran the other's inputs. A comment claiming parity is not
+ * enforcement; a file both sides read is. Add a shape to the fixture, not to
+ * one suite.
+ *
+ * The bespoke tests above stay: they assert runtime-specific things the
+ * fixture deliberately cannot carry (row survival through a refusal, the
+ * repeat-refusal on every open, and the real pre-reconciliation evidence
+ * file on disk).
+ */
+const VERDICT_FIXTURE = JSON.parse(
+  fs.readFileSync(
+    path.join(__dirname, '..', '..', 'api', 'fixtures', 'schema-verdict-cases.json'),
+    'utf8'
+  )
+);
+
+function applyVerdictCase(db, c) {
+  if (c.setup_sql) db.exec(c.setup_sql);
+  if (c.pre_migrate) checkAndMigrate(db, SCHEMA_SQL, 'pre-migrate');
+  if (c.user_version !== null && c.user_version !== undefined) {
+    db.exec(`PRAGMA user_version = ${c.user_version}`);
+  }
+}
+
+function tableColumns(db, table) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().map((r) => r.name);
+}
+
+describe('verdict parity — the shared fixture both runtimes read', () => {
+  test('the fixture is present and non-trivial — an empty one must not read as a pass', () => {
+    assert.ok(Array.isArray(VERDICT_FIXTURE.cases), 'fixture has no cases[]');
+    assert.strictEqual(VERDICT_FIXTURE.cases.length, 8, 'expected the 8 documented shapes');
+    for (const verdict of ['created', 'current', 'migrated', 'incompatible']) {
+      assert.ok(
+        VERDICT_FIXTURE.cases.some((c) => c.expect.verdict === verdict),
+        `fixture covers no ${verdict} case`
+      );
+    }
+  });
+
+  for (const c of VERDICT_FIXTURE.cases) {
+    test(`${c.expect.verdict}: ${c.label}`, () => {
+      const dbPath = tmpDbPath('sahay-schema-verdict-fixture-');
+      const db = new DatabaseSync(dbPath);
+      try {
+        applyVerdictCase(db, c);
+
+        if (c.expect.verdict === 'incompatible') {
+          let error;
+          try {
+            checkAndMigrate(db, SCHEMA_SQL, dbPath);
+          } catch (e) {
+            error = e;
+          }
+          assert.ok(error instanceof IncompatibleDatabaseError, `expected a refusal for ${c.label}`);
+          for (const pattern of c.expect.message_matches || []) {
+            assert.match(error.message, new RegExp(pattern));
+          }
+        } else {
+          const result = checkAndMigrate(db, SCHEMA_SQL, dbPath);
+          assert.strictEqual(result.verdict, c.expect.verdict);
+          if (c.expect.version !== undefined) assert.strictEqual(result.version, c.expect.version);
+          if (c.expect.from !== undefined) assert.strictEqual(result.from, c.expect.from);
+          for (const col of c.expect.added_includes || []) {
+            assert.ok(result.added.includes(col), `expected ${col} among added`);
+          }
+          if (c.expect.skipped) assert.deepStrictEqual(result.skipped, c.expect.skipped);
+          // JS spells it skippedIndexes; the fixture uses the shared snake_case name.
+          if (c.expect.skipped_indexes) {
+            assert.deepStrictEqual(result.skippedIndexes, c.expect.skipped_indexes);
+          }
+        }
+
+        if (c.expect.user_version_after !== undefined) {
+          assert.strictEqual(
+            db.prepare('PRAGMA user_version').get().user_version,
+            c.expect.user_version_after
+          );
+        }
+        for (const [table, cols] of Object.entries(c.expect.columns_exactly || {})) {
+          assert.deepStrictEqual(tableColumns(db, table), cols);
+        }
+        for (const [table, cols] of Object.entries(c.expect.columns_absent || {})) {
+          const live = tableColumns(db, table);
+          for (const col of cols) {
+            assert.ok(!live.includes(col), `${table}.${col} must not have been added`);
+          }
+        }
+        for (const table of c.expect.tables_present || []) {
+          const names = db
+            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+            .all()
+            .map((r) => r.name);
+          assert.ok(names.includes(table), `expected table ${table}`);
+        }
+      } finally {
+        db.close();
+      }
+    });
+  }
+});

@@ -1,0 +1,157 @@
+{
+  "_readme": [
+    "ONE table of database shapes -> expected open-time verdict, read by BOTH",
+    "agent/tests/schema-version.test.js and api/tests/test_schema_version.py.",
+    "",
+    "agent/src/adapters/persistence/schema-version.js and api/schema_version.py",
+    "are separate implementations of the same three verdicts over the same",
+    "api/schema.sql. They happen to agree today; nothing was enforcing that,",
+    "which is exactly how the redaction rule in the sibling pair (db-path.js /",
+    "db_path.py) drifted for four review rounds. This fixture is the",
+    "enforcement. Add a shape here, not to one suite.",
+    "",
+    "Each case: apply setup_sql to a fresh temp database (empty means a brand",
+    "new file); if pre_migrate, run check_and_migrate once first; if",
+    "user_version is not null, stamp it; then run check_and_migrate and match",
+    "expect{}.",
+    "",
+    "expect.verdict       'created' | 'current' | 'migrated' | 'incompatible'",
+    "                     ('incompatible' means it must RAISE/THROW).",
+    "expect.message_matches   regexes the refusal message must match. Written",
+    "                     in the subset of syntax that means the same thing in",
+    "                     both JS RegExp and Python re.",
+    "expect.user_version_after   PRAGMA user_version once the dust settles.",
+    "expect.columns_absent / columns_exactly   PRAGMA table_info assertions.",
+    "",
+    "Result-shape keys differ by runtime (JS `skippedIndexes` vs Python",
+    "`skipped_indexes`); each suite maps its own naming."
+  ],
+  "cases": [
+    {
+      "label": "an empty file — nothing to migrate, nothing to lose",
+      "setup_sql": "",
+      "pre_migrate": false,
+      "user_version": null,
+      "expect": {
+        "verdict": "created",
+        "version": 1,
+        "user_version_after": 1,
+        "tables_present": [
+          "patients",
+          "payments",
+          "medications"
+        ]
+      }
+    },
+    {
+      "label": "an already-current database, opened a second time",
+      "setup_sql": "",
+      "pre_migrate": true,
+      "user_version": null,
+      "expect": {
+        "verdict": "current",
+        "version": 1,
+        "user_version_after": 1
+      }
+    },
+    {
+      "label": "behind by only safely-addable columns",
+      "setup_sql": "CREATE TABLE patients (id TEXT PRIMARY KEY, phone_e164 TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);",
+      "pre_migrate": false,
+      "user_version": null,
+      "expect": {
+        "verdict": "migrated",
+        "version": 1,
+        "from": 0,
+        "user_version_after": 1,
+        "added_includes": [
+          "patients.timezone",
+          "patients.caregiver_id"
+        ],
+        "skipped": [],
+        "skipped_indexes": []
+      },
+      "note": "A `medications` table is deliberately absent: its missing gap columns include NOT-NULL-no-DEFAULT and non-constant-DEFAULT ones, which is the separate refusing case below."
+    },
+    {
+      "label": "a populated table missing a NOT NULL column with no DEFAULT — the migration cannot complete",
+      "setup_sql": "CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);INSERT INTO medications (id, name) VALUES ('m1', 'Metformin');",
+      "pre_migrate": false,
+      "user_version": null,
+      "expect": {
+        "verdict": "incompatible",
+        "user_version_after": 0,
+        "message_matches": [
+          "medications\\.patient_id",
+          "medications\\.dose",
+          "index statement\\(s\\) could not run"
+        ]
+      },
+      "note": "user_version must NOT be stamped: stamping it is what made an incomplete migration permanent and invisible on every later open."
+    },
+    {
+      "label": "an INTEGER primary key where the schema says TEXT",
+      "setup_sql": "CREATE TABLE patients (id INTEGER PRIMARY KEY AUTOINCREMENT, phone_e164 TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);",
+      "pre_migrate": false,
+      "user_version": null,
+      "expect": {
+        "verdict": "incompatible",
+        "user_version_after": 0,
+        "message_matches": [
+          "patients\\.id is INTEGER, schema requires TEXT"
+        ],
+        "columns_exactly": {
+          "patients": [
+            "id",
+            "phone_e164",
+            "created_at"
+          ]
+        }
+      }
+    },
+    {
+      "label": "an untyped id column — PRAGMA table_info reports its type as the empty string",
+      "setup_sql": "CREATE TABLE patients (id PRIMARY KEY, phone_e164 TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);",
+      "pre_migrate": false,
+      "user_version": null,
+      "expect": {
+        "verdict": "incompatible",
+        "user_version_after": 0,
+        "message_matches": [
+          "patients\\.id is \\(untyped\\), schema requires TEXT"
+        ]
+      }
+    },
+    {
+      "label": "a pre-rename column name (medications.times) — THE REGRESSION GUARD",
+      "setup_sql": "CREATE TABLE medications (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, name TEXT NOT NULL, dose TEXT NOT NULL, times TEXT NOT NULL DEFAULT '[]', food_rule TEXT);INSERT INTO medications (id, patient_id, name, dose, times) VALUES ('m1','p1','Metformin','500mg','[\"08:00\"]');",
+      "pre_migrate": false,
+      "user_version": null,
+      "expect": {
+        "verdict": "incompatible",
+        "user_version_after": 0,
+        "message_matches": [
+          "medications\\.times"
+        ],
+        "columns_absent": {
+          "medications": [
+            "slots"
+          ]
+        }
+      },
+      "note": "`slots` must never be auto-added beside a populated `times` column. Both runtimes must refuse, and the file must be left byte-identical."
+    },
+    {
+      "label": "a future user_version this code does not understand",
+      "setup_sql": "",
+      "pre_migrate": true,
+      "user_version": 999,
+      "expect": {
+        "verdict": "incompatible",
+        "message_matches": [
+          "only understands schema versions up to"
+        ]
+      }
+    }
+  ]
+}

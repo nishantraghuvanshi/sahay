@@ -1,0 +1,355 @@
+{
+  "_readme": [
+    "ONE table of cases, read by BOTH agent/tests/db-path.test.js and",
+    "api/tests/test_db_path.py. It is the only thing keeping",
+    "agent/src/utils/db-path.js and api/db_path.py in step.",
+    "",
+    "They were previously 'kept in step by the tests on each side', which is",
+    "how they came to disagree about what a connection string even is: Node",
+    "keyed redaction on '://' while Python keyed it on ':/'. Node therefore",
+    "printed 'postgresql:/user:PASSWORD@host/db' verbatim -- out of the very",
+    "guard whose purpose is to protect it -- while Python mangled the real",
+    "Windows path 'C:/Users/x/data.db' into 'C://<redacted>'. Four review",
+    "rounds passed over that, because neither suite ever ran the other's",
+    "inputs.",
+    "",
+    "Add a case here, not to one suite. Both sides must agree byte for byte.",
+    "",
+    "cases[]  input -> expected output of redactCredentials/redact_credentials.",
+    "         'connection_string' is also the expected verdict of",
+    "         assertFilesystemPath/assert_filesystem_path: true means it must",
+    "         throw, false means it must accept. The two share one predicate,",
+    "         so one flag pins both.",
+    "         'forbidden' lists substrings that must NOT appear in the",
+    "         redacted output or in the rejection message.",
+    "redos[]  input = unit*count + suffix; must complete within max_ms.",
+    "",
+    "Non-string inputs (None/null, undefined, 5) are deliberately absent:",
+    "str(None) is 'None' but String(null) is 'null', so their coercion is",
+    "language-specific and cannot be shared. Each suite covers those locally."
+  ],
+  "cases": [
+    {
+      "label": "a plain absolute path",
+      "input": "/data/voiceagent.db",
+      "expected": "/data/voiceagent.db",
+      "connection_string": false
+    },
+    {
+      "label": "a path containing '@' — a legal filesystem character",
+      "input": "/tmp/a@b/x.db",
+      "expected": "/tmp/a@b/x.db",
+      "connection_string": false
+    },
+    {
+      "label": "a path containing ':' not followed by '/'",
+      "input": "/tmp/a:b/x.db",
+      "expected": "/tmp/a:b/x.db",
+      "connection_string": false
+    },
+    {
+      "label": "a dated backup directory, ':' mid-path",
+      "input": "/tmp/backup:2026-08-30/x.db",
+      "expected": "/tmp/backup:2026-08-30/x.db",
+      "connection_string": false
+    },
+    {
+      "label": "a relative path",
+      "input": "./data/v.db",
+      "expected": "./data/v.db",
+      "connection_string": false
+    },
+    {
+      "label": "a bare filename",
+      "input": "voiceagent.db",
+      "expected": "voiceagent.db",
+      "connection_string": false
+    },
+    {
+      "label": "a Windows drive path — one letter, one slash, no '@'",
+      "input": "C:/Users/x/data.db",
+      "expected": "C:/Users/x/data.db",
+      "connection_string": false
+    },
+    {
+      "label": "a lower-case Windows drive path",
+      "input": "c:/users/x/data.db",
+      "expected": "c:/users/x/data.db",
+      "connection_string": false
+    },
+    {
+      "label": "the empty string",
+      "input": "",
+      "expected": "",
+      "connection_string": false
+    },
+    {
+      "label": "a postgresql URL — the canonical case",
+      "input": "postgresql://kinvox:SECRETPW@localhost:5432/kinvox",
+      "expected": "postgresql://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRETPW",
+        "kinvox:",
+        "@"
+      ]
+    },
+    {
+      "label": "the pathlib-collapsed single-slash form — FINDING 1, leaked verbatim on Node",
+      "input": "postgresql:/kinvox:SECRETPW@localhost:5432/kinvox",
+      "expected": "postgresql://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRETPW",
+        "kinvox:",
+        "@"
+      ]
+    },
+    {
+      "label": "no scheme at all before ':/' — FINDING 1, leaked verbatim on Node",
+      "input": ":/user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "no scheme at all before '://'",
+      "input": "://user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a digit-led scheme, single slash",
+      "input": "1abc:/user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a digit-led scheme, double slash",
+      "input": "1abc://user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a punctuation-led scheme, double slash",
+      "input": "$$$://user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a punctuation-led scheme, single slash",
+      "input": "$$$:/user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a scheme-shaped run after a real path prefix",
+      "input": "/mnt/1x://user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "an embedded scheme after a legitimate-looking directory prefix",
+      "input": "/mnt/backups/scp://deploy:SECRET@2024/release.db",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "deploy:",
+        "@"
+      ]
+    },
+    {
+      "label": "a short postgresql URL",
+      "input": "postgresql://u:s@h",
+      "expected": "postgresql://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "u:s",
+        "@"
+      ]
+    },
+    {
+      "label": "sqlite:/// — three slashes, no authority, nothing to leak",
+      "input": "sqlite:///abs/path.db",
+      "expected": "sqlite://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "abs/path.db"
+      ]
+    },
+    {
+      "label": "postgres://",
+      "input": "postgres://user:SECRET@host/db",
+      "expected": "postgres://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "@"
+      ]
+    },
+    {
+      "label": "mysql://",
+      "input": "mysql://user:SECRET@host/db",
+      "expected": "mysql://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "@"
+      ]
+    },
+    {
+      "label": "mongodb://",
+      "input": "mongodb://user:SECRET@host/db",
+      "expected": "mongodb://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "@"
+      ]
+    },
+    {
+      "label": "a one-character scheme with an authority — drive-shaped but '//' opens userinfo",
+      "input": "a://user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a one-character scheme with a single slash but userinfo — the '@' rule is what catches this",
+      "input": "a:/user:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "user:",
+        "@"
+      ]
+    },
+    {
+      "label": "a drive letter followed by '//' is an authority, not a drive",
+      "input": "C://Users:SECRET@x",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "@"
+      ]
+    },
+    {
+      "label": "a real Windows drive prefix in front of a real connection string",
+      "input": "C:/Users/x/postgresql://u:SECRET@h",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "SECRET",
+        "@"
+      ]
+    },
+    {
+      "label": "a drive-shaped prefix with a SECOND ':/' later is not exempt (fail closed)",
+      "input": "C:/a/sub:/b",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": []
+    },
+    {
+      "label": "a lone '://'",
+      "input": "://",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": []
+    },
+    {
+      "label": "a lone ':/'",
+      "input": ":/",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": []
+    },
+    {
+      "label": "a leading null byte",
+      "input": "\u0000abc://x",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": [
+        "abc"
+      ]
+    },
+    {
+      "label": "whitespace padding",
+      "input": "   \t ://x   ",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": []
+    },
+    {
+      "label": "a non-ASCII scheme-shaped prefix",
+      "input": "ünïcödé://x",
+      "expected": "<redacted>://<redacted>",
+      "connection_string": true,
+      "forbidden": []
+    }
+  ],
+  "redos": [
+    {
+      "label": "4M scheme characters and no separator at all",
+      "unit": "a",
+      "count": 4000000,
+      "suffix": "",
+      "max_ms": 5
+    },
+    {
+      "label": "4M scheme characters followed by a separator",
+      "unit": "a",
+      "count": 4000000,
+      "suffix": "://x",
+      "max_ms": 100
+    },
+    {
+      "label": "1M repetitions of 'a://'",
+      "unit": "a://",
+      "count": 1000000,
+      "suffix": "",
+      "max_ms": 10
+    }
+  ]
+}

@@ -9,8 +9,12 @@ former _ADDED_COLUMNS).
 
 The Node counterpart (agent/src/adapters/persistence/schema-version.js)
 implements the same algorithm against the same file; there is no shared
-runtime, so the two are kept in step by both parsing schema.sql the same way
-and by the tests on each side.
+runtime. Both parse schema.sql the same way, and — this is the part that is
+actually enforced — both test suites assert against ONE shared table of
+database shapes, api/fixtures/schema-verdict-cases.json. "Kept in step by the
+tests on each side" is what the sibling pair (api/db_path.py and
+agent/src/utils/db-path.js) claimed while drifting in opposite directions for
+four review rounds, because neither suite ever ran the other's inputs.
 """
 from __future__ import annotations
 

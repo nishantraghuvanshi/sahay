@@ -6,6 +6,8 @@ itself to run (neither pytest nor fastapi were installed in the environment
 this was written in — see task-4-report.md for what was verified by running
 the bodies below directly with plain asserts instead).
 """
+import json
+import re
 import shutil
 import sqlite3
 import sys
@@ -234,3 +236,98 @@ class TestVerdictIncompatible:
 
         # the original evidence file was never opened by this test — only the copy was
         assert PRE_RECONCILIATION_DB.read_bytes() == before
+
+
+VERDICT_FIXTURE = json.loads(
+    (Path(__file__).resolve().parents[1] / "fixtures" / "schema-verdict-cases.json").read_text()
+)
+VERDICT_CASES = VERDICT_FIXTURE["cases"]
+
+
+def _apply_verdict_case(con, case):
+    if case["setup_sql"]:
+        con.executescript(case["setup_sql"])
+    if case["pre_migrate"]:
+        schema_version.check_and_migrate(con, SCHEMA_SQL, "pre-migrate")
+    if case["user_version"] is not None:
+        con.executescript(f"PRAGMA user_version = {case['user_version']}")
+
+
+def _table_columns(con, table):
+    return [r[1] for r in con.execute(f"PRAGMA table_info({table})")]
+
+
+class TestVerdictParityAgainstTheSharedFixture:
+    """api/fixtures/schema-verdict-cases.json lists database shape -> expected
+    verdict, and agent/tests/schema-version.test.js runs the SAME table against
+    agent/src/adapters/persistence/schema-version.js.
+
+    This exists because the sibling pair of this module (api/db_path.py and
+    agent/src/utils/db-path.js) was also "kept in step by the tests on each
+    side" — and drifted for four review rounds, in opposite directions,
+    because neither suite ever ran the other's inputs. A comment claiming
+    parity is not enforcement; a file both sides read is. Add a shape to the
+    fixture, not to one suite.
+
+    The bespoke tests above stay: they assert runtime-specific things the
+    fixture deliberately cannot carry (row survival through a refusal, the
+    repeat-refusal on every open, and the real pre-reconciliation evidence
+    file on disk).
+    """
+
+    def test_the_fixture_is_present_and_non_trivial(self):
+        # An empty or missing fixture must not read as a pass.
+        assert len(VERDICT_CASES) == 8, "expected the 8 documented shapes"
+        verdicts = {c["expect"]["verdict"] for c in VERDICT_CASES}
+        for verdict in ("created", "current", "migrated", "incompatible"):
+            assert verdict in verdicts, f"fixture covers no {verdict} case"
+
+    @pytest.mark.parametrize(
+        "case", VERDICT_CASES, ids=[c["expect"]["verdict"] + ": " + c["label"] for c in VERDICT_CASES]
+    )
+    def test_every_shared_shape(self, case, tmp_path):
+        con = _open(tmp_path / "case.db")
+        try:
+            _apply_verdict_case(con, case)
+            expect = case["expect"]
+
+            if expect["verdict"] == "incompatible":
+                with pytest.raises(schema_version.IncompatibleDatabaseError) as exc_info:
+                    schema_version.check_and_migrate(con, SCHEMA_SQL, str(tmp_path / "case.db"))
+                message = str(exc_info.value)
+                for pattern in expect.get("message_matches", []):
+                    assert re.search(pattern, message), f"{pattern!r} not in {message!r}"
+            else:
+                result = schema_version.check_and_migrate(
+                    con, SCHEMA_SQL, str(tmp_path / "case.db")
+                )
+                assert result["verdict"] == expect["verdict"]
+                if "version" in expect:
+                    assert result["version"] == expect["version"]
+                if "from" in expect:
+                    assert result["from"] == expect["from"]
+                for col in expect.get("added_includes", []):
+                    assert col in result["added"], f"expected {col} among added"
+                if "skipped" in expect:
+                    assert result["skipped"] == expect["skipped"]
+                # Python spells it skipped_indexes, which is the shared name.
+                if "skipped_indexes" in expect:
+                    assert result["skipped_indexes"] == expect["skipped_indexes"]
+
+            if "user_version_after" in expect:
+                assert con.execute("PRAGMA user_version").fetchone()[0] == expect[
+                    "user_version_after"
+                ]
+            for table, cols in expect.get("columns_exactly", {}).items():
+                assert _table_columns(con, table) == cols
+            for table, cols in expect.get("columns_absent", {}).items():
+                live = _table_columns(con, table)
+                for col in cols:
+                    assert col not in live, f"{table}.{col} must not have been added"
+            present = {
+                r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            for table in expect.get("tables_present", []):
+                assert table in present, f"expected table {table}"
+        finally:
+            con.close()

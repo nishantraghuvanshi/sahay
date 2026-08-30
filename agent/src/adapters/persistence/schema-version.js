@@ -11,9 +11,13 @@
  * _ensureColumn calls and api/db.py's _ADDED_COLUMNS).
  *
  * The Python counterpart (api/schema_version.py) implements the same
- * algorithm against the same file; there is no shared runtime, so the two
- * are kept in step by both parsing schema.sql the same way and by the tests
- * on each side.
+ * algorithm against the same file; there is no shared runtime. Both parse
+ * schema.sql the same way, and — this is the part that is actually enforced
+ * — both test suites assert against ONE shared table of database shapes,
+ * api/fixtures/schema-verdict-cases.json. "Kept in step by the tests on each
+ * side" is what the sibling pair (utils/db-path.js and api/db_path.py)
+ * claimed while drifting in opposite directions for four review rounds,
+ * because neither suite ever ran the other's inputs.
  */
 
 const fs = require('fs');
@@ -216,9 +220,29 @@ function _existingTables(db) {
 
 /**
  * Decide current / migratable / incompatible for `db` and apply the
- * migration in place. Never executes a single statement before every
- * compatibility check has passed — an incompatible database is refused with
- * nothing written.
+ * migration in place.
+ *
+ * What "refused" means depends on WHICH refusal fires, and the two are not
+ * the same guarantee:
+ *
+ *   - A pre-rename column name, a mismatched primary-key type, or a
+ *     user_version from the future is refused with NOTHING WRITTEN. Those
+ *     checks all run before the first statement is executed, so the file on
+ *     disk is left byte-identical.
+ *   - An incomplete migration (a column SQLite cannot safely ALTER in, or an
+ *     index that depended on one) is refused AFTER the schema script has
+ *     run: columns that could be added safely have been added, and any
+ *     wholly-new table and index has been created. Only `PRAGMA
+ *     user_version` is withheld — the claim "this database is fully current"
+ *     — so the refusal repeats deterministically on every subsequent open
+ *     instead of the gap becoming permanent and invisible. The additive
+ *     changes left behind are harmless on their own; existing rows are
+ *     untouched.
+ *
+ * This docstring used to say only "an incompatible database is refused with
+ * nothing written", which was true before the incomplete-migration refusal
+ * existed and false after it. A stale comment about a safety guarantee is
+ * worse than none.
  *
  * @param {import('node:sqlite').DatabaseSync} db - already open
  * @param {string} schemaSql - api/schema.sql's contents

@@ -11,23 +11,85 @@
  * database — no error, no warning. This module is what every caller of
  * SqliteRepository (server.js, the scripts, tests) shares so that mistake is
  * caught once, in one place, before anything is created.
+ *
+ * api/db_path.py implements the identical rule for the Python runtime. The
+ * two are no longer "kept in step by the tests on each side" — that is
+ * precisely how they drifted, one keying on "://" and the other on ":/", in
+ * opposite directions, for four review rounds. They now assert against ONE
+ * shared table of cases, api/fixtures/db-path-cases.json, read by both
+ * agent/tests/db-path.test.js and api/tests/test_db_path.py.
  */
 
-// One or more slashes after the colon, not exactly "://" (minor fix, round
-// 1): api/db_path.py's equivalent accepts the collapsed single-slash form
-// because pathlib.Path() collapses "//" to "/" the moment a raw value is
-// wrapped in it — see that file's comment for the concrete example. Node
-// never does that collapse on its own, so this file was never actually
-// bitten by it, but a value could still arrive here already collapsed by
-// something upstream (a caller doing its own path.resolve() first, a value
-// read back out of a Path-like structure). Matching Python's pattern here
-// removes that divergence rather than relying on "Node happens not to".
-const URL_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/+/;
-// Anchored at both ends: the whole prefix, or nothing. Deterministic, so it
-// is linear in the prefix length however long that prefix is.
-const CLEAN_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*$/;
+/**
+ * Rendered verbatim in the redacted output only when the WHOLE prefix before
+ * the separator is itself a scheme name of AT LEAST TWO characters. The `+`
+ * (not `*`) is the length rule: a one-character prefix is never rendered,
+ * because a one-character prefix is what a Windows drive letter looks like
+ * and this pattern must not be the thing that decides between the two.
+ *
+ * Anchored at both ends, one greedy character class, no alternation: it is
+ * deterministic and linear in the prefix length, so it cannot backtrack.
+ */
+const CLEAN_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]+$/;
+
+const SLASH = 0x2f;
 
 class NotAFilesystemPathError extends Error {}
+
+/**
+ * Is the ":/" at `idx` the ":" of a Windows drive letter rather than the
+ * separator of a connection string?
+ *
+ * This is the ONLY exemption, and it is decided on length and shape alone —
+ * never on "the prefix starts with a letter", which is the gate four earlier
+ * rounds used to skip redaction and which let `postgresql:/`, `1abc:/` and
+ * `$$$://` through. All four conditions must hold:
+ *
+ *   1. exactly one character precedes the colon (idx === 1). RFC 3986 scheme
+ *      names are two characters or more, so a one-character prefix cannot be
+ *      a real scheme;
+ *   2. that character is an ASCII letter — a drive letter is A-Z;
+ *   3. exactly one slash follows the colon. "//" opens a URI authority, and
+ *      an authority is the only place userinfo can live, so `a://…` is a
+ *      connection string however short its scheme looks;
+ *   4. the value contains no "@" anywhere. "@" is the userinfo delimiter; a
+ *      value carrying one is treated as a credential no matter what shape
+ *      surrounds it. This is what closes `a:/user:pw@host`, whose first
+ *      three conditions are indistinguishable from `C:/Users/x/data.db`.
+ *
+ * Anything that is not all four redacts. When in doubt, redact.
+ */
+function _isWindowsDriveSeparator(str, idx) {
+  if (idx !== 1) return false;
+  const c = str.charCodeAt(0);
+  const isAsciiLetter = (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a);
+  if (!isAsciiLetter) return false;
+  if (str.charCodeAt(3) === SLASH) return false; // "C://…" — an authority, not a drive
+  return str.indexOf('@') === -1;
+}
+
+/**
+ * The single predicate both redactCredentials and assertFilesystemPath ask.
+ * Returns the index of the ":/" that makes `str` a connection string, or -1
+ * when `str` is an ordinary filesystem path.
+ *
+ * Stated as one rule: a value is a connection string as soon as it contains
+ * ":/", UNLESS its only ":/" is a Windows drive separator (see
+ * _isWindowsDriveSeparator). A drive letter can occur once, at the start —
+ * so after exempting it we look once more for a further ":/", and a second
+ * one is a separator regardless.
+ *
+ * Cost: at most three linear scans (indexOf ':/' twice, indexOf '@' once)
+ * plus one anchored, non-backtracking test over the prefix. No regex ever
+ * scans the whole string, so there is no ReDoS surface — the shape
+ * `/([a-zA-Z][a-zA-Z0-9+.-]*):\/\//` hung for minutes on 4M characters.
+ */
+function connectionStringSeparatorIndex(str) {
+  const idx = str.indexOf(':/');
+  if (idx === -1) return -1;
+  if (!_isWindowsDriveSeparator(str, idx)) return idx;
+  return str.indexOf(':/', idx + 2);
+}
 
 /**
  * Redact a value before it reaches a log line or an error message. db_path is
@@ -36,37 +98,36 @@ class NotAFilesystemPathError extends Error {}
  * mistake — logging or throwing one verbatim would put the password in the
  * log or in the crash report.
  *
- * Exactly two rules, and there is no third:
+ * Exactly two outcomes, and there is no third:
  *
- *   - the value contains "://" anywhere -> coarsen it. No character after
- *     the "://" survives, and what precedes it survives only when it is
- *     itself a clean scheme name — so "1abc://user:pw@host", whose prefix is
- *     really a mis-split credential, comes out "<redacted>://<redacted>".
- *   - it does not -> return it byte-identical, not even copied through a
+ *   - the value is a connection string (connectionStringSeparatorIndex found
+ *     a separator) -> coarsen it. No character after the separator survives,
+ *     and what precedes it survives only when the whole prefix is itself a
+ *     scheme name of two or more characters — so "1abc://user:pw@host",
+ *     "://user:pw@host" and "/mnt/1x://user:pw@host", whose prefixes are
+ *     really mis-split credentials or paths, all come out
+ *     "<redacted>://<redacted>".
+ *   - it is not -> return it byte-identical, not even copied through a
  *     regex, so a real path can never be corrupted into pointing at the
  *     wrong database.
  *
- * Four earlier rounds each added a third rule — extract just the userinfo,
- * scope to the authority, bail out when the prefix isn't a valid scheme —
- * and every one of those decisions was a place a credential slipped through,
- * the last returning the connection string verbatim. Any condition that can
- * return the original while "://" is present is that bug again.
+ * Four earlier rounds each added a third outcome — extract just the
+ * userinfo, scope to the authority, bail out when the prefix isn't a valid
+ * scheme — and every one of those decisions was a place a credential
+ * slipped through, the last returning the connection string verbatim. Any
+ * condition that can return the original once a separator has been found is
+ * that bug again.
  *
  * Never throws on any input — null, undefined, a number, empty string, a
  * lone "://", a null byte, unicode, whitespace padding, multi-megabyte:
  * String() tolerates all of it, and indexOf, slice and test cannot throw.
- *
- * No ReDoS: indexOf is one linear scan, and the scheme test runs only once
- * "://" has been found, anchored at both ends over the prefix alone. It
- * cannot retry at every position the way `/([a-zA-Z][a-zA-Z0-9+.-]*):\/\//`
- * does — that shape hung for minutes on 4M characters containing no "://".
  *
  * @param {*} value
  * @returns {string}
  */
 function redactCredentials(value) {
   const str = String(value);
-  const idx = str.indexOf('://');
+  const idx = connectionStringSeparatorIndex(str);
   if (idx === -1) return str;
   const prefix = str.slice(0, idx);
   return `${CLEAN_SCHEME_RE.test(prefix) ? prefix : '<redacted>'}://<redacted>`;
@@ -74,10 +135,21 @@ function redactCredentials(value) {
 
 /**
  * Reject a configured value that is evidently not a filesystem path — a
- * `<scheme>://` connection string (postgresql://, postgres://, mysql://,
- * sqlite://, ...). A plain filesystem path never contains "://", so this
- * never catches a legitimate path — including one containing ':' or '@'
- * elsewhere, e.g. `/tmp/a@b/x.db`.
+ * connection string (postgresql://, postgres:/, mysql://, sqlite://, ...).
+ *
+ * It asks connectionStringSeparatorIndex, the same predicate
+ * redactCredentials asks, and renders the offending value through
+ * redactCredentials. That coupling is the point, not an implementation
+ * detail: this function used to reject on `^scheme:/+` while the redactor
+ * only coarsened on "://", so `postgresql:/kinvox:PASSWORD@host/db` was
+ * rejected AND printed in clear by the very guard meant to protect it.
+ * Because both now go through one function there is no second definition
+ * left to drift.
+ *
+ * A plain filesystem path never contains ":/", so this never catches a
+ * legitimate path — including one containing ':' or '@' elsewhere, e.g.
+ * `/tmp/a:b/x.db` or `/tmp/a@b/x.db` — and a Windows path (`C:/Users/x.db`)
+ * is exempted by shape.
  *
  * Throws before anything is created or opened; the caller must call this
  * ahead of any mkdir/open.
@@ -88,13 +160,13 @@ function redactCredentials(value) {
  *   passing dbPath directly rather than through an env var).
  */
 function assertFilesystemPath(value, varName) {
-  if (URL_SCHEME_RE.test(value)) {
-    const label = varName || 'the configured database path';
-    throw new NotAFilesystemPathError(
-      `${label} is not a filesystem path: "${redactCredentials(value)}" looks like a ` +
-        `<scheme>:// connection string. Expected a SQLite file path (e.g. ./data/voiceagent.db).`
-    );
-  }
+  const str = String(value);
+  if (connectionStringSeparatorIndex(str) === -1) return;
+  const label = varName || 'the configured database path';
+  throw new NotAFilesystemPathError(
+    `${label} is not a filesystem path: "${redactCredentials(str)}" looks like a ` +
+      `<scheme>:// connection string. Expected a SQLite file path (e.g. ./data/voiceagent.db).`
+  );
 }
 
 /**
@@ -119,6 +191,7 @@ function resolveConfiguredDbPath(varNames, env = process.env) {
 module.exports = {
   redactCredentials,
   assertFilesystemPath,
+  connectionStringSeparatorIndex,
   resolveConfiguredDbPath,
   NotAFilesystemPathError,
 };
