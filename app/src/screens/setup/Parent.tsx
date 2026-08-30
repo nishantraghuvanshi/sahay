@@ -40,38 +40,38 @@ export default function Parent() {
           type="button"
           aria-label="Back"
           onClick={() => navigate('/login')}
-          className="-ml-1 px-1 text-[16px] text-muted"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           &larr;
         </button>
-        <h1 className="text-[18px] font-bold">Who are we caring for?</h1>
-        <Label className="ml-auto">1 / 3</Label>
+        <h1 className="min-w-0 flex-1 text-lg font-bold sm:text-xl">Who are we caring for?</h1>
+        <Label className="shrink-0">1 / 4</Label>
       </header>
-      <p className="-mt-1 text-[12px] text-muted-strong">
+      <p className="-mt-1 text-base text-muted-strong">
         Everything here shapes what the agent says on a call.
       </p>
 
       <Card className="gap-3">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <FieldInput
-            className="col-span-2"
+            className="sm:col-span-2"
             label="Name"
             value={draft.parentName}
             onChange={(v) => patch({ parentName: v })}
-            placeholder="Sharma"
+            placeholder="e.g. Sharma"
             required
           />
           <FieldInput
             label="They are called"
             value={draft.honorific}
             onChange={(v) => patch({ honorific: v })}
-            placeholder="ji"
+            placeholder="e.g. ji"
           />
           <FieldInput
             label="Age"
             value={draft.age}
             onChange={(v) => patch({ age: v.replace(/\D/g, '').slice(0, 3) })}
-            placeholder="68"
+            placeholder="e.g. 68"
             inputMode="numeric"
             required
           />
@@ -95,12 +95,12 @@ export default function Parent() {
             label="Parent&rsquo;s phone — the agent calls this"
             value={draft.parentPhone}
             onChange={(v) => patch({ parentPhone: v })}
-            placeholder="+91 98765 43210"
+            placeholder="Their 10-digit mobile number"
             inputMode="tel"
             required
             hint={
               draft.parentPhone && !e164
-                ? '10 digits, or start with +country code'
+                ? 'Enter the 10-digit mobile number'
                 : e164
                   ? `Saved as ${e164}`
                   : undefined
@@ -110,7 +110,7 @@ export default function Parent() {
             label="Where they live"
             value={draft.address}
             onChange={(v) => patch({ address: v })}
-            placeholder="14 Rose Villa, Baner, Pune"
+            placeholder="e.g. 14 Rose Villa, Baner, Pune"
           />
         </div>
       </Card>
@@ -126,7 +126,7 @@ export default function Parent() {
             </Chip>
           ))}
         </Row>
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           They can switch language mid-sentence; the agent follows.
         </p>
       </Card>
@@ -174,7 +174,7 @@ export default function Parent() {
             ))}
             <AddChip label="allergy" onAdd={(v) => patch({ allergies: [...draft.allergies, v] })} />
           </Row>
-          <p className="text-[11px] text-muted-strong">
+          <p className="text-sm text-muted-strong">
             The agent will never name a medicine that conflicts with these.
           </p>
         </Card>
@@ -185,14 +185,14 @@ export default function Parent() {
           label="Doctor's name"
           value={draft.doctorName}
           onChange={(v) => patch({ doctorName: v })}
-          placeholder="Dr Rao"
+          placeholder="e.g. Dr Rao"
           card
         />
         <FieldInput
           label="Doctor's phone"
           value={draft.doctorPhone}
           onChange={(v) => patch({ doctorPhone: v })}
-          placeholder="+91 98450 12345"
+          placeholder="Their 10-digit phone number"
           inputMode="tel"
           card
         />
@@ -206,7 +206,7 @@ export default function Parent() {
           onChange={(e) => patch({ notes: e.target.value })}
           rows={3}
           placeholder='Hard of hearing on the left ear · gets confused after 9 PM · call them "Amma"'
-          className="w-full resize-none rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted focus:border-ink"
+          className="w-full resize-none rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base leading-relaxed outline-none placeholder:text-muted-strong focus:border-ink"
         />
       </Card>
 
@@ -218,10 +218,10 @@ export default function Parent() {
             onChange={(e) => patch({ callsEnabled: e.target.checked })}
             className="size-4 accent-[#1a1a1a]"
           />
-          <span className="flex-1 text-[13px] font-semibold">Allow agent check-in calls</span>
-          <span className="text-[11px] text-muted">{draft.callsEnabled ? 'on' : 'off'}</span>
+          <span className="flex-1 text-md font-semibold">Allow agent check-in calls</span>
+          <span className="text-sm text-muted-strong">{draft.callsEnabled ? 'on' : 'off'}</span>
         </label>
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           Turn this off and we set everything up but place no calls. You can switch it on later.
         </p>
         <Divider />
@@ -262,62 +262,27 @@ export default function Parent() {
         </Row>
         {draft.escalation.map((c, i) => (
           <Row key={i}>
-            <span className="flex-1 text-[12px] font-semibold">{c.name}</span>
-            <span className="text-[11px] text-muted">
+            <span className="flex-1 text-base font-semibold">{c.name}</span>
+            <span className="text-sm text-muted-strong">
               {c.relationship} · after {c.after}
             </span>
             <button
               type="button"
               aria-label={`Remove ${c.name}`}
-              className="px-1 text-muted"
+              className="px-1 text-muted-strong"
               onClick={() => patch({ escalation: draft.escalation.filter((_, j) => j !== i) })}
             >
               ✕
             </button>
           </Row>
         ))}
-        <Row className="flex-wrap">
-          <Chip
-            onClick={() =>
-              patch({
-                escalation: [
-                  ...draft.escalation,
-                  { name: 'Family member', relationship: 'sibling', after: '15 min' },
-                ],
-              })
-            }
-          >
-            + family member
-          </Chip>
-          <Chip
-            onClick={() =>
-              patch({
-                escalation: [
-                  ...draft.escalation,
-                  { name: draft.doctorName || 'Doctor', relationship: 'doctor', after: 'critical only' },
-                ],
-              })
-            }
-          >
-            + doctor
-          </Chip>
-          <Chip
-            onClick={() =>
-              patch({
-                escalation: [
-                  ...draft.escalation,
-                  { name: 'Neighbour', relationship: 'neighbour', after: 'no answer 3x' },
-                ],
-              })
-            }
-          >
-            + neighbour
-          </Chip>
-        </Row>
-        <p className="text-[11px] text-muted-strong">Skip this — you can add people later.</p>
+        <AddContact
+          onAdd={(contact) => patch({ escalation: [...draft.escalation, contact] })}
+        />
+        <p className="text-sm text-muted-strong">Skip this — you can add people later.</p>
       </Card>
 
-      <div className="sticky bottom-0 mt-2 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 z-10 -mx-4 mt-2 flex flex-col gap-2 bg-canvas px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-14px_18px_-14px_rgb(26_23_18/0.18)]">
         <Row>
           <Label className="flex-1">Name, age, relation, phone and language required</Label>
           {!ready && <Label>{missing.length} left</Label>}
@@ -334,6 +299,68 @@ export default function Parent() {
  * The hard-coded chip lists cannot describe every parent. Anything typed here is
  * carried verbatim into the agent's context, so an unusual allergy is not silently lost.
  */
+/**
+ * The chips here used to insert a hardcoded "Family member · sibling · after 15 min" row that
+ * looked like captured data and could not be edited. A contact without a number cannot be
+ * escalated to, so this asks for one.
+ */
+function AddContact({ onAdd }: { onAdd: (c: { name: string; relationship: string; after: string }) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [relationship, setRelationship] = useState('')
+
+  if (!open) return <Chip onClick={() => setOpen(true)}>+ add someone</Chip>
+
+  const ready = name.trim().length > 1 && Boolean(toE164(phone))
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-line-strong bg-paper p-2.5">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name"
+          aria-label="Contact name"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
+        />
+        <input
+          value={relationship}
+          onChange={(e) => setRelationship(e.target.value)}
+          placeholder="Sister, doctor, neighbour…"
+          aria-label="Relationship to your parent"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
+        />
+        <input
+          value={phone}
+          inputMode="tel"
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Their 10-digit mobile number"
+          aria-label="Contact phone number"
+          className="rounded-md border border-line-strong px-2.5 py-2 text-md outline-none focus:border-ink"
+        />
+      </div>
+      <Row>
+        <span className="flex-1 text-sm text-muted-strong">
+          We only call someone we have a number for.
+        </span>
+        <Chip onClick={() => setOpen(false)}>Cancel</Chip>
+        <Chip
+          on={ready}
+          onClick={() => {
+            if (!ready) return
+            onAdd({ name: name.trim(), relationship: relationship.trim() || 'contact', after: '15 min' })
+            setName(''); setPhone(''); setRelationship(''); setOpen(false)
+          }}
+        >
+          Add
+        </Chip>
+      </Row>
+    </div>
+  )
+}
+
 function AddChip({ label, onAdd }: { label: string; onAdd: (value: string) => void }) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
@@ -360,7 +387,7 @@ function AddChip({ label, onAdd }: { label: string; onAdd: (value: string) => vo
           if (e.key === 'Escape') setOpen(false)
         }}
         onBlur={commit}
-        className="w-32 rounded-full border border-ink bg-paper px-2.5 py-1 text-[11px] outline-none"
+        className="w-32 rounded-full border border-ink bg-paper px-2.5 py-1 text-sm outline-none"
       />
     </span>
   )
@@ -402,9 +429,9 @@ function FieldInput({
         placeholder={placeholder}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[13px] outline-none placeholder:text-muted focus:border-ink"
+        className="w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-md outline-none placeholder:text-muted-strong focus:border-ink"
       />
-      {hint && <span className="text-[10px] text-muted-strong">{hint}</span>}
+      {hint && <span className="text-2xs text-muted-strong">{hint}</span>}
     </div>
   )
   return card ? <Card>{body}</Card> : body
@@ -420,13 +447,13 @@ function TimeInput({
   onChange: (v: string) => void
 }) {
   return (
-    <label className="flex items-center gap-2 text-[11px] text-muted-strong">
+    <label className="flex items-center gap-2 text-sm text-muted-strong">
       {label}
       <input
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-line-strong bg-paper px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"
+        className="rounded-md border border-line-strong bg-paper px-2 py-1.5 text-base text-ink outline-none focus:border-ink"
       />
     </label>
   )

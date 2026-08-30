@@ -114,9 +114,18 @@ function parseArgs() {
   return parsed;
 }
 
-/** Same repository selection as make-call.js / server.js. */
+/**
+ * Same repository selection as server.js, KINVOX_DB included.
+ *
+ * It was missing here, so seeding silently no-opped against the shared
+ * database that everything else reads — the script reported success-shaped
+ * output while writing nothing. DB_PATH and DATABASE_URL keep precedence
+ * because they are set per invocation; KINVOX_DB is the shared product
+ * database and usually comes from .env.
+ */
 function buildRepository() {
-  const dbPath = process.env.DB_PATH || process.env.DATABASE_URL;
+  const dbPath =
+    process.env.DB_PATH || process.env.DATABASE_URL || process.env.KINVOX_DB;
   return dbPath ? new SqliteRepository({ dbPath }) : new ConsoleRepository();
 }
 
@@ -173,7 +182,7 @@ async function main() {
     console.log(
       JSON.stringify({
         event: 'seed_skipped_no_persistence',
-        reason: 'Set DB_PATH or DATABASE_URL to seed a real database.',
+        reason: 'Set KINVOX_DB, DB_PATH or DATABASE_URL to seed a real database.',
       })
     );
     return;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import clsx from 'clsx'
 import {
   Bar,
@@ -226,7 +226,9 @@ export default function MedicinesEdit() {
   const navigate = useNavigate()
   const record = useCareRecord()
 
-  const [tab, setTab] = useState<'edit' | 'upload'>('edit')
+  const [params] = useSearchParams()
+  // Calendar's two CTAs land here: one on the list, one on the uploader (1g).
+  const [tab, setTab] = useState<'edit' | 'upload'>(params.get('tab') === 'upload' ? 'upload' : 'edit')
 
   /** The record as it was read. The diff — and therefore the consent — is against this. */
   const [baseline, setBaseline] = useState<Medication[] | null>(null)
@@ -378,6 +380,8 @@ export default function MedicinesEdit() {
   const gateOpen = changes.length > 0 && incomplete === 0 && !uploading
   const canSave = gateOpen && consent
 
+  const [submitted, setSubmitted] = useState(false)
+
   function saveAndContinue() {
     /**
      * TODO(Lane B): there is no mutation endpoint yet, so this is a deliberate no-op.
@@ -389,10 +393,12 @@ export default function MedicinesEdit() {
      *   · the uploaded prescription file ids, when any were attached.
      *
      * That is the `medication_changes` audit row specified in docs/SCHEMA-GAPS-LANE-C.md §3.
-     * Until it exists the screen must not pretend it saved: it navigates, and the record it
-     * came from is unchanged on the next read.
+     *
+     * Until it exists this must NOT navigate to /calendar: the calendar would render the old
+     * schedule and read as a bug rather than as an unfinished integration. So it stays on the
+     * screen and says plainly that the change is held, not sent.
      */
-    navigate('/calendar')
+    setSubmitted(true)
   }
 
   if (record.isLoading) return <LoadingBlock rows={6} />
@@ -409,11 +415,11 @@ export default function MedicinesEdit() {
           type="button"
           onClick={() => navigate('/calendar')}
           aria-label="Back"
-          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-[15px] text-muted"
+          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-lg text-muted-strong"
         >
           ←
         </button>
-        <h1 className="flex-1 text-[15px] font-bold">Change medicines</h1>
+        <h1 className="flex-1 text-lg font-bold">Change medicines</h1>
         <Label>
           {active} {active === 1 ? 'med' : 'meds'}
         </Label>
@@ -433,7 +439,7 @@ export default function MedicinesEdit() {
             aria-pressed={tab === key}
             onClick={() => setTab(key)}
             className={clsx(
-              'flex-1 rounded-full border px-3 py-2 text-[12px] font-semibold',
+              'flex-1 rounded-full border px-3 py-2 text-base font-semibold',
               tab === key
                 ? 'border-ink bg-ink text-white'
                 : 'border-line-strong bg-paper text-muted-strong',
@@ -468,14 +474,14 @@ export default function MedicinesEdit() {
                 <Label>Frequency</Label>
                 <Label>Times</Label>
                 <Label>Food rule</Label>
-                <Label>Priority · ✎</Label>
+                <Label>Priority</Label>
               </div>
 
               {stopMode && (
                 <Card emphasis="rule">
                   <Row className="flex-wrap gap-2">
                     <Tag>stopping</Tag>
-                    <span className="flex-1 text-[11px] text-muted-strong">
+                    <span className="flex-1 text-sm text-muted-strong">
                       Pick the medicine to stop. The row stays on the record, struck through, and can
                       be restored — stopping is not deleting.
                     </span>
@@ -512,7 +518,7 @@ export default function MedicinesEdit() {
                 </Label>
               </Row>
 
-              <p className="px-1 text-[10.5px] text-muted">
+              <p className="px-1 text-xs text-muted-strong">
                 Priority is the one dose the agent chases hardest — only one may hold it. Stopped
                 medicines keep their history; nothing already logged is deleted.
               </p>
@@ -530,7 +536,7 @@ export default function MedicinesEdit() {
                 the caregiver is agreeing to this list and not to the form above it. */}
             <div aria-live="polite">
               {changes.length === 0 ? (
-                <div className="text-[12px] text-muted-strong">
+                <div className="text-base text-muted-strong">
                   Nothing has changed yet. Edit a time, a dose or a food rule and the difference is
                   listed here before you sign it off.
                 </div>
@@ -544,7 +550,7 @@ export default function MedicinesEdit() {
             </div>
 
             <Divider />
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-sm text-muted-strong">
               The agent uses the new schedule from the next slot onward. Nothing already logged is
               rewritten.
             </div>
@@ -570,11 +576,11 @@ export default function MedicinesEdit() {
               }}
             >
               <Placeholder className="h-[150px] flex-col gap-2 border-dashed">
-                <span className="text-[22px] leading-none">▢</span>
-                <span className="text-[12px] font-semibold text-muted-strong">
+                <span className="text-2xl leading-none">▢</span>
+                <span className="text-base font-semibold text-muted-strong">
                   Drop a file, or scan
                 </span>
-                <span className="text-[9px]">JPG · PNG · PDF</span>
+                <span className="text-2xs">JPG · PNG · PDF</span>
               </Placeholder>
               <button
                 type="button"
@@ -585,7 +591,7 @@ export default function MedicinesEdit() {
             </div>
 
             {/* The same three ways in as onboarding — one uploader behind all of them. */}
-            <Row className="gap-2">
+            <Row className="flex-wrap gap-2">
               <Button variant="outline" className="flex-1" onClick={addFile}>
                 Camera
               </Button>
@@ -603,7 +609,7 @@ export default function MedicinesEdit() {
 
             {files.length === 0 && (
               <Card className="border-dashed">
-                <div className="text-[11px] text-muted-strong">
+                <div className="text-sm text-muted-strong">
                   Nothing attached. The upload is optional — the consent below is not. A new
                   prescription is filed with the change so the record shows why it happened.
                 </div>
@@ -615,13 +621,13 @@ export default function MedicinesEdit() {
               return (
                 <Card key={f.id}>
                   <Row>
-                    <Placeholder className="h-[40px] w-[32px] shrink-0 text-[9px]">
+                    <Placeholder className="h-[40px] w-[32px] shrink-0 text-2xs">
                       pg {i + 1}
                     </Placeholder>
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      <span className="truncate text-[12px] font-semibold">{f.name}</span>
+                      <span className="truncate text-base font-semibold">{f.name}</span>
                       <Bar fill={f.progress / 100} />
-                      <span className="text-[9.5px] text-muted">
+                      <span className="text-2xs text-muted-strong">
                         {done ? `${mb(f.size)} · read ✓` : `uploading · ${f.progress}%`}
                       </span>
                     </div>
@@ -629,7 +635,7 @@ export default function MedicinesEdit() {
                       type="button"
                       onClick={() => removeFile(f.id)}
                       aria-label={`Remove ${f.name}`}
-                      className="grid size-7 shrink-0 place-items-center rounded-md text-[12px] text-muted"
+                      className="grid size-7 shrink-0 place-items-center rounded-md text-base text-muted-strong"
                     >
                       ✕
                     </button>
@@ -641,7 +647,7 @@ export default function MedicinesEdit() {
             <Card>
               <Row>
                 <Tag outline>note</Tag>
-                <span className="flex-1 text-[11px] text-muted-strong">
+                <span className="flex-1 text-sm text-muted-strong">
                   Attaching a file changes nothing on its own. The schedule is what the agent calls
                   about, so edit it on the other tab.
                 </span>
@@ -652,10 +658,9 @@ export default function MedicinesEdit() {
       )}
 
       {/* ------------------------------------------------------- the gate, pinned */}
-      {/* Negative margins bleed through AppShell's <main> padding (p-3 / p-5 at 900px) so the
-          footer sits flush on the scrollport edge. The bottom padding is the safe-area max the
-          sibling screens learned the hard way — without it the CTA hides under the home bar. */}
-      <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 flex flex-col gap-2.5 border-t border-line bg-surface px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] min-[900px]:-mx-5 min-[900px]:-mb-5 min-[900px]:px-5">
+      {/* Negative margins bleed through AppShell's <main> padding (p-4, p-6 from lg) so the
+          footer sits flush on the scrollport edge. The tab bar already reserves the safe area. */}
+      <footer className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-col gap-2.5 border-t border-line bg-surface px-4 pt-3 pb-3 lg:-mx-6 lg:-mb-6 lg:px-6">
         <Card emphasis="rule">
           <div className="flex items-start gap-2.5">
             <input
@@ -667,9 +672,9 @@ export default function MedicinesEdit() {
               className="mt-0.5 size-4 shrink-0 accent-ink disabled:opacity-40"
             />
             <label htmlFor="medicines-edit-consent" className="flex-1 leading-snug">
-              <span className="text-[12px] font-semibold">{CONSENT_TEXT}</span>
+              <span className="text-base font-semibold">{CONSENT_TEXT}</span>
               <br />
-              <span className="text-[10.5px] text-muted-strong">
+              <span className="text-xs text-muted-strong">
                 {changes.length === 0
                   ? 'Nothing has changed yet — there is nothing to agree to.'
                   : incomplete > 0
@@ -682,7 +687,16 @@ export default function MedicinesEdit() {
           </div>
         </Card>
 
-        <Button disabled={!canSave} onClick={saveAndContinue} className="w-full">
+        {submitted && (
+          <Card emphasis="rule" className="gap-1">
+            <Label>Held on this device</Label>
+            <span className="text-base leading-relaxed">
+              These changes and your attestation are ready to send. They reach {"Sharma-ji's"}{' '}
+              schedule once the Care API accepts them — nothing has changed for them yet.
+            </span>
+          </Card>
+        )}
+        <Button disabled={!canSave || submitted} onClick={saveAndContinue} className="w-full">
           Save and Continue
         </Button>
       </footer>
@@ -700,7 +714,7 @@ export default function MedicinesEdit() {
  */
 function DiffChip({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex max-w-full items-center rounded-full border border-line-strong bg-paper px-2.5 py-1 text-[11px] break-words">
+    <span className="inline-flex max-w-full items-center rounded-full border border-line-strong bg-paper px-2.5 py-1 text-sm break-words">
       {children}
     </span>
   )
@@ -734,23 +748,23 @@ function MedicineRow({
   onDiscard: () => void
 }) {
   const input =
-    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[12px] text-ink placeholder:text-muted'
+    'w-full rounded-md border border-line-strong bg-paper px-2.5 py-2 text-base text-ink placeholder:text-muted-strong'
 
   /* A stopped row is a receipt, not a form: it stays legible, says why it is greyed out in
      words as well as in opacity, and offers exactly one action — restore. */
   if (row.stopped) {
     return (
-      <Card className={clsx('gap-2.5 opacity-70', GRID)}>
+      <Card className={clsx('gap-2.5 bg-canvas', GRID)}>
         <div className="flex min-w-0 flex-col gap-1">
           <Row className="flex-wrap gap-2">
-            <span className="text-[13px] font-semibold line-through break-words">
+            <span className="text-md font-semibold line-through break-words">
               {row.name || 'Untitled medicine'}
             </span>
             <Tag outline>stopped</Tag>
           </Row>
-          <span className="text-[10px] text-muted">{row.dose || '—'}</span>
+          <span className="text-2xs text-muted-strong">{row.dose || '—'}</span>
         </div>
-        <div className="text-[12px] text-muted sm:col-span-3">no longer scheduled · from today</div>
+        <div className="text-base text-muted-strong sm:col-span-3">no longer scheduled · from today</div>
         <div className="hidden sm:block" />
         <Row>
           <Chip onClick={() => onStopped(false)}>↺ Restore</Chip>
@@ -792,7 +806,7 @@ function MedicineRow({
       {/* frequency — derived, never typed */}
       <div className="flex flex-col gap-1">
         <Label className="sm:hidden">Frequency</Label>
-        <div className="py-2 text-[12px] whitespace-nowrap">{row.slots.length}× daily</div>
+        <div className="py-2 text-base whitespace-nowrap">{row.slots.length}× daily</div>
       </div>
 
       {/* times */}
@@ -812,14 +826,14 @@ function MedicineRow({
                     onChange={(e) => onSetSlot(i, e.target.value)}
                     onBlur={() => onEditSlot(null)}
                     onKeyDown={(e) => e.key === 'Enter' && onEditSlot(null)}
-                    className="rounded-full border border-ink bg-paper px-2 py-0.5 text-[11px]"
+                    className="rounded-full border border-ink bg-paper px-2 py-0.5 text-sm"
                   />
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onRemoveSlot(i)}
                     aria-label={`Remove time ${slot}`}
-                    className="text-[11px] text-muted"
+                    className="text-sm text-muted-strong"
                   >
                     ✕
                   </button>
@@ -857,24 +871,21 @@ function MedicineRow({
       <div className="flex flex-col gap-1.5">
         <Divider className="sm:hidden" />
         <Row className="flex-wrap gap-2">
-          <label className="inline-flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+          <label className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
             <input
               type="checkbox"
               checked={row.is_priority}
               onChange={(e) => onPriority(e.target.checked)}
-              className="size-3.5 accent-ink"
+              className="size-5 accent-ink"
             />
             priority
           </label>
-          <span title="Every field on this row is editable in place" className="text-[12px] text-muted">
-            ✎
-          </span>
           {row.isNew ? (
             <button
               type="button"
               onClick={onDiscard}
               aria-label={`Discard ${row.name || 'new medicine'}`}
-              className="ml-auto text-[11px] text-muted underline"
+              className="ml-auto text-sm text-muted-strong underline"
             >
               Discard
             </button>

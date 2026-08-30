@@ -1,14 +1,17 @@
+import { House, CalendarDays, TriangleAlert, Phone, FileText, MessageSquareQuote, Settings } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+
 /** The four tabs (wireframe 1f) plus the desktop-only sidebar entries (2e). */
-export type NavItem = { to: string; label: string; tab: boolean }
+export type NavItem = { to: string; label: string; tab: boolean; icon: LucideIcon }
 
 export const NAV: NavItem[] = [
-  { to: '/home', label: 'Home', tab: true },
-  { to: '/calendar', label: 'Calendar', tab: true },
-  { to: '/alerts', label: 'Alerts', tab: true },
-  { to: '/calls', label: 'Calls', tab: true },
-  { to: '/record', label: 'Care record', tab: false },
-  { to: '/observations', label: 'What she said', tab: false },
-  { to: '/settings', label: 'Settings', tab: false },
+  { to: '/home', label: 'Home', tab: true, icon: House },
+  { to: '/calendar', label: 'Calendar', tab: true, icon: CalendarDays },
+  { to: '/alerts', label: 'Alerts', tab: true, icon: TriangleAlert },
+  { to: '/calls', label: 'Calls', tab: true, icon: Phone },
+  { to: '/record', label: 'Care record', tab: false, icon: FileText },
+  { to: '/observations', label: 'What she said', tab: false, icon: MessageSquareQuote },
+  { to: '/settings', label: 'Settings', tab: false, icon: Settings },
 ]
 
 export const TABS = NAV.filter((n) => n.tab)

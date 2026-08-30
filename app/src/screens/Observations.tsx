@@ -12,6 +12,7 @@ import {
   LoadingBlock,
   Row,
   SeverityChip,
+  useParentLanguage,
 } from '../ui'
 import { useCalls, useEscalations, useObservations } from '../api/hooks'
 import { relativeTime } from '../lib/schedule'
@@ -153,13 +154,14 @@ export default function Observations() {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+      <Link to="/home" className="text-sm font-semibold text-muted-strong lg:hidden">
+        ← Home
+      </Link>
       {/* ------------------------------------------------------ what this screen is */}
       <Card className="gap-1.5">
         <Label>What she said</Label>
-        <div className="text-[13px] leading-snug font-bold">
-          Her own words, as she said them.
-        </div>
-        <div className="text-[11px] leading-relaxed text-muted-strong">
+        <h1 className="text-md leading-snug font-bold">Her own words, as she said them.</h1>
+        <div className="text-sm leading-relaxed text-muted-strong">
           Every line below is stored exactly as it was heard — nothing is translated,
           shortened, summarised or scored. The words are the record.
         </div>
@@ -236,6 +238,7 @@ function ObservationRow({
   escalation: Escalation | null
   now: Date
 }) {
+  const parentLang = useParentLanguage()
   const at = new Date(observation.created_at)
 
   return (
@@ -250,9 +253,9 @@ function ObservationRow({
 
       {/* Verbatim. No clamp, no truncate, no ellipsis — the full sentence always renders. */}
       <blockquote
-        lang="hi"
+        lang={parentLang}
         className={clsx(
-          'text-[15px] leading-relaxed break-words hyphens-none whitespace-pre-wrap sm:text-[16px]',
+          'text-lg leading-relaxed break-words hyphens-none whitespace-pre-wrap sm:text-lg',
           observation.severity === 'red' ? 'font-bold' : 'font-semibold',
         )}
       >
@@ -266,13 +269,13 @@ function ObservationRow({
             {observation.call_session_id && (
               <Link
                 to={`/calls/${observation.call_session_id}`}
-                className="text-[11px] font-semibold underline"
+                className="text-sm font-semibold underline"
               >
                 Heard on this call
               </Link>
             )}
             {escalation && (
-              <Link to={`/alerts/${escalation.id}`} className="text-[11px] font-semibold underline">
+              <Link to={`/alerts/${escalation.id}`} className="text-sm font-semibold underline">
                 Escalated to you · {escalation.level}
               </Link>
             )}

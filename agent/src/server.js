@@ -7,7 +7,12 @@ const path = require('path');
 const dotenv = require('dotenv');
 
 // Load environment variables
+// Two files, deliberately. agent/.env holds what only the agent needs
+// (WEBHOOK_URL, ports); the repo-root .env holds credentials shared with the
+// Python Care API, so a key is configured once rather than copied. agent/.env
+// is loaded first and dotenv does not overwrite, so the local file wins.
 dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 // Core
 const { loadProvidersConfig } = require('./core/config/loader');
@@ -24,6 +29,7 @@ const { createWebhookCapture } = require('./utils/webhook-capture');
 // Adapters
 const ProviderRegistry = require('./adapters/providers/registry');
 const TransportRegistry = require('./adapters/transport/registry');
+const { captureRawBody } = require('./adapters/transport/elevenlabs-signature');
 const ConsoleRepository = require('./adapters/persistence/console');
 const SqliteRepository = require('./adapters/persistence/sqlite');
 
@@ -35,6 +41,12 @@ const { apiKeyAuth, authenticateWebSocket, hasValidApiKey } = require('./core/mi
 
 // Use cases
 const { getActiveUseCase } = require('./use-cases/registry');
+const {
+  buildScheduleVariables,
+} = require('./use-cases/medication-adherence/scheduling/call-variables');
+const { runDemoCall, PERSONAS } = require('./use-cases/medication-adherence/demo-call');
+const logger = require('./utils/logger');
+const { utcToLocalParts } = require('./utils/time');
 
 // Attach diagnostic context to fatal errors before any bootstrap work runs,
 // so a failure during config load or DB open is reported with context.
@@ -53,9 +65,18 @@ const StrategyClass = useCase.strategy;
 const strategy = new StrategyClass();
 
 // 4. Set up repository (Phase 1: SQLite, fallback to console if no DB)
-const useSqlite = process.env.DB_PATH || process.env.DATABASE_URL;
+// KINVOX_DB is the shared database the Python Care API also reads; DB_PATH and
+// DATABASE_URL predate it and still work. Any of the three selects SQLite —
+// without this, setting only KINVOX_DB left the console repository active and the
+// persistence guard rejected the boot while a real database sat configured.
+// DB_PATH and DATABASE_URL come first deliberately: they are set per invocation
+// (a test spawning a server with its own temp file), and must beat KINVOX_DB, which
+// is the shared product database and typically comes from .env. The other order
+// silently pointed an isolated test at the real database.
+const useSqlite =
+  process.env.DB_PATH || process.env.DATABASE_URL || process.env.KINVOX_DB;
 const repository = useSqlite
-  ? new SqliteRepository({ dbPath: process.env.DB_PATH || process.env.DATABASE_URL })
+  ? new SqliteRepository({ dbPath: useSqlite })
   : new ConsoleRepository();
 
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
@@ -95,7 +116,13 @@ const playgroundTransport = transportRegistry.getTransport('playground');
 // --- Server ---
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+// The `verify` hook keeps the untouched request bytes on req.rawBody.
+// ElevenLabs' post-call webhook signs `${timestamp}.${raw body}`, and
+// express.json otherwise discards the buffer the moment it parses it —
+// re-serialising the parsed object would reorder keys and change the digest.
+// It has to sit on the parser: a route-level middleware runs after the global
+// parser has already drained the stream.
+app.use(express.json({ limit: '10mb', verify: captureRawBody }));
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
 
 // Serve static files (playground UI, call form, browser JS)
@@ -150,6 +177,17 @@ transport.start(server, engine, {
   strategy,
   repository,
   webhookUrl: process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`,
+}).catch((err) => {
+  // A transport that cannot finish starting must not take the server with it.
+  // The routes it registered synchronously are already live, and the other
+  // transports are unaffected. Loud, because the thing this most often means is
+  // a stale tunnel — and silence is exactly the failure re-patching exists to end.
+  console.log(JSON.stringify({
+    event: 'transport_start_failed',
+    transport: providersConfig.active.transport,
+    error: err.message,
+    timestamp: new Date().toISOString(),
+  }));
 });
 
 // Wires the patient-picker route and stashes the repository/strategy the
@@ -166,7 +204,16 @@ transport.start(server, engine, {
 // TTS is bridged, and would break the phone path.
 app.use('/api/playground', apiKeyAuth);
 
-playgroundTransport.start(server, engine, { app, repository, strategy });
+playgroundTransport.start(server, engine, { app, repository, strategy }).catch((err) => {
+  // Same reasoning as the primary transport's start() above: a failed start
+  // must not take the whole server down with it.
+  console.log(JSON.stringify({
+    event: 'transport_start_failed',
+    transport: 'playground',
+    error: err.message,
+    timestamp: new Date().toISOString(),
+  }));
+});
 
 // --- Playground WebSocket endpoint ---
 playgroundWss.on('connection', (ws, req) => {
@@ -220,9 +267,61 @@ app.get('/call', (req, res) => {
 
 // --- Call API ---
 
+/**
+ * Local "HH:MM" for the patient. Used to work out which dose slot an
+ * unscheduled call is about — one placed by hand at 08:45 is about the 08:30
+ * dose, not tonight's. India-only today, matching patients.timezone.
+ */
+function localHHMM(timeZone = 'Asia/Kolkata') {
+  return utcToLocalParts(new Date().toISOString(), timeZone).hhmm;
+}
+
 // Initiate an outbound call
+// A demo dose call: the real agent, the caregiver's real prescription, and
+// nobody's phone rings. Returns the conversation as text.
+//
+// Separate from POST /api/call on purpose. That one dials a human being; this
+// one cannot, and the two must not be a flag apart from each other — a demo
+// that could ring a patient by accident is not a demo.
+app.get('/api/demo-call/personas', (req, res) => {
+  res.json({
+    personas: Object.entries(PERSONAS).map(([key, p]) => ({ key, label: p.label })),
+  });
+});
+
+app.post('/api/demo-call', async (req, res) => {
+  const { phone, name, drug, caregiver, persona } = req.body || {};
+
+  if (!name) return res.status(400).json({ error: 'Parent name is required' });
+  if (!drug) return res.status(400).json({ error: 'Drug name is required' });
+
+  try {
+    const result = await runDemoCall({
+      repository,
+      phone,
+      parentName: name,
+      drugName: drug,
+      caregiverName: caregiver,
+      persona: persona || 'forgot',
+    });
+    logger.log('demo_call_completed', {
+      persona: result.persona,
+      turns: result.turns.length,
+      outcome: result.outcome ? result.outcome.label : null,
+    });
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    const known = { unknown_persona: 400, not_configured: 503, upstream_failed: 502 };
+    const status = known[err.code] || 500;
+    logger.log('demo_call_failed', { code: err.code || 'unknown', status });
+    // err.message is safe here — this route is behind apiKeyAuth and the
+    // messages are about our own configuration, not a caller's input.
+    return res.status(status).json({ ok: false, error: err.code || 'demo_failed', detail: err.message });
+  }
+});
+
 app.post('/api/call', asyncRoute(async (req, res) => {
-  const { phone, name, drug, language } = req.body;
+  const { phone, name, drug, language, caregiver, slot } = req.body;
 
   // Validate
   if (!phone || !phone.startsWith('+')) {
@@ -235,17 +334,42 @@ app.post('/api/call', asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'Drug name is required' });
   }
 
-  const assistantId = process.env.VAPI_ASSISTANT_ID;
-  if (!assistantId) {
-    return res.status(500).json({ error: 'VAPI_ASSISTANT_ID not set. Run scripts/create-assistant.js first.' });
+  // Ask the ACTIVE transport for its own id. Reading VAPI_ASSISTANT_ID here
+  // hardcoded this route to one orchestrator: with active.transport:
+  // elevenlabs it either failed for a missing Vapi variable or handed a Vapi
+  // assistant id to ElevenLabs as its agent_id.
+  let assistantId;
+  try {
+    assistantId = transport.getAssistantId();
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 
   try {
+    // Pulled from the patient's own medication rows rather than from the
+    // request: when the next dose is, and whether this one goes with food.
+    // Both are precomputed here so the agent never has to work them out —
+    // a model inventing a call time nobody will keep is the same defect as
+    // claiming to have contacted the family. Empty means say nothing.
+    const schedule = await buildScheduleVariables({
+      repository,
+      phone,
+      slot,
+      nowHHMM: localHHMM(),
+    });
+
     const variables = {
+      ...schedule,
       parent_name: name,
       drug_name: drug,
+      // The prompt templates {{caregiver_name}} into the escalation
+      // reassurance line. Omitted, it is either spoken as a literal
+      // placeholder or fails the call outright, so it is sent explicitly as
+      // well as defaulted on the agent (dynamic_variable_placeholders).
+      caregiver_name: caregiver || undefined,
       language: language || 'hi',
     };
+    if (!variables.caregiver_name) delete variables.caregiver_name;
 
     const call = await transport.createCall(assistantId, phone, variables);
 

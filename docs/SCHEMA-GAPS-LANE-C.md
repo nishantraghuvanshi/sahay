@@ -1,15 +1,31 @@
 # Schema gaps found while building the caregiver app
 
 Lane C, raised against `TRD §3`. Each item is something the **wireframes or the checklist ask
-the app to show** that the data model currently cannot store. None of these block Lane C — the
+the app to show** that the data model currently cannot store. Gap 1 is now closed. The rest do not block Lane C — the
 app is built without them — but each is a field the record will silently drop.
 
 Ordered by how much the demo cares.
 
-## 1. The four-step signup has nowhere to record verification
+> **Status, 30 Aug 03:5x — most of these are now built.** `api/schema.sql` implements the
+> Care API against TRD §3 in SQLite, and the columns below are in it, marked `[GAP-n]`.
+> Closed: **1** (verification timestamps), **2** (intro call + consents), **4** (`end_date`,
+> `duration_days`), **5** (`escalation_contacts`), **7** (extraction provenance and the
+> required `confirmed_by`/`confirmed_at`). Table created but nothing writes to it yet: **3**
+> (`medication_changes`). Still genuinely open: **6** (`stock_count`) and the new **8** below.
+>
+> The gaps are described in their original wording rather than rewritten, because the
+> reasoning for each is why the column exists.
 
-`caregivers` holds `phone_e164` and `email`, but nothing says either was verified. Screen `1a`
+
+## 1. The four-step signup has nowhere to record verification
+## 1. ~~The four-step signup has nowhere to record verification~~ — **CLOSED**
+
+`caregivers` holds `phone_e164` and `email`, but nothing said either was verified. Screen `1a`
 verifies both by OTP.
+
+Both columns are now in `api/schema.sql`, alongside two tables the TRD never had — `auth_otp`
+and `auth_sessions` — because signup went from mocked to real. NULL still means "never proved",
+which is not the same as absent: an email may be present and unverified.
 
 ```sql
 ALTER TABLE caregivers ADD COLUMN phone_verified_at TIMESTAMPTZ;
@@ -95,6 +111,75 @@ the schema cannot do.
 flow collects it and the draft has no field for it, so a schedule created in the app posts
 `NULL`. Fine if nothing consumes it — worth deleting from the seed if so, since a column that is
 always null reads as a bug during a database spot check.
+
+## 7. A schedule read from a prescription loses its provenance at the database
+
+Added when prescription extraction was wired up (`api/rx_extract`). This one is a **safety**
+gap, not a convenience one.
+
+The extractor returns, per medicine, the verbatim `raw_line` it claims it read off the paper,
+a per-medicine `confidence`, and validation `flags`. Design doc §2 makes two of these
+load-bearing:
+
+> **S3** — every extracted medicine must carry a `raw_line` so a reviewer can compare against
+> the photo. **S6** — the review UI shows a crop of the original image beside each parsed row.
+
+`DraftMedicine` now carries these fields and the review screen displays `raw_line` beside every
+row. But `medications` has nowhere to put them, so the moment a caregiver signs the schedule off
+and it is posted, **the evidence for every row is discarded**. What survives is "Metformin 500mg
+at 08:30" with no record of what the paper actually said, who confirmed it, or how sure the
+model was. If a dose is later disputed, there is nothing to audit against.
+
+```sql
+ALTER TABLE medications ADD COLUMN source          TEXT;    -- 'prescription' | 'manual'
+ALTER TABLE medications ADD COLUMN source_doc_id   TEXT;    -- the extraction doc_id
+ALTER TABLE medications ADD COLUMN raw_line        TEXT;    -- verbatim reading (S3)
+ALTER TABLE medications ADD COLUMN confidence      REAL;
+ALTER TABLE medications ADD COLUMN extraction_flags JSONB;
+```
+
+Related and **required rather than optional** — the design doc §10 is explicit that the
+scheduler must accept only confirmed schedules, and that the confirmation fields are `NOT NULL`,
+not nullable-with-a-default. A nullable `confirmed_by` is a gate that defaults to open:
+
+```sql
+ALTER TABLE medications ADD COLUMN confirmed_by UUID NOT NULL REFERENCES caregivers(id);
+ALTER TABLE medications ADD COLUMN confirmed_at TIMESTAMPTZ NOT NULL;
+```
+
+Two more fields the extractor produces that the schema cannot hold:
+
+- **`excluded` / `exclusion_reason`.** PRN (`SOS`) medicines and non-oral forms — injections,
+  ointments, drops — are read from the page and deliberately given no reminder (§3.3, safety
+  rule 4). Today the app represents this in the draft only. Posted to a schema without the
+  field, an SOS medicine becomes an ordinary row with no slots, and any future scheduler that
+  fills in a default time would start calling a patient about a medicine they take as needed.
+- **`duration_days`**, which is gap 4 above (`end_date`) seen from the other side: the
+  extractor reads "x 5 days" off the page and there is no column for it, so reminders cannot
+  auto-expire.
+
+Also unstored: `unparsed_lines` — lines the model returned that failed validation. The app shows
+them so a caregiver can add them by hand, but nothing records that a page had unreadable lines
+at all.
+
+## 8. Onboarding never asks the caregiver their own name
+
+Found while writing `POST /app/onboarding`. The signup screen (`1a`) collects a phone and an
+email; the parent screen (`1b`) collects the *parent's* name. Nobody ever asks the caregiver
+what they are called.
+
+`caregivers.name` is `NOT NULL`, so the endpoint has to put something there. It currently
+stores the relationship, title-cased — a caregiver who said they are the son is recorded as
+`"Son"`. That is not a name, and the care record screen displays it as one.
+
+Two ways out, and this is a product call rather than a schema one:
+
+- Ask for it on `1a`, next to the phone. One field, and it is the honest fix.
+- Or drop `name` to nullable and have the UI fall back to the relationship explicitly
+  ("Your son"), so the record never claims to know a name it was never told.
+
+Until then the field holds a label, not a name, and anything that greets the caregiver by it
+will read strangely.
 
 ---
 

@@ -191,3 +191,226 @@ describe('OUTCOMES enum shape', () => {
     assert.strictEqual(OUTCOMES.ESCALATED, undefined);
   });
 });
+
+describe('D4 — an escalation is never masked by an earlier benign report', () => {
+  // Found by running the ElevenLabs scenario battery. The agent is instructed
+  // to call report_outcome "EXACTLY ONCE per call", and it does not: in the
+  // chest-pain scenario it reported CONFIRMED, then ESCALATED_SYMPTOM once the
+  // patient mentioned chest heaviness, then ESCALATED_DISTRESS.
+  //
+  // checkToolCalls returned on the FIRST report_outcome, so the persisted
+  // outcome was CONFIRMED and no family alert would ever have fired — for a
+  // patient reporting chest pain and fear. The transport made it visible, but
+  // the defect is in shared derivation code and applies to Vapi too.
+  //
+  // First-wins is kept for every other case, deliberately: it is the existing
+  // behaviour and the agent's first call is normally its considered answer.
+  // Only an escalation overrides, because only an escalation has a cost when
+  // it is missed.
+  const call = (outcome, reason) => ({
+    name: 'report_outcome',
+    arguments: { outcome, reason },
+  });
+
+  test('a later ESCALATED_SYMPTOM overrides an earlier CONFIRMED', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('CONFIRMED', 'user confirmed'), call('ESCALATED_SYMPTOM', 'chest pain')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+    assert.strictEqual(result.reason, 'chest pain');
+  });
+
+  test('a later ESCALATED_DISTRESS overrides an earlier CONFIRMED', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('CONFIRMED', 'user confirmed'), call('ESCALATED_DISTRESS', 'wants to stop')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_DISTRESS);
+  });
+
+  test('the real three-call sequence from the battery escalates', () => {
+    const result = deriveOutcome({
+      toolCalls: [
+        call('CONFIRMED', 'user confirmed taking medicine'),
+        call('ESCALATED_SYMPTOM', 'user reported chest pain and fear'),
+        call('ESCALATED_DISTRESS', 'user expressed fear/distress'),
+      ],
+    });
+    // The medical emergency outranks the distress that followed it.
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+  });
+
+  test('ESCALATED_SYMPTOM outranks ESCALATED_DISTRESS regardless of order', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('ESCALATED_DISTRESS', 'low mood'), call('ESCALATED_SYMPTOM', 'fainted')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+  });
+
+  test('a clarify-loop INCOMPLETE does NOT get promoted into an escalation', () => {
+    // normaliseLabel turns legacy ESCALATED + clarify reason into INCOMPLETE.
+    // The override must run on the NORMALISED label, or a broken conversation
+    // would page a caregiver — which is exactly defect D1.
+    const result = deriveOutcome({
+      toolCalls: [
+        call('CONFIRMED', 'user confirmed'),
+        call('ESCALATED', 'clarify_loop_exceeded'),
+      ],
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('with no escalation present, the first report still wins', () => {
+    const result = deriveOutcome({
+      toolCalls: [call('DENIED', 'not yet'), call('CONFIRMED', 'took it after all')],
+    });
+    assert.strictEqual(result.label, OUTCOMES.DENIED);
+    assert.strictEqual(result.source, 'tool_call');
+  });
+
+  test('a single report is unaffected', () => {
+    const result = deriveOutcome({ toolCalls: [call('CONFIRMED', 'user confirmed')] });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('malformed entries between reports are skipped, not fatal', () => {
+    const result = deriveOutcome({
+      toolCalls: [
+        call('CONFIRMED', 'user confirmed'),
+        { name: 'report_outcome', arguments: 'not json at all' },
+        { name: 'capture_field', arguments: { field: 'x', value: 'y' } },
+        call('ESCALATED_SYMPTOM', 'breathlessness'),
+      ],
+    });
+    assert.strictEqual(result.label, OUTCOMES.ESCALATED_SYMPTOM);
+  });
+});
+
+describe('D5 — "ate" must not be read as "took the medicine"', () => {
+  // A real call, v15. The agent asked "क्या आपने खाना खा लिया है?" — the food
+  // question added for food-dependent doses — the caller answered about FOOD,
+  // report_outcome never fired because they hung up, and tier-3 keyword
+  // matching read "खा लिया" as a dose confirmation. The call was persisted
+  // CONFIRMED / confirmed_keyword_detected for a dose that was never taken.
+  //
+  // "खा लिया" / "kha liya" mean "ate". They only ever meant "took the tablet"
+  // by accident of context, and the food question removed that accident. A
+  // false CONFIRMED writes "dose taken" into a caregiver's record, which is
+  // the single worst thing this system can get wrong quietly.
+  test('answering the food question does not confirm the dose', () => {
+    const result = deriveOutcome({
+      transcript: 'agent: क्या आपने खाना खा लिया है?\nuser: हाँ, खाना खा लिया है।',
+    });
+    assert.notStrictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('the romanized form is equally not a confirmation', () => {
+    // The agent's question has to be in the transcript, because it is the
+    // question that makes the answer ambiguous. A transcript holding only the
+    // caller's "haan" and no question is indistinguishable from a plain dose
+    // confirmation, and is treated as one.
+    const result = deriveOutcome({
+      transcript: 'agent: khana kha liya hai?\nuser: haan khana kha liya hai',
+    });
+    assert.notStrictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('a bare yes still confirms on a call that never mentioned food', () => {
+    // The narrowing must not cost the commonest real confirmation there is.
+    const result = deriveOutcome({
+      transcript: 'agent: क्या आपने ले लिया है?\nuser: हाँ',
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+
+  test('a real dose confirmation still confirms', () => {
+    // NB "दवाई ले ली है" matches nothing today — "ले ली" is absent from the
+    // keyword list while "ले लिया" is there. A pre-existing gap, and the safe
+    // direction to be wrong in: a missed confirmation falls through to
+    // NO_ANSWER rather than inventing adherence.
+    for (const said of ['हाँ, ले लिया', 'haan le liya', 'हो गया']) {
+      const result = deriveOutcome({ transcript: `user: ${said}` });
+      assert.strictEqual(result.label, OUTCOMES.CONFIRMED, said);
+    }
+  });
+
+  test('a tool call still wins over any keyword reading', () => {
+    // Tier 1 beats tier 3: an explicit report_outcome is unaffected by this.
+    const result = deriveOutcome({
+      toolCalls: [{ name: 'report_outcome', arguments: { outcome: 'CONFIRMED', reason: 'said so' } }],
+      transcript: 'user: खाना खा लिया है',
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+  });
+});
+
+describe('D6 — ElevenLabs analysis is a real second opinion, not an inert tier', () => {
+  // deriveOutcome has four tiers. Tier 2 (analysis) only ever read Vapi's
+  // `structuredData`, a field ElevenLabs never sends, so on that transport a
+  // call whose agent forgot to call report_outcome fell straight past it to
+  // keyword matching or the watchdog. That is the "ends without filing an
+  // outcome" failure, and it is intermittent precisely because it depends on
+  // the model remembering a tool call.
+  //
+  // ElevenLabs extracts `data_collection_results` at end of call from the
+  // transcript, independently of any tool the agent did or did not invoke. It
+  // is configured on the agent by buildAssistantConfig.
+  const analysis = (value) => ({
+    data_collection_results: { dose_outcome: { value, rationale: 'from the transcript' } },
+  });
+
+  test('reads the outcome ElevenLabs extracted when no tool call was made', () => {
+    const result = deriveOutcome({ analysis: analysis('DENIED'), transcript: 'user: हाँ' });
+    assert.strictEqual(result.label, OUTCOMES.DENIED);
+    assert.strictEqual(result.source, 'analysis');
+  });
+
+  test('beats keyword matching, which is the tier below it', () => {
+    // The transcript says "हाँ" — keyword matching alone would call it CONFIRMED.
+    const result = deriveOutcome({
+      analysis: analysis('UNCLEAR'),
+      transcript: 'agent: क्या आपने ले लिया है?\nuser: हाँ',
+    });
+    assert.strictEqual(result.label, OUTCOMES.UNCLEAR);
+  });
+
+  test('a real report_outcome still wins over it', () => {
+    const result = deriveOutcome({
+      toolCalls: [{ name: 'report_outcome', arguments: { outcome: 'CONFIRMED', reason: 'said so' } }],
+      analysis: analysis('DENIED'),
+    });
+    assert.strictEqual(result.label, OUTCOMES.CONFIRMED);
+    assert.strictEqual(result.source, 'tool_call');
+  });
+
+  test('normalises a legacy label the same way a tool call would', () => {
+    const result = deriveOutcome({
+      analysis: {
+        data_collection_results: {
+          dose_outcome: { value: 'ESCALATED', rationale: 'clarify_loop_exceeded' },
+        },
+      },
+    });
+    // ESCALATED + a clarify reason must not page a caregiver — defect D1.
+    assert.strictEqual(result.label, OUTCOMES.INCOMPLETE);
+  });
+
+  test('an absent or unusable extraction falls through rather than inventing one', () => {
+    for (const a of [
+      {},
+      { data_collection_results: {} },
+      { data_collection_results: { dose_outcome: { value: null } } },
+      { data_collection_results: { dose_outcome: { value: '' } } },
+    ]) {
+      const result = deriveOutcome({ analysis: a, endedReason: 'customer-ended-call' });
+      assert.strictEqual(result.source, 'watchdog', JSON.stringify(a));
+    }
+  });
+
+  test("Vapi's structuredData still works, so the other transport is unaffected", () => {
+    const result = deriveOutcome({
+      analysis: { structuredData: { outcome: 'DENIED', reason: 'not yet' } },
+    });
+    assert.strictEqual(result.label, OUTCOMES.DENIED);
+    assert.strictEqual(result.source, 'analysis');
+  });
+});

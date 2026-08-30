@@ -39,14 +39,21 @@ const FILTERS: { key: Filter; label: string }[] = [
 ]
 
 /**
- * `missed` and `no_answer` are the two rows a caregiver must never confuse: one means the
- * dose was not taken, the other means we do not know. Said in words on the row itself.
+ * `missed`, `no_answer` and `unknown` are the rows a caregiver must never confuse: the
+ * dose was not taken, nobody picked up, or they answered and it could not be read.
+ * Said in words on the row itself.
+ *
+ * MEANING is a Record over the whole DoseStatus union, so every member needs an entry
+ * — `pending` included, even though it is the scheduler's bookkeeping rather than an
+ * outcome (see answered() in api/types.ts).
  */
 const MEANING: Record<DoseStatus, string> = {
   confirmed: 'Taken — confirmed on a check-in call.',
   deferred: 'Put off to a later time, and still expected.',
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
+  unknown: 'They answered, but what they said could not be read either way.',
+  pending: 'Not due yet — nothing has been established.',
 }
 
 /** Local calendar day, never UTC — a 21:00 IST dose must not land on the previous day. */
@@ -124,19 +131,19 @@ export default function DoseHistory() {
       {/* ------------------------------------------------------------- header */}
       <div className="flex flex-col gap-1">
         <Row className="items-baseline gap-2">
-          <h1 className="flex-1 text-[17px] font-bold">Dose history</h1>
+          <h1 className="flex-1 text-lg font-bold">Dose history</h1>
           <Label>
             {events.length} {events.length === 1 ? 'record' : 'records'}
           </Label>
         </Row>
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           One row per dose, exactly as it was written down. The counts are counts of these rows —
           nothing here is averaged or estimated.
         </p>
       </div>
 
       {record.error && (
-        <p className="text-[11px] text-muted-strong">
+        <p className="text-sm text-muted-strong">
           Medicine names could not be loaded just now. The doses below are unchanged.
         </p>
       )}
@@ -158,7 +165,7 @@ export default function DoseHistory() {
         />
       ) : visible.length === 0 ? (
         <Card className="py-6 text-center">
-          <div className="text-[12px] text-muted-strong">
+          <div className="text-base text-muted-strong">
             No doses with that status. {events.length} records in total.
           </div>
         </Card>
@@ -171,12 +178,12 @@ export default function DoseHistory() {
             <Card key={group.key} className="gap-2" emphasis={isToday ? 'border' : 'none'}>
               {/* day header — the count is read straight off the rows below it */}
               <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="text-[13px] font-bold">{dayHeading(group.day, today)}</span>
-                <span className="text-[11px] text-muted-strong">
+                <span className="text-md font-bold">{dayHeading(group.day, today)}</span>
+                <span className="text-sm text-muted-strong">
                   {group.day.toLocaleDateString([], { day: 'numeric', month: 'short' })}
                 </span>
                 {isToday && <Tag outline>today</Tag>}
-                <span className="ml-auto text-[11px] font-semibold">
+                <span className="ml-auto text-sm font-semibold">
                   {day.total === 0
                     ? 'nothing logged yet'
                     : `${day.confirmed} of ${day.total} confirmed`}
@@ -198,7 +205,7 @@ export default function DoseHistory() {
               )}
 
               {group.shown.length === 0 ? (
-                <p className="py-1 text-[12px] text-muted-strong">
+                <p className="py-1 text-base text-muted-strong">
                   Nothing has been logged today yet. The next check-in call will fill this in.
                 </p>
               ) : (
@@ -211,7 +218,7 @@ export default function DoseHistory() {
               )}
 
               {filter !== 'all' && group.shown.length < group.events.length && (
-                <div className="text-[10px] text-muted">
+                <div className="text-2xs text-muted-strong">
                   Showing {group.shown.length} of {group.events.length} rows for this day.
                 </div>
               )}
@@ -229,7 +236,7 @@ export default function DoseHistory() {
               <span className="w-[6.75rem] shrink-0 pt-px">
                 <DoseStatusChip status={status} />
               </span>
-              <span className="min-w-0 flex-1 text-[11px] break-words text-muted-strong">
+              <span className="min-w-0 flex-1 text-sm break-words text-muted-strong">
                 {MEANING[status]}
               </span>
             </Row>
@@ -248,14 +255,14 @@ export default function DoseHistory() {
 function DoseRow({ event, medication }: { event: DoseEvent; medication: Medication | undefined }) {
   const body = (
     <div className="grid grid-cols-[3.75rem_minmax(0,1fr)] gap-x-3 py-2.5 sm:py-2">
-      <span className="pt-0.5 text-[10px] font-bold tracking-wide text-muted">
+      <span className="pt-0.5 text-2xs font-bold tracking-wide text-muted-strong">
         {clock(event.slot_time)}
       </span>
 
       <div className="flex min-w-0 flex-col gap-1 sm:gap-0.5">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 sm:flex-nowrap">
-          <span className="text-[13px] font-semibold">{medication?.name ?? 'Medicine'}</span>
-          {medication && <span className="text-[12px] text-muted-strong">{medication.dose}</span>}
+          <span className="text-md font-semibold">{medication?.name ?? 'Medicine'}</span>
+          {medication && <span className="text-base text-muted-strong">{medication.dose}</span>}
           {medication?.is_priority && <Tag>priority</Tag>}
           <span className="ml-auto shrink-0 sm:w-[6.75rem]">
             <DoseStatusChip status={event.status} />
@@ -265,7 +272,7 @@ function DoseRow({ event, medication }: { event: DoseEvent; medication: Medicati
         {(event.status === 'missed' || event.status === 'no_answer') && (
           <div
             className={clsx(
-              'text-[11px] break-words',
+              'text-sm break-words',
               event.status === 'no_answer' ? 'text-muted-strong' : 'font-semibold',
             )}
           >
@@ -274,12 +281,12 @@ function DoseRow({ event, medication }: { event: DoseEvent; medication: Medicati
         )}
 
         {event.note && (
-          <p className="border-l-2 border-line-strong pl-2 text-[12px] leading-relaxed break-words whitespace-pre-line">
+          <p className="border-l-2 border-line-strong pl-2 text-base leading-relaxed break-words whitespace-pre-line">
             {event.note}
           </p>
         )}
 
-        <div className="text-[10px] text-muted">
+        <div className="text-2xs text-muted-strong">
           logged {clock(event.created_at)}
           {event.call_session_id ? ' · on the call — open it' : ' · no call attached'}
         </div>

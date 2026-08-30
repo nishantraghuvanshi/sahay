@@ -67,6 +67,11 @@ before(async () => {
       API_KEY,
       VAPI_SECRET,
       DISABLE_GUARDRAILS: 'false',
+      // Pinned: main made ElevenLabs the default transport, and that one is
+      // outbound-only — it mounts no /api/stt and no custom-LLM route, so
+      // every auth assertion below would 404 instead of 401. This file tests
+      // the Vapi path's auth, so it must name the transport it needs.
+      TRANSPORT: 'vapi',
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -301,6 +306,11 @@ describe('server boot — refuses to start without VAPI_SECRET', () => {
         DB_PATH: path.join(failDbDir, 'test.db'),
         API_KEY,
         DISABLE_GUARDRAILS: 'false',
+        // Pinned: main made ElevenLabs the default transport, and that one is
+        // outbound-only — it mounts no /api/stt and no custom-LLM route, so
+        // every auth assertion below would 404 instead of 401. This file tests
+        // the Vapi path's auth, so it must name the transport it needs.
+        TRANSPORT: 'vapi',
         // No VAPI_SECRET. And ALLOW_INSECURE_LOCAL is forced empty, not
         // merely absent — dotenv.config() (called inside server.js) does
         // not override a key that already exists in process.env, even an

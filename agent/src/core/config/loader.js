@@ -92,7 +92,19 @@ function validateProvidersConfig(config) {
  */
 function loadProvidersConfig(configPath = DEFAULT_CONFIG_PATH) {
   const raw = fs.readFileSync(configPath, 'utf8');
-  return validateProvidersConfig(yaml.load(raw));
+  const config = yaml.load(raw);
+
+  // A test that needs a specific orchestrator should be able to say so
+  // without editing a shared config file, and an operator should be able to
+  // A/B the two transports without a YAML edit between runs. TRANSPORT wins
+  // over active.transport when set; it is validated the same way the YAML
+  // value is, so an unknown TRANSPORT fails at boot with the same clear
+  // message an unknown YAML value would.
+  if (process.env.TRANSPORT && config && config.active) {
+    config.active.transport = process.env.TRANSPORT;
+  }
+
+  return validateProvidersConfig(config);
 }
 
 module.exports = {

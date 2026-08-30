@@ -92,8 +92,16 @@ export default function Analysing() {
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-3 p-3 sm:p-5">
       <Row>
-        <h1 className="flex-1 text-[15px] font-bold">Reading prescription…</h1>
-        <Label>step 3 / 4</Label>
+        <button
+          type="button"
+          onClick={() => navigate('/setup/prescription')}
+          aria-label="Back"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
+        >
+          ←
+        </button>
+        <h1 className="flex-1 text-lg font-bold">Reading prescription…</h1>
+        <Label>2 / 4</Label>
       </Row>
 
       {/* Web 2c puts the page preview beside the stage log; a phone stacks them. */}
@@ -101,9 +109,9 @@ export default function Analysing() {
         <div className="flex flex-col gap-2">
           <Placeholder className="h-[150px] flex-col gap-1 lg:h-[210px]">
             <span>scanned page preview</span>
-            <span className="text-[9.5px]">(detected dose lines boxed)</span>
+            <span className="text-2xs">(detected dose lines boxed)</span>
           </Placeholder>
-          <div className="text-[10px] text-muted">
+          <div className="text-2xs text-muted-strong">
             {draft.files.length > 0
               ? `Reading ${draft.files.length} file${draft.files.length > 1 ? 's' : ''} · ${draft.files
                   .map((f) => f.name)
@@ -124,9 +132,9 @@ export default function Analysing() {
                     <Dot kind={complete ? 'filled' : running ? 'hollow' : 'empty'} />
                     <span
                       className={clsx(
-                        'flex-1 text-[12px]',
+                        'flex-1 text-base',
                         running && 'font-semibold',
-                        !complete && !running && 'text-muted',
+                        !complete && !running && 'text-muted-strong',
                       )}
                     >
                       {stage.label}
@@ -143,7 +151,7 @@ export default function Analysing() {
           <Card>
             <Label>Found so far</Label>
             <Row className="flex-wrap gap-1.5">
-              {revealed === 0 && <span className="text-[11px] text-muted">still reading…</span>}
+              {revealed === 0 && <span className="text-sm text-muted-strong">still reading…</span>}
               {DETECTED.slice(0, revealed).map((m) => (
                 <Chip key={m.id}>
                   {m.name} {m.dose}
@@ -154,7 +162,7 @@ export default function Analysing() {
             {allDone && (
               <Row>
                 <Tag>{UNCLEAR_COUNT} unclear</Tag>
-                <span className="flex-1 text-[11px] text-muted-strong">
+                <span className="flex-1 text-sm text-muted-strong">
                   You'll confirm these next.
                 </span>
               </Row>
@@ -167,7 +175,7 @@ export default function Analysing() {
         <Card emphasis="rule">
           <Row>
             <Tag outline>check</Tag>
-            <span className="flex-1 text-[11px] leading-relaxed text-muted-strong">
+            <span className="flex-1 text-sm leading-relaxed text-muted-strong">
               {draft.allergies.join(', ')} on file — nothing in this prescription conflicts.
             </span>
           </Row>
@@ -175,9 +183,9 @@ export default function Analysing() {
       )}
 
       <Button className="w-full" disabled={!allDone} onClick={() => navigate('/setup/schedule')}>
-        Continue
+        Approve schedule
       </Button>
-      <p className="text-[10px] text-muted">
+      <p className="text-2xs text-muted-strong">
         Enabled once matching finishes. Nothing is saved to the care record until you sign the
         schedule off.
       </p>

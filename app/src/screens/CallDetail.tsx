@@ -10,6 +10,7 @@ import {
   Row,
   SeverityChip,
   Tag,
+  useParentLanguage,
 } from '../ui'
 import { useCalls, useCareRecord, useDoseHistory, useObservations } from '../api/hooks'
 import type { CallSession, DoseEvent, Medication, Observation } from '../api/types'
@@ -136,8 +137,8 @@ function BackToCalls({ variant = 'quiet' }: { variant?: 'quiet' | 'button' }) {
       to="/calls"
       className={clsx(
         variant === 'button'
-          ? 'inline-flex items-center justify-center rounded-lg border border-ink px-4 py-2.5 text-[12px] font-semibold'
-          : 'text-[11px] font-semibold underline',
+          ? 'inline-flex items-center justify-center rounded-lg border border-ink px-4 py-2.5 text-base font-semibold'
+          : 'text-sm font-semibold underline',
       )}
     >
       All calls
@@ -164,10 +165,10 @@ export default function CallDetail() {
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-3">
         <Card emphasis="rule" className="gap-2">
           <Label>Call not found</Label>
-          <div className="text-[13px] font-bold">
+          <div className="text-md font-bold">
             There is no call in the record with that reference.
           </div>
-          <p className="text-[11px] leading-relaxed break-words text-muted-strong">
+          <p className="text-sm leading-relaxed break-words text-muted-strong">
             Nothing has been deleted — every call that happened is still in the log. The
             reference in this link{id ? ` (${id})` : ''} does not match any of them.
           </p>
@@ -206,7 +207,7 @@ export default function CallDetail() {
           <Label className="ml-auto">{STATUS_WORD[call.status] ?? call.status.replace(/_/g, ' ')}</Label>
         </Row>
 
-        <h1 className="text-[17px] leading-tight font-bold break-words">
+        <h1 className="text-lg leading-tight font-bold break-words">
           {!wasAnswered
             ? `We called${who ? ` ${who}` : ''} — nobody picked up`
             : inbound
@@ -214,7 +215,7 @@ export default function CallDetail() {
               : `We called${who ? ` ${who}` : ''}`}
         </h1>
 
-        <Row className="flex-wrap gap-x-3 gap-y-1 text-[12px]">
+        <Row className="flex-wrap gap-x-3 gap-y-1 text-base">
           <span>{whenWords(at, now)}</span>
           <span className="text-muted-strong">
             {!wasAnswered
@@ -232,12 +233,12 @@ export default function CallDetail() {
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
           <Label>Safety check</Label>
           <span
-            className={clsx('text-[12px] font-bold', call.safety_pass === false && 'underline')}
+            className={clsx('text-base font-bold', call.safety_pass === false && 'underline')}
           >
             {safetyWord(call.safety_pass)}
           </span>
         </Row>
-        <p className="text-[11px] leading-relaxed break-words text-muted-strong">
+        <p className="text-sm leading-relaxed break-words text-muted-strong">
           {safetyMeaning(call.safety_pass)}
         </p>
       </Card>
@@ -253,14 +254,14 @@ export default function CallDetail() {
               {turns.length} {turns.length === 1 ? 'turn' : 'turns'}
             </Label>
           </Row>
-          <p className="text-[11px] leading-relaxed text-muted-strong">
+          <p className="text-sm leading-relaxed text-muted-strong">
             Stored exactly as it was said — Hindi and Hinglish as spoken, nothing translated,
             shortened or scored. The record keeps who said what, in order; it does not keep a
             time against each line, so none is shown.
           </p>
 
           {turns.length === 0 ? (
-            <p className="text-[12px] text-muted-strong">
+            <p className="text-base text-muted-strong">
               A transcript is stored for this call but it holds no readable lines.
             </p>
           ) : (
@@ -278,12 +279,12 @@ export default function CallDetail() {
         <Label>What this call produced</Label>
 
         {doses.error || observations.error ? (
-          <p className="text-[11px] text-muted-strong">
+          <p className="text-sm text-muted-strong">
             What this call changed in the record could not be loaded just now. The transcript
             above is unchanged.
           </p>
         ) : callDoses.length === 0 && callObservations.length === 0 ? (
-          <p className="text-[12px] leading-relaxed break-words text-muted-strong">
+          <p className="text-base leading-relaxed break-words text-muted-strong">
             Nothing was written to the record on this call — no dose was logged and nothing was
             kept as an observation.
           </p>
@@ -325,10 +326,10 @@ export default function CallDetail() {
 
       <Row className="flex-wrap gap-x-3 gap-y-1">
         <BackToCalls />
-        <Link to="/doses" className="text-[11px] font-semibold underline">
+        <Link to="/doses" className="text-sm font-semibold underline">
           Dose history
         </Link>
-        <Link to="/observations" className="text-[11px] font-semibold underline">
+        <Link to="/observations" className="text-sm font-semibold underline">
           What she said
         </Link>
       </Row>
@@ -344,6 +345,7 @@ export default function CallDetail() {
  * quieter and outlined — so nothing here depends on colour.
  */
 function TranscriptTurn({ turn, who }: { turn: Turn; who: string | null }) {
+  const parentLang = useParentLanguage()
   return (
     <div
       className={clsx(
@@ -364,9 +366,9 @@ function TranscriptTurn({ turn, who }: { turn: Turn; who: string | null }) {
       </Row>
       {/* Verbatim. No clamp, no truncation, no ellipsis — the full line always renders. */}
       <p
-        lang="hi"
+        lang={parentLang}
         className={clsx(
-          'text-[14px] leading-relaxed break-words hyphens-none whitespace-pre-wrap',
+          'text-md leading-relaxed break-words hyphens-none whitespace-pre-wrap',
           turn.isAgent ? 'text-muted-strong' : 'font-semibold',
         )}
       >
@@ -397,10 +399,10 @@ function NoTranscript({
   return (
     <Card emphasis="rule" className="gap-2">
       <Label>Transcript</Label>
-      <div className="text-[13px] font-bold break-words">
+      <div className="text-md font-bold break-words">
         There is no transcript, because nobody picked up.
       </div>
-      <p className="text-[11px] leading-relaxed break-words text-muted-strong">
+      <p className="text-sm leading-relaxed break-words text-muted-strong">
         We rang {who ?? 'them'} at {clock(call.started_at)}
         {ms !== null ? ` and the line was open ${spanWords(ms)} — ringing, not talking` : ''}. No
         one answered, so nothing was said and there is nothing to store. This is not a call that
@@ -414,7 +416,7 @@ function NoTranscript({
           {tried.map((dose) => (
             <p
               key={dose.id}
-              className="border-l-2 border-line-strong pl-2 text-[12px] leading-relaxed break-words whitespace-pre-line"
+              className="border-l-2 border-line-strong pl-2 text-base leading-relaxed break-words whitespace-pre-line"
             >
               {dose.note}
             </p>
@@ -423,7 +425,7 @@ function NoTranscript({
       )}
 
       <Divider />
-      <p className="text-[11px] leading-relaxed break-words text-muted-strong">
+      <p className="text-sm leading-relaxed break-words text-muted-strong">
         Whether the dose was taken is not known either way. The safety check still applies to the
         attempt and reads {safetyWord(call.safety_pass)}.
       </p>
@@ -436,19 +438,19 @@ function DoseLine({ dose, medication }: { dose: DoseEvent; medication: Medicatio
   return (
     <Link to="/doses" className="-mx-1 block rounded px-1 py-1.5 hover:bg-line/40">
       <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-[10px] font-bold tracking-wide text-muted">
+        <span className="text-2xs font-bold tracking-wide text-muted-strong">
           {clock(dose.slot_time)}
         </span>
-        <span className="text-[13px] font-semibold break-words">
+        <span className="text-md font-semibold break-words">
           {medication?.name ?? 'Medicine'}
         </span>
-        {medication && <span className="text-[12px] text-muted-strong">{medication.dose}</span>}
+        {medication && <span className="text-base text-muted-strong">{medication.dose}</span>}
         <span className="ml-auto shrink-0">
           <DoseStatusChip status={dose.status} />
         </span>
       </Row>
       {dose.note && (
-        <p className="mt-1 border-l-2 border-line-strong pl-2 text-[12px] leading-relaxed break-words whitespace-pre-line">
+        <p className="mt-1 border-l-2 border-line-strong pl-2 text-base leading-relaxed break-words whitespace-pre-line">
           {dose.note}
         </p>
       )}
@@ -458,6 +460,7 @@ function DoseLine({ dose, medication }: { dose: DoseEvent; medication: Medicatio
 
 /** One observation this call kept — the sentence verbatim, exactly as the record holds it. */
 function ObservationLine({ observation }: { observation: Observation }) {
+  const parentLang = useParentLanguage()
   return (
     <Link to="/observations" className="-mx-1 block rounded px-1 py-1 hover:bg-line/40">
       <Row className="flex-wrap gap-x-2 gap-y-1">
@@ -466,9 +469,9 @@ function ObservationLine({ observation }: { observation: Observation }) {
         <Label className="ml-auto">{clock(observation.created_at)}</Label>
       </Row>
       <blockquote
-        lang="hi"
+        lang={parentLang}
         className={clsx(
-          'mt-1 text-[14px] leading-relaxed break-words hyphens-none whitespace-pre-wrap',
+          'mt-1 text-md leading-relaxed break-words hyphens-none whitespace-pre-wrap',
           observation.severity === 'red' ? 'font-bold' : 'font-semibold',
         )}
       >

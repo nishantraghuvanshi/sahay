@@ -3,7 +3,28 @@
  * sees the schema. Do not rename fields to be "nicer" — the record must match the DB.
  */
 
-export type DoseStatus = 'confirmed' | 'deferred' | 'missed' | 'no_answer'
+/**
+ * `unknown` is not a softer `missed`. It is the degraded case — the agent could not
+ * reach the parent at all — and it asserts nothing about whether the dose was taken.
+ * Rendering it as `missed` would state a fact nobody established, which is the same
+ * failure as reading a model refusal as "no medicines on the page".
+ */
+export type DoseStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'deferred'
+  | 'missed'
+  | 'no_answer'
+  | 'unknown'
+
+/**
+ * `pending` is the scheduler's own bookkeeping state, not an outcome: the row
+ * exists so retry counters have somewhere to live, and nothing has been
+ * established. Everywhere in the app it must read exactly as no row at all —
+ * `answered()` is what draws that line.
+ */
+export const answered = (status: DoseStatus | undefined | null): boolean =>
+  Boolean(status) && status !== 'pending'
 export type Severity = 'none' | 'watch' | 'red'
 export type Priority = 'P1' | 'P2' | 'P3'
 export type ObservationKind = 'symptom' | 'mood' | 'note'
@@ -38,6 +59,17 @@ export interface Patient {
   schedule_signed_off_at: string | null
   /** SR-5 — the parent asked us to stop. */
   calls_paused: boolean
+
+  /**
+   * The one-off consent call (FR-5). `intro_call_status` is load-bearing rather
+   * than informational: no dose slot may be dialled until it is 'done', or the
+   * product rings a parent who never agreed to be rung.
+   */
+  intro_call_at: string | null
+  intro_call_status: 'pending' | 'done' | 'declined' | null
+  /** Stored with their text, not as bare booleans — SR-5. */
+  consents: { id: string; agreed: boolean; agreed_at: string | null }[] | null
+
   created_at: string
 }
 
@@ -52,6 +84,11 @@ export interface Medication {
   /** At most one per patient. */
   is_priority: boolean
   stock_count: number | null
+  /** Set when the caregiver stopped it. Stopped medicines are not returned by the
+   *  record endpoint, but their dose history survives. */
+  stopped_at?: string | null
+  /** When the course begins — what lets a taper be expressed as two rows. */
+  start_date?: string | null
 }
 
 export interface CallSession {
@@ -69,7 +106,15 @@ export interface DoseEvent {
   id: string
   patient_id: string
   medication_id: string
+  /** The slot this event belongs to — its identity, even after a move. */
   slot_time: string
+  /** Where this single occurrence was moved to, if it was. Pairs with `deferred`. */
+  rescheduled_to?: string | null
+  /** Retry bookkeeping owned by the scheduler. */
+  attempt_count?: number
+  next_attempt_at?: string | null
+  /** Who established the outcome: 'agent' | 'caregiver' | 'patient'. */
+  actor?: string | null
   call_session_id: string | null
   status: DoseStatus
   note: string | null
@@ -122,6 +167,8 @@ export interface Escalation {
   id: string
   patient_id: string
   intake_record_id: string | null
+  /** Set when the alert was raised about a specific dose slot. */
+  dose_event_id?: string | null
   level: Priority
   /** The cited rule — rendered literally in the feed. */
   reason: string

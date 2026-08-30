@@ -11,6 +11,12 @@ import type { HandoffView } from '../api/types'
  * No login, no install, no navigation into the caregiver app — the reader is not a user
  * of this product and must never be offered one thing to tap that is not the phone number.
  *
+ * NOTE (design system, Aug 30): this screen is deliberately EXEMPT from the app-wide
+ * type scale in index.css. The pixel budget below is measured against these exact sizes,
+ * so the sizes stay literal here. It still inherits the palette for free, because every
+ * colour is read through a Tailwind token class (bg-paper, text-muted-strong, border-line).
+ * No webfont is loaded for this screen either: it assumes one bar of signal.
+ *
  * Three rules drive every layout decision below:
  *
  *  1. 🔑 The P1 block fits ONE 390×844 screen with no scrolling. Measured budget,
@@ -101,7 +107,7 @@ const NONE_RECORDED = /^(none|nil|no|nope|none known|no known allergies|na|n\/a)
 /* --------------------------------------------------------------- fragments */
 
 function NotCaptured() {
-  return <span className="text-muted">not captured</span>
+  return <span className="text-muted-strong italic">not captured</span>
 }
 
 /** A value, or the explicit absence of one. Never an empty node. */
@@ -133,7 +139,7 @@ function BelowFold({ title, children }: { title: string; children: ReactNode }) 
  */
 function Notice({ title, body, aside }: { title: string; body: string; aside?: string }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-[430px] flex-col justify-center bg-paper px-6 py-10">
+    <main className="mx-auto flex min-h-[100dvh] max-w-[430px] flex-col justify-center bg-paper px-6 py-10">
       <h1 className="text-[22px] leading-[28px] font-bold">{title}</h1>
       <p className="mt-3 text-[14px] leading-[21px]">{body}</p>
       {aside && <p className="mt-4 text-[11px] leading-[16px] text-muted-strong">{aside}</p>}
@@ -229,7 +235,7 @@ function Record({ view }: { view: HandoffView }) {
   const captured = Math.round(intake.completeness * 12)
 
   return (
-    <main className="mx-auto min-h-screen max-w-[430px] bg-paper px-4 pb-10 text-ink">
+    <main className="mx-auto min-h-[100dvh] max-w-[430px] bg-paper px-4 pb-10 text-ink">
       {/* Why a stranger is holding a stranger's medical record. */}
       <header className="border-b border-line py-[9px]">
         <p className="text-[10px] leading-[13px] text-muted-strong">
@@ -260,12 +266,12 @@ function Record({ view }: { view: HandoffView }) {
         </p>
       </section>
 
-      <dl className="mt-2 grid grid-cols-3 gap-x-2 rounded-md border border-line-strong px-3 py-2">
+      <dl className="mt-2 grid grid-cols-1 gap-x-2 gap-y-1 rounded-md min-[360px]:grid-cols-3 border border-line-strong px-3 py-2">
         <div>
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Started
           </dt>
-          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold">
+          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
             <Value text={onset} />
           </dd>
         </div>
@@ -273,7 +279,7 @@ function Record({ view }: { view: HandoffView }) {
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Responsive
           </dt>
-          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold">
+          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
             {responsive ? sentence(responsive) : <NotCaptured />}
           </dd>
         </div>
@@ -281,7 +287,7 @@ function Record({ view }: { view: HandoffView }) {
           <dt className="text-[10px] font-bold tracking-[0.10em] text-muted-strong uppercase">
             Breathing
           </dt>
-          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold">
+          <dd className="mt-0.5 text-[13px] leading-[16px] font-semibold break-words">
             {breathing ? sentence(breathing) : <NotCaptured />}
           </dd>
         </div>

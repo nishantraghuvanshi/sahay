@@ -82,7 +82,17 @@ before(async () => {
     [path.join(__dirname, '..', 'src', 'server.js')],
     {
       cwd: path.join(__dirname, '..'),
-      env: { ...process.env, PORT: String(port), DB_PATH: dbPath, VAPI_SECRET: TEST_VAPI_SECRET },
+      // This test exercises inbound resume over HTTP, which is a Vapi-path
+      // capability — the ElevenLabs transport is outbound-only and has no
+      // inbound path. Name the transport this test needs explicitly rather
+      // than inheriting whatever active.transport happens to default to.
+      env: {
+        ...process.env,
+        PORT: String(port),
+        DB_PATH: dbPath,
+        VAPI_SECRET: TEST_VAPI_SECRET,
+        TRANSPORT: 'vapi',
+      },
       // Captured (not 'ignore') so a boot crash has a reason attached to the
       // failure instead of vanishing — see the assert.fail below, which is
       // this test's entire reason to exist.

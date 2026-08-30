@@ -53,6 +53,15 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return null;
   }
 
+  /**
+   * No medication schedule without a database. Callers treat an empty list as
+   * "nothing to promise", so the agent simply says nothing about a next call
+   * rather than guessing.
+   */
+  async findMedicationsForPatient() {
+    return [];
+  }
+
   async listPatients() {
     return [];
   }

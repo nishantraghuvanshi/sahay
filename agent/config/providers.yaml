@@ -1,7 +1,9 @@
 # Provider Configuration
 # =====================
 # Swap the orchestrator or any STT/TTS/LLM provider by changing "active" below.
-# No code changes needed — the server reads this file at startup.
+# No code changes needed — the server reads this file at startup. The active
+# transport can also be overridden per-run without editing this file — see
+# the TRANSPORT env var in src/core/config/loader.js.
 #
 # Every provider declares an `integration`, because these are two different
 # architectures and not two providers:
@@ -29,7 +31,7 @@
 # To add a transport (orchestrator), see src/adapters/transport/registry.js.
 
 active:
-  transport: vapi
+  transport: elevenlabs
   stt: sarvam       # bridge  — Indic-specialised, audio via our server
   llm: sarvam       # bridge  — Hindi-native; OpenAI project can only reach gpt-5-nano
   tts: elevenlabs   # native  — Vapi calls ElevenLabs directly
@@ -41,6 +43,62 @@ transport:
     api_key_env: "VAPI_PRIVATE_KEY"
     assistant_id_env: "VAPI_ASSISTANT_ID"
     # Inbound routing is configured by scripts/setup-inbound.js
+
+  elevenlabs:
+    # OUTBOUND ONLY. While this is active.transport, inbound calls are not
+    # answered by this server — the number still rings and nothing handles it.
+    # Switch back to vapi for the inbound path.
+    api_key_env: "ELEVENLABS_API_KEY"
+    agent_id_env: "ELEVENLABS_AGENT_ID"
+    phone_number_id: "phnum_2001m0m0dch2fvhv1jar36bfzd5p"
+
+    # The model ElevenLabs runs. This is the biggest lever on how long a
+    # caller waits: measured on a real call, LLM time-to-first-sentence was
+    # 1029-1700ms out of a 2252-3882ms gap between the caller falling silent
+    # and hearing a reply — against ~160ms for TTS and ~30ms for ASR.
+    #
+    # gemini-2.5-flash reasons internally before answering, which costs time
+    # and is the most likely source of the v6 bug where the agent spoke its
+    # own deliberation aloud to a patient. Lower-latency candidates worth
+    # comparing: gemini-2.0-flash, gemini-2.5-flash-lite, claude-haiku-4-5.
+    #
+    # Changing this changes behaviour as well as speed. Re-run
+    # `npm run simulate-elevenlabs -- --all` before trusting a swap: a faster
+    # model that mishandles the escalation branches is not an improvement.
+    llm: "gemini-2.5-flash"
+
+    # 0 turns the model's internal reasoning off. gemini-2.5-flash thinks by
+    # default, and this agent was paying for it on every turn: LLM
+    # time-to-first-sentence measured 1029-1700ms on a real call. A dose call
+    # is a scripted branch, not a puzzle.
+    #
+    # It is also a safety setting. The v6 transcript shows the model's
+    # deliberation being spoken aloud to a patient, in English, mid-sentence:
+    # "The user just said ... However, the guardrail for emotional dist...".
+    # Reasoning it does not do cannot leak.
+    #
+    # Raise it if a guardrail branch turns out to need the headroom — but
+    # re-run the battery, because that is the only way to tell.
+    thinking_budget: 0
+
+    # How long the agent waits before deciding the caller has stopped talking.
+    # patient | normal | eager.
+    #
+    # After thinking was turned off, this became the largest remaining piece of
+    # perceived latency: measured across two real calls it ran 160-1280ms,
+    # against ~500-850ms for the LLM and ~200ms for TTS.
+    #
+    # 'eager' is a real trade, not a free win. This product calls people in
+    # their seventies who pause mid-sentence to find a word, and the
+    # elderly-friendly rules in the prompt say plainly: "If the user is silent,
+    # wait. Do not rush them." Cutting someone off is a worse failure than a
+    # one-second pause. If callers start getting interrupted, put this back to
+    # 'normal' — that is the fix, not a prompt change.
+    turn_eagerness: "eager"
+
+    # Seconds to wait for a reply before re-engaging. Sent alongside eagerness
+    # so that setting one does not drop the other from the turn object.
+    turn_timeout: 7
 
 # ── STT (Speech-to-Text) ──────────────────────────────────────────
 

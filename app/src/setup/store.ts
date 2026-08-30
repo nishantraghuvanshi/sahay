@@ -15,8 +15,48 @@ export interface DraftMedicine {
   slots: string[]
   with_food: WithFood
   is_priority: boolean
-  /** OCR could not read this row confidently — highlighted for review (wireframe 1e). */
+  /** A person must correct this row before it can be scheduled (wireframe 1e). */
   unclear?: boolean
+
+  /* --- provenance, when the row came from a prescription photo -------------
+   * Safety rule S3: every extracted medicine carries the verbatim text the model
+   * claims it read, so the caregiver can check it against the paper rather than
+   * confirming a value they have no way to verify. Optional because a row the
+   * caregiver typed by hand has no reading to show. */
+
+  /** Verbatim line the model read. Absent on hand-entered rows. */
+  raw_line?: string
+  /** Per-medicine, 0–1, as reported by the model. */
+  confidence?: number
+  /** Validation flags from design doc §7 — e.g. 'low_confidence'. */
+  flags?: string[]
+  /** Days written on the prescription. Nothing consumes this yet — `medications`
+   *  has no end-date column (docs/SCHEMA-GAPS-LANE-C.md §4) — but dropping it at
+   *  the boundary would lose a value that was legibly on the page. */
+  duration_days?: number | null
+  /** Read from the page, deliberately never scheduled: PRN, or a non-oral form. */
+  excluded?: boolean
+  exclusion_reason?: string | null
+}
+
+/** What the extractor reported about the document as a whole. */
+export interface ExtractionMeta {
+  doc_id: string
+  model: string
+  /**
+   * The `DraftFile` ids this reading was produced from.
+   *
+   * This is what distinguishes "the caregiver came back to the same prescription"
+   * from "the caregiver gave us a different one". Without it, `ocrDone` alone
+   * suppresses the re-read and the previous prescription's medicines are shown
+   * under the new photograph — which is the worst possible way to be wrong here,
+   * because the schedule looks confirmed and belongs to someone else's page.
+   */
+  source_files: string[]
+  needs_review: boolean
+  review_reasons: string[]
+  /** Lines the model returned that failed validation — shown, never dropped. */
+  unparsed_lines: string[]
 }
 
 export interface DraftFile {
@@ -33,9 +73,14 @@ export interface SetupDraft {
   phone: string
   phoneVerified: boolean
   phoneOtpSent: boolean
+  /** When the code was sent, epoch ms. The flag survives a reload on purpose, but
+   *  the code behind it dies in `otp_ttl_min` (api/config.py), so a flag with no
+   *  timestamp — or an old one — means "no code is in flight", not "resume". */
+  phoneOtpSentAt: number | null
   email: string
   emailVerified: boolean
   emailOtpSent: boolean
+  emailOtpSentAt: number | null
 
   /* 1b — parent */
   parentName: string
@@ -60,6 +105,8 @@ export interface SetupDraft {
   /* 1c/1d — prescription */
   files: DraftFile[]
   ocrDone: boolean
+  /** Null until a prescription has actually been read. */
+  extraction: ExtractionMeta | null
 
   /* 1e — schedule */
   medicines: DraftMedicine[]
@@ -75,9 +122,11 @@ export const EMPTY_DRAFT: SetupDraft = {
   phone: '',
   phoneVerified: false,
   phoneOtpSent: false,
+  phoneOtpSentAt: null,
   email: '',
   emailVerified: false,
   emailOtpSent: false,
+  emailOtpSentAt: null,
 
   parentName: '',
   honorific: '',
@@ -99,6 +148,7 @@ export const EMPTY_DRAFT: SetupDraft = {
 
   files: [],
   ocrDone: false,
+  extraction: null,
 
   medicines: [],
   scheduleConfirmed: false,
@@ -157,13 +207,17 @@ export function useSetupDraft() {
 
 /* ------------------------------------------------------------- validation */
 
-/** E.164 (FR-1 acceptance: the record stores E.164). */
-export function toE164(input: string, cc = '+91'): string | null {
-  const digits = input.replace(/[^\d+]/g, '')
-  if (digits.startsWith('+')) return /^\+[1-9]\d{7,14}$/.test(digits) ? digits : null
-  const local = digits.replace(/^0+/, '')
-  if (local.length !== 10) return null
-  return `${cc}${local}`
+/**
+ * E.164 (FR-1 acceptance: the record stores E.164). India only: the user types the
+ * 10-digit mobile number and we prefix +91 ourselves. A pasted "+91 …", "91 …" or
+ * "0 …" is tolerated so a number copied from contacts still works.
+ */
+export function toE164(input: string): string | null {
+  let digits = input.replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2)
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
+  // Indian mobiles are 10 digits and start with 6–9.
+  return /^[6-9]\d{9}$/.test(digits) ? `+91${digits}` : null
 }
 
 export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())
