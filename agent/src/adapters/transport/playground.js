@@ -79,15 +79,31 @@ class PlaygroundTransportAdapter extends TransportPort {
    * via PlaygroundConversation.start()'s existing error path) is told
    * before a single turn is spoken.
    *
+   * A `drugName` makes this a configured demo call rather than a plain
+   * simulated one, and it is also what makes an OUTBOUND playground call
+   * possible at all: the phone path never creates a patient on outbound (an
+   * outbound call already dialled a chosen number, so an unmatched number
+   * means no session), and the caregiver trying the playground for the first
+   * time is exactly such an unmatched number. Upserting here — in the
+   * playground's own adapter, never in core/ — keeps that production rule
+   * untouched while giving the demo a record to hang a session on. The upsert
+   * is keyed on phone and only fills `drug_name`, so it never overwrites a
+   * real patient's name, language or schedule.
+   *
    * @param {Object} args
    * @param {string} args.phone - The picked patient's E.164 phone
    * @param {'inbound'|'outbound'} args.direction
+   * @param {string|null} [args.drugName] - Medicine picked in the playground UI
    * @returns {Promise<Object>} { sessionId, mode, patient, session, fieldsSoFar, lastCalls, isNewPatient }
    * @throws {Error} If no session row was opened for this call — an
    *   unmatched outbound number, or a resolution/persistence failure.
    */
-  async openSession({ phone, direction }) {
+  async openSession({ phone, direction, drugName = null }) {
     const sessionId = _mintSessionId();
+
+    if (phone && drugName) {
+      await this.repository.upsertPatient({ phone, drugName });
+    }
     const resolution = await openCall({
       repository: this.repository,
       phone,

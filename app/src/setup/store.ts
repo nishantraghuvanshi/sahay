@@ -160,13 +160,60 @@ export const EMPTY_DRAFT: SetupDraft = {
 
 const KEY = 'kinvox.setup.draft.v1'
 
+/**
+ * The signup fields, deliberately excluded from localStorage.
+ *
+ * Persisting these made every later visit open on a phone number the caregiver
+ * did not type in this session — their own from a previous attempt, or the
+ * VITE_DEV_MODE seed, which is written once per browser and outlives the flag
+ * that wrote it (devSeed.ts). A prefilled identity field is the one kind of
+ * stale draft that is actively wrong: the rest of the draft is the caregiver's
+ * own typing to be resumed, this is a claim about who they are.
+ *
+ * They still behave normally for the length of the tab — the OTP steps depend on
+ * `phoneOtpSent` surviving between patches — so they live in memory instead.
+ * A reload starts signup clean, which is correct: the code behind a sent OTP is
+ * server-side and short-lived, and `session.phone_verified` is the real record
+ * of who is verified.
+ */
+const AUTH_KEYS = [
+  'phone',
+  'phoneVerified',
+  'phoneOtpSent',
+  'phoneOtpSentAt',
+  'email',
+  'emailVerified',
+  'emailOtpSent',
+  'emailOtpSentAt',
+] as const
+
+type AuthKey = (typeof AUTH_KEYS)[number]
+
+/** Tab-lifetime only. Reset by `reset()`, gone on reload. */
+let authState: Pick<SetupDraft, AuthKey> = pickAuth(EMPTY_DRAFT)
+
+function pickAuth(from: SetupDraft): Pick<SetupDraft, AuthKey> {
+  return Object.fromEntries(AUTH_KEYS.map((k) => [k, from[k]])) as Pick<SetupDraft, AuthKey>
+}
+
+/** Strip the auth fields from anything headed for — or coming out of — storage. */
+function withoutAuth(d: Partial<SetupDraft>): Partial<SetupDraft> {
+  const out = { ...d }
+  for (const k of AUTH_KEYS) delete out[k]
+  return out
+}
+
 function read(): SetupDraft {
+  let stored: Partial<SetupDraft> = {}
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? { ...EMPTY_DRAFT, ...(JSON.parse(raw) as Partial<SetupDraft>) } : EMPTY_DRAFT
+    if (raw) stored = JSON.parse(raw) as Partial<SetupDraft>
   } catch {
-    return EMPTY_DRAFT
+    /* unreadable or unparseable — treat as no draft */
   }
+  // Auth last: a blob written by an older build still carries these keys, and
+  // stripping them on the way out is what un-prefills an existing browser.
+  return { ...EMPTY_DRAFT, ...withoutAuth(stored), ...authState }
 }
 
 /** Cross-component sync without a state library: one storage event, one custom event. */
@@ -187,8 +234,9 @@ export function useSetupDraft() {
 
   const patch = useCallback((next: Partial<SetupDraft>) => {
     const merged = { ...read(), ...next }
+    authState = pickAuth(merged)
     try {
-      localStorage.setItem(KEY, JSON.stringify(merged))
+      localStorage.setItem(KEY, JSON.stringify(withoutAuth(merged)))
     } catch {
       /* private mode — the draft simply does not survive a reload */
     }
@@ -198,6 +246,7 @@ export function useSetupDraft() {
 
   const reset = useCallback(() => {
     localStorage.removeItem(KEY)
+    authState = pickAuth(EMPTY_DRAFT)
     window.dispatchEvent(new Event(CHANGED))
     setDraft(EMPTY_DRAFT)
   }, [])

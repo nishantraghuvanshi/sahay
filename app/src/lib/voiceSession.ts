@@ -63,6 +63,10 @@ export interface VoiceSessionOptions extends VoiceSessionHandlers {
   /** E.164 caller. An unknown number opens an intake conversation. */
   phone: string
   direction?: 'inbound' | 'outbound'
+  /** The dose this simulated call is about. Sent verbatim in `start`. */
+  drugName?: string
+  mealRelation?: 'before' | 'after'
+  meal?: 'breakfast' | 'lunch' | 'dinner'
   /** Sent as `?api_key=` when the server is running with API_KEY set. */
   apiKey?: string
 }
@@ -113,6 +117,9 @@ export class VoiceSession {
         language: this.opts.language,
         phone: this.opts.phone,
         direction: this.opts.direction ?? 'inbound',
+        drugName: this.opts.drugName ?? null,
+        mealRelation: this.opts.mealRelation ?? null,
+        meal: this.opts.meal ?? null,
       })
       this.started = true
     } catch (err) {

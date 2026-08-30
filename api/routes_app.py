@@ -1,7 +1,8 @@
 """Caregiver-app endpoints. spec: TRD §5.1, §11
 
-These are the read endpoints `app/src/api/hooks.ts` calls, plus the one write that
-turns a completed onboarding into a real record.
+These are the read endpoints `app/src/api/hooks.ts` calls, plus the writes behind
+the medicine editor and the dose tick. The onboarding write lives in
+api/caregiver/routes.py.
 
 Two conventions the app depends on:
 
@@ -10,10 +11,15 @@ Two conventions the app depends on:
   `{ok: false, error}`, and they come back HTTP 200 because `humanise()` in the
   client turns the error *code* into the sentence a caregiver reads — a raw 404
   would lose that (NFR-6).
-* **No auth, one household.** NFR-7 says the browser only ever sees
-  caregiver-scoped reads, and there is no session layer yet, so "the caregiver" is
-  the most recently created one. That is a demo simplification and the only place
-  it lives is `current_patient()` below.
+* **Every endpoint is caregiver-scoped.** NFR-7 says the browser only ever sees
+  caregiver-scoped reads. `CaregiverDep` resolves the session cookie or 401s, and
+  `current_patient()` takes that caregiver's id — it is the only place the
+  patient is chosen, so there is one place to get the scoping right.
+
+  It used to be `ORDER BY created_at DESC LIMIT 1` with no session at all, which
+  meant every signed-in caregiver read the household that onboarded most recently.
+  The one exception is `/h/{token}`: a handoff link is given to a paramedic who has
+  no account, so the bearer of the token is the authorisation.
 """
 import json
 import uuid
@@ -24,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from fastapi.responses import JSONResponse
 
 from api import db
+from api.auth.deps import CaregiverDep
 
 router = APIRouter()
 
@@ -44,21 +51,38 @@ def _fail(error: str):
     return JSONResponse(status_code=200, content={"ok": False, "error": error})
 
 
-def current_patient(con):
-    return con.execute("SELECT * FROM patients ORDER BY created_at DESC LIMIT 1").fetchone()
+# `SELECT *` on caregivers would put password_hash, password_salt, failed_logins
+# and locked_until in a JSON body the browser can read. None of them are in the
+# app's `Caregiver` type, so nothing would have noticed the leak.
+CAREGIVER_COLUMNS = "id, name, phone_e164, email, relationship, created_at"
+
+
+def current_patient(con, caregiver_id: str):
+    """The signed-in caregiver's patient.
+
+    One per caregiver today — onboarding upserts on the parent's phone and refuses
+    a number that belongs to someone else's parent — so LIMIT 1 is the whole set
+    rather than a pick from it. `caregiver_id` is not optional on purpose: an
+    unscoped read is the bug this replaced, and a default would let it back in.
+    """
+    return con.execute(
+        "SELECT * FROM patients WHERE caregiver_id = ? ORDER BY created_at DESC LIMIT 1",
+        (caregiver_id,),
+    ).fetchone()
 
 
 # --------------------------------------------------------------------- reads
 
 @router.get("/app/record")
-def get_record():
+def get_record(caregiver: CaregiverDep):
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return _fail("not_found")
-        caregiver = con.execute(
-            "SELECT * FROM caregivers WHERE id = ?", (patient["caregiver_id"],)
+        caregiver_row = con.execute(
+            f"SELECT {CAREGIVER_COLUMNS} FROM caregivers WHERE id = ?",
+            (patient["caregiver_id"],),
         ).fetchone()
         meds = con.execute(
             "SELECT * FROM medications WHERE patient_id = ? AND stopped_at IS NULL "
@@ -67,7 +91,7 @@ def get_record():
         ).fetchall()
         return {
             "patient": _row("patients", patient),
-            "caregiver": _row("caregivers", caregiver),
+            "caregiver": _row("caregivers", caregiver_row),
             "medications": [_row("medications", m) for m in meds],
         }
     finally:
@@ -75,10 +99,10 @@ def get_record():
 
 
 @router.get("/app/doses")
-def get_doses():
+def get_doses(caregiver: CaregiverDep):
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return []
         rows = con.execute(
@@ -90,10 +114,10 @@ def get_doses():
 
 
 @router.get("/app/observations")
-def get_observations():
+def get_observations(caregiver: CaregiverDep):
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return []
         rows = con.execute(
@@ -106,10 +130,10 @@ def get_observations():
 
 
 @router.get("/app/escalations")
-def get_escalations():
+def get_escalations(caregiver: CaregiverDep):
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return []
         rows = con.execute(
@@ -122,10 +146,10 @@ def get_escalations():
 
 
 @router.get("/app/calls")
-def get_calls():
+def get_calls(caregiver: CaregiverDep):
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return []
         rows = con.execute(
@@ -138,10 +162,20 @@ def get_calls():
 
 
 @router.get("/app/intake/{record_id}")
-def get_intake(record_id: str):
+def get_intake(record_id: str, caregiver: CaregiverDep):
     con = db.connect()
     try:
-        row = con.execute("SELECT * FROM intake_records WHERE id = ?", (record_id,)).fetchone()
+        patient = current_patient(con, caregiver.id)
+        if patient is None:
+            return _fail("not_found")
+        # `AND patient_id = ?` rather than a fetch-then-compare: one query cannot
+        # drift out of step with the check that follows it, and "belongs to someone
+        # else" and "does not exist" collapse into the same answer, which is what
+        # we want to tell the caller anyway.
+        row = con.execute(
+            "SELECT * FROM intake_records WHERE id = ? AND patient_id = ?",
+            (record_id, patient["id"]),
+        ).fetchone()
         if row is None:
             return _fail("not_found")
         return _row("intake_records", row)
@@ -150,7 +184,7 @@ def get_intake(record_id: str):
 
 
 @router.get("/app/summary")
-def get_summary():
+def get_summary(caregiver: CaregiverDep):
     """Today's roll-up. Derived on read, never stored (wireframe 1f).
 
     Mirrors the derivation in app/src/api/mock.ts so the live screen and the mock
@@ -158,7 +192,7 @@ def get_summary():
     """
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         since = datetime.now().astimezone().replace(hour=6, minute=0, second=0, microsecond=0)
         empty = {
             "since": since.isoformat(), "items": [],
@@ -274,7 +308,7 @@ def get_handoff(token: str):
 
         patient = con.execute(
             "SELECT * FROM patients WHERE id = ?", (intake["patient_id"],)
-        ).fetchone() or current_patient(con)
+        ).fetchone()
         if patient is None:
             return _fail("not_found")
 
@@ -306,213 +340,14 @@ def get_handoff(token: str):
 
 
 # -------------------------------------------------------------------- write
-
-class OnboardingMedicine(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    name: str
-    dose: str = ""
-    slots: list[str] = Field(default_factory=list)
-    with_food: str | None = "any"
-    is_priority: bool = False
-    unclear: bool = False
-    raw_line: str | None = None
-    confidence: float | None = None
-    flags: list[str] = Field(default_factory=list)
-    duration_days: int | None = None
-    excluded: bool = False
-    exclusion_reason: str | None = None
-
-
-class EscalationContact(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    name: str = ""
-    relationship: str | None = None
-    after: str | None = None
-
-
-class Onboarding(BaseModel):
-    """The onboarding draft from app/src/setup/store.ts."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    phone: str = ""
-    email: str = ""
-    phoneVerified: bool = False
-    emailVerified: bool = False
-
-    parentName: str
-    honorific: str | None = None
-    age: str | None = None
-    relation: str | None = None
-    parentPhone: str
-    language: str = "hi-IN"
-    conditions: list[str] = Field(default_factory=list)
-    allergies: list[str] = Field(default_factory=list)
-    doctorName: str | None = None
-    doctorPhone: str | None = None
-    address: str | None = None
-    mealTimes: dict[str, str] | None = None
-    escalation: list[EscalationContact] = Field(default_factory=list)
-
-    medicines: list[OnboardingMedicine] = Field(default_factory=list)
-    scheduleConfirmed: bool = False
-
-    introCall: str | None = None
-    introCallAt: str | None = None
-    consents: dict[str, bool] = Field(default_factory=dict)
-
-    extraction: dict | None = None
-
-
-@router.post("/app/onboarding")
-def post_onboarding(body: Onboarding):
-    """Turn a completed onboarding into a real record.
-
-    The sign-off is enforced here, not just in the UI. FR-4 and design doc §2 (S1)
-    say no schedule enters the reminder system without an explicit human
-    confirmation, and a rule that only exists in a disabled button is not a rule —
-    anything can POST. `confirmed_by` and `confirmed_at` are NOT NULL in the schema
-    for the same reason.
-    """
-    if not body.scheduleConfirmed:
-        return _fail("schedule_not_signed_off")
-    if not body.medicines:
-        return _fail("no_medicines")
-
-    # FR-2: at most one priority medicine. Enforced rather than trusted.
-    if sum(1 for m in body.medicines if m.is_priority) > 1:
-        return _fail("multiple_priority_medicines")
-
-    now = db.now_iso()
-    con = db.connect()
-    try:
-        # Re-running onboarding for the same parent updates them rather than
-        # colliding on the unique phone index.
-        existing = con.execute(
-            "SELECT * FROM patients WHERE phone_e164 = ?", (body.parentPhone,)
-        ).fetchone()
-
-        if existing:
-            patient_id = existing["id"]
-            caregiver_id = existing["caregiver_id"]
-        else:
-            patient_id = str(uuid.uuid4())
-            caregiver_row = con.execute(
-                "SELECT * FROM caregivers WHERE phone_e164 = ?", (body.phone,)
-            ).fetchone()
-            caregiver_id = caregiver_row["id"] if caregiver_row else str(uuid.uuid4())
-
-        db.insert(con, "caregivers", {
-            "id": caregiver_id,
-            # Onboarding never asks the caregiver their own name — it collects a
-            # phone and an email and nothing else — so the relationship is the
-            # closest true thing we hold. Recorded in SCHEMA-GAPS as a flow gap
-            # rather than invented here.
-            "name": (body.relation or "Caregiver").strip().title(),
-            "phone_e164": body.phone or f"unknown-{caregiver_id[:8]}",
-            "email": body.email or None,
-            "relationship": body.relation,
-            "phone_verified_at": now if body.phoneVerified else None,
-            "email_verified_at": now if body.emailVerified else None,
-            "created_at": now,
-        })
-
-        age = None
-        if body.age and str(body.age).strip().isdigit():
-            age = int(str(body.age).strip())
-
-        # GAP-2: dose reminders must not be dialled until the intro call is done.
-        intro_status = (
-            "done" if body.introCall == "now"
-            else "pending" if body.introCall == "later"
-            else None
-        )
-        consents = [
-            {"id": k, "agreed": v, "agreed_at": now if v else None}
-            for k, v in body.consents.items()
-        ]
-
-        db.insert(con, "patients", {
-            "id": patient_id,
-            "caregiver_id": caregiver_id,
-            "name": body.parentName,
-            "honorific": body.honorific or None,
-            "phone_e164": body.parentPhone,
-            "language": body.language or "hi-IN",
-            "age": age,
-            "conditions": body.conditions,
-            "allergies": body.allergies,
-            "doctor_name": body.doctorName or None,
-            "doctor_phone": body.doctorPhone or None,
-            "address_text": body.address or None,
-            "meal_times": body.mealTimes,
-            # This is the FR-4 gate: set only because scheduleConfirmed was true.
-            "schedule_signed_off_at": now,
-            "calls_paused": 0,
-            "intro_call_at": body.introCallAt,
-            "intro_call_status": intro_status,
-            "consents": consents,
-            "created_at": existing["created_at"] if existing else now,
-        })
-
-        # Replace the schedule wholesale: this POST represents one signed-off list,
-        # and merging it with an older one would produce a schedule nobody signed.
-        con.execute("DELETE FROM dose_events WHERE patient_id = ?", (patient_id,))
-        con.execute("DELETE FROM medications WHERE patient_id = ?", (patient_id,))
-
-        doc_id = (body.extraction or {}).get("doc_id")
-        for med in body.medicines:
-            db.insert(con, "medications", {
-                "id": str(uuid.uuid4()),
-                "patient_id": patient_id,
-                "name": med.name,
-                "dose": med.dose,
-                "slots": med.slots,
-                "with_food": med.with_food,
-                "is_priority": int(med.is_priority),
-                "stock_count": None,
-                "duration_days": med.duration_days,
-                # The course starts when the caregiver signed it off; there is no
-                # earlier date on the prescription we could trust.
-                "start_date": now,
-                "end_date": None,
-                "source": "prescription" if med.raw_line else "manual",
-                "source_doc_id": doc_id,
-                "raw_line": med.raw_line,
-                "confidence": med.confidence,
-                "extraction_flags": med.flags,
-                "excluded": int(med.excluded),
-                "exclusion_reason": med.exclusion_reason,
-                "confirmed_by": caregiver_id,
-                "confirmed_at": now,
-            })
-
-        con.execute("DELETE FROM escalation_contacts WHERE patient_id = ?", (patient_id,))
-        for rank, contact in enumerate(body.escalation, start=1):
-            if not contact.name.strip():
-                continue
-            after = None
-            if contact.after and str(contact.after).strip().isdigit():
-                after = int(str(contact.after).strip())
-            db.insert(con, "escalation_contacts", {
-                "id": str(uuid.uuid4()),
-                "patient_id": patient_id,
-                "name": contact.name,
-                "relationship": contact.relationship,
-                # GAP-5: onboarding still collects no number for these people, so
-                # the ladder remains unusable. Stored anyway rather than dropped.
-                "phone_e164": None,
-                "after_minutes": after,
-                "rank": rank,
-            })
-
-        con.commit()
-        return {"ok": True, "patient_id": patient_id, "caregiver_id": caregiver_id}
-    finally:
-        con.close()
-
+#
+# Onboarding is NOT here. There used to be a second `POST /app/onboarding` in this
+# file, and because this router is included before api/caregiver/routes.py — whose
+# router carries the `/app` prefix — Starlette matched this one on every request
+# and the authenticated version was unreachable. This one took camelCase
+# (`parentName`, `scheduleConfirmed`) while the app sends snake_case, so every real
+# onboarding answered 422 and no patient was ever written. The surviving endpoint
+# is api/caregiver/routes.py::onboarding, which authenticates.
 
 class MedicationEdit(BaseModel):
     """One row as the medicine editor holds it (app/src/screens/MedicinesEdit.tsx)."""
@@ -539,7 +374,7 @@ class MedicationChange(BaseModel):
 
 
 @router.post("/app/medications")
-def post_medications(body: MedicationChange):
+def post_medications(body: MedicationChange, caregiver: CaregiverDep):
     """Persist an edited schedule, with the attestation that justified it.
 
     The doctor-advice attestation is the reason this endpoint exists at all, so it
@@ -568,7 +403,7 @@ def post_medications(body: MedicationChange):
     now = db.now_iso()
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return _fail("not_found")
         pid = patient["id"]
@@ -640,7 +475,7 @@ class DoseMark(BaseModel):
 
 
 @router.post("/app/doses")
-def post_dose(body: DoseMark):
+def post_dose(body: DoseMark, caregiver: CaregiverDep):
     """Record a dose the caregiver confirmed themselves.
 
     Writing the event is what cancels the agent's call for that slot: the scheduler
@@ -656,7 +491,7 @@ def post_dose(body: DoseMark):
 
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return _fail("not_found")
         med = con.execute(
@@ -702,7 +537,7 @@ class DoseMove(BaseModel):
 
 
 @router.post("/app/doses/move")
-def post_dose_move(body: DoseMove):
+def post_dose_move(body: DoseMove, caregiver: CaregiverDep):
     """Move a single occurrence of a dose, leaving the recurring schedule alone.
 
     `medications.slots` are recurring local times, so there is nowhere in that row to
@@ -720,7 +555,7 @@ def post_dose_move(body: DoseMove):
     """
     con = db.connect()
     try:
-        patient = current_patient(con)
+        patient = current_patient(con, caregiver.id)
         if patient is None:
             return _fail("not_found")
         med = con.execute(

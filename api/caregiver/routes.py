@@ -4,9 +4,9 @@
 CARE_API_TOKEN (NFR-7), so the app needs caregiver-scoped endpoints that
 authenticate by session instead — see docs/SCHEMA-GAPS-LANE-C.md.
 
-Only the onboarding write lives here. The eight read endpoints the app polls
-(`/app/record`, `/app/doses`, ...) are still mocked client-side and belong to
-Lane B.
+Only the onboarding write lives here. The read endpoints the app polls
+(`/app/record`, `/app/doses`, ...) are in api/routes_app.py and take the same
+`CaregiverDep`, so the whole `/app` surface is scoped by the session cookie.
 """
 
 from __future__ import annotations
@@ -36,6 +36,26 @@ class DraftMedicine(BaseModel):
     with_food: str | None = None
     is_priority: bool = False
 
+    # Provenance. Safety rule S3 requires the verbatim line the model read to
+    # survive to a reviewer, so it is carried through the boundary rather than
+    # dropped here — the schedule screen shows it, and until now nothing stored it.
+    raw_line: str | None = None
+    confidence: float | None = None
+    flags: list[str] = Field(default_factory=list)
+    duration_days: int | None = None
+    excluded: bool = False
+    exclusion_reason: str | None = None
+
+
+class EscalationContact(BaseModel):
+    """Who to ring after the caregiver. Collected nowhere in the app yet, so this
+    arrives empty — stored rather than dropped so the flow that fills it in has
+    somewhere to land (SCHEMA-GAPS §5)."""
+
+    name: str = ""
+    relationship: str | None = None
+    after: int | None = None
+
 
 class OnboardingBody(BaseModel):
     """Mirrors SetupDraft in app/src/setup/store.ts, minus the UI-only flags."""
@@ -58,6 +78,23 @@ class OnboardingBody(BaseModel):
     medicines: list[DraftMedicine] = Field(default_factory=list)
     consents: dict[str, bool] = Field(default_factory=dict)
 
+    # FR-4 / design doc S1. The schedule screen disables its button until the
+    # caregiver signs off, but a disabled button is not a rule — anything can POST.
+    schedule_confirmed: bool = False
+
+    # The reading these medicines came from, so a row can be traced back to a
+    # document rather than only to its own raw_line.
+    extraction: dict | None = None
+
+    # GAP-2: the scheduler must not dial a dose slot until the intro call is done,
+    # or the product calls a parent who never agreed to be called. The consent
+    # screen already asks; this is where the answer becomes a column.
+    intro_call: str | None = None          # 'now' | 'later'
+    intro_call_at: str | None = None
+
+    escalation: list[EscalationContact] = Field(default_factory=list)
+
+
 
 REQUIRED_CONSENTS = ("informed", "recording", "no_advice")
 
@@ -73,6 +110,11 @@ async def onboarding(body: OnboardingBody, caregiver: CaregiverDep):
 
     One transaction: a patient with half a prescription is worse than no patient.
     """
+    # Checked before the consents: an unsigned schedule is not a thing to consent
+    # to, and it is the gate the whole dialler hangs off.
+    if not body.schedule_confirmed:
+        return {"ok": False, "error": "schedule_not_signed_off"}
+
     missing = [c for c in REQUIRED_CONSENTS if not body.consents.get(c)]
     if missing:
         return {"ok": False, "error": "consent_missing"}
@@ -85,6 +127,8 @@ async def onboarding(body: OnboardingBody, caregiver: CaregiverDep):
         # medications has a partial unique index enforcing this; catching it here
         # gives the app a named error instead of a constraint violation.
         return {"ok": False, "error": "multiple_priority"}
+
+    now = datetime.now(UTC).isoformat()
 
     async with db.transaction() as conn:
         # The caregiver row was created by the phone OTP with an empty name;
@@ -99,20 +143,41 @@ async def onboarding(body: OnboardingBody, caregiver: CaregiverDep):
 
         # Re-running onboarding for the same parent updates rather than colliding
         # on the unique phone index — the caregiver may have gone back a screen.
+        # GAP-2: 'now' means the intro call happens immediately, 'later' means it
+        # is booked and has NOT happened. The dialler refuses dose slots until this
+        # reads 'done', so mapping 'later' to anything else would start calling a
+        # parent who has not yet been introduced to the thing calling them.
+        intro_status = (
+            "done" if body.intro_call == "now"
+            else "pending" if body.intro_call == "later"
+            else None
+        )
+        # Stored WITH the moment they were given. A bare boolean against nothing is
+        # not evidence (api/schema.sql, `consents`).
+        consents = [
+            {"id": k, "agreed": bool(v), "agreed_at": now if v else None}
+            for k, v in body.consents.items()
+        ]
+
         patient_id = await conn.fetchval(
             """
             INSERT INTO patients (
                 id, caregiver_id, name, honorific, phone_e164, language, age,
                 conditions, allergies, doctor_name, doctor_phone, address_text,
-                meal_times, schedule_signed_off_at
-            ) VALUES ($13,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14)
+                meal_times, schedule_signed_off_at,
+                intro_call_at, intro_call_status, consents, created_at
+            ) VALUES ($13,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14,
+                      $15,$16,$17,$14)
             ON CONFLICT (phone_e164) DO UPDATE SET
                 name = EXCLUDED.name, honorific = EXCLUDED.honorific,
                 language = EXCLUDED.language, age = EXCLUDED.age,
                 conditions = EXCLUDED.conditions, allergies = EXCLUDED.allergies,
                 doctor_name = EXCLUDED.doctor_name, doctor_phone = EXCLUDED.doctor_phone,
                 address_text = EXCLUDED.address_text, meal_times = EXCLUDED.meal_times,
-                schedule_signed_off_at = $14
+                schedule_signed_off_at = $14,
+                intro_call_at = EXCLUDED.intro_call_at,
+                intro_call_status = EXCLUDED.intro_call_status,
+                consents = EXCLUDED.consents
             WHERE patients.caregiver_id = $1
             RETURNING id
             """,
@@ -133,8 +198,14 @@ async def onboarding(body: OnboardingBody, caregiver: CaregiverDep):
             json.dumps(body.meal_times),
             # id and the sign-off timestamp are supplied: no gen_random_uuid()
             # or now() here, and a TEXT primary key accepts NULL in silence.
+            # `created_at` is NOT NULL and has no DEFAULT, so omitting it — as this
+            # statement did — made every first onboarding an IntegrityError. It
+            # reuses $14 because on a re-run the ON CONFLICT branch never touches it.
             str(uuid.uuid4()),
-            datetime.now(UTC).isoformat(),
+            now,
+            body.intro_call_at,
+            intro_status,
+            json.dumps(consents),
         )
         if patient_id is None:
             # The ON CONFLICT WHERE clause filtered the update out: this phone
@@ -143,17 +214,76 @@ async def onboarding(body: OnboardingBody, caregiver: CaregiverDep):
 
         # Replace rather than merge. The schedule the caregiver just signed off
         # is the whole truth; a medicine they deleted must not survive.
+        #
+        # dose_events reference medications, so they go first — otherwise the
+        # DELETE below trips the foreign key on a re-run. Dropping them is correct
+        # here and only here: this is a schedule being signed off for the first
+        # time, so any events against the old rows were never real outcomes. The
+        # medicine *editor* (routes_app.py) must never do this, which is why it
+        # updates in place and stops medicines softly.
+        await conn.execute("DELETE FROM dose_events WHERE patient_id = $1", patient_id)
         await conn.execute("DELETE FROM medications WHERE patient_id = $1", patient_id)
+
+        doc_id = (body.extraction or {}).get("doc_id")
         for m in body.medicines:
             await conn.execute(
-                "INSERT INTO medications (patient_id, name, dose, slots, with_food, is_priority) "
-                "VALUES ($1,$2,$3,$4,$5,$6)",
+                """
+                INSERT INTO medications (
+                    id, patient_id, name, dose, slots, with_food, is_priority,
+                    duration_days, start_date, source, source_doc_id, raw_line,
+                    confidence, extraction_flags, excluded, exclusion_reason,
+                    confirmed_by, confirmed_at, created_at
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18)
+                """,
+                # Supplied, not defaulted. SQLite lets a TEXT PRIMARY KEY hold NULL
+                # and treats NULLs as distinct, so omitting this inserted a whole
+                # schedule of rows with no id — which the app keys its list on and
+                # dose_events point at.
+                str(uuid.uuid4()),
                 patient_id,
                 m.name,
                 m.dose,
-                m.slots,
+                # slots is TEXT holding a JSON array. Binding the Python list
+                # directly raises InterfaceError; sqlite3 has no list adapter.
+                json.dumps(m.slots),
                 m.with_food,
-                m.is_priority,
+                int(m.is_priority),
+                m.duration_days,
+                # The course starts when the caregiver signed it off. There is no
+                # earlier date on the prescription we could trust.
+                now,
+                "prescription" if m.raw_line else "manual",
+                doc_id,
+                m.raw_line,
+                m.confidence,
+                json.dumps(m.flags or []),
+                int(m.excluded),
+                m.exclusion_reason,
+                # This POST *is* the sign-off, so the row carries who signed it.
+                caregiver.id,
+                now,
+            )
+
+        # Rank order is the ladder order, so it comes from the list position.
+        await conn.execute("DELETE FROM escalation_contacts WHERE patient_id = $1", patient_id)
+        rank = 0
+        for contact in body.escalation:
+            if not contact.name.strip():
+                continue
+            rank += 1
+            await conn.execute(
+                "INSERT INTO escalation_contacts "
+                "(id, patient_id, name, relationship, phone_e164, after_minutes, rank) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+                str(uuid.uuid4()),
+                patient_id,
+                contact.name.strip(),
+                contact.relationship,
+                # GAP-5: onboarding still collects no number for these people, so
+                # the ladder remains unusable. Stored anyway rather than dropped.
+                None,
+                contact.after,
+                rank,
             )
 
     return {"ok": True, "patient_id": str(patient_id)}

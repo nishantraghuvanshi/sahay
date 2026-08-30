@@ -82,8 +82,30 @@ export default function Consent() {
           slots: m.slots,
           with_food: m.with_food,
           is_priority: m.is_priority,
+          // Safety rule S3: the verbatim line the model read has to survive to a
+          // reviewer. It was being dropped here, so the moment onboarding
+          // finished there was no way to check a row against the paper again.
+          raw_line: m.raw_line ?? null,
+          confidence: m.confidence ?? null,
+          flags: m.flags ?? [],
+          duration_days: m.duration_days ?? null,
+          excluded: m.excluded ?? false,
+          exclusion_reason: m.exclusion_reason ?? null,
         })),
+        extraction: draft.extraction,
+        // FR-4: the sign-off itself, enforced server-side too.
+        schedule_confirmed: draft.scheduleConfirmed,
         consents: draft.consents,
+        // GAP-2: the dialler will not place a dose call until the intro call has
+        // happened. The screen above collects the answer; sending it is what
+        // makes it a gate rather than a question.
+        intro_call: draft.introCall,
+        intro_call_at: draft.introCallAt,
+        escalation: draft.escalation.map((c) => ({
+          name: c.name,
+          relationship: c.relationship || null,
+          after: c.after ? Number(c.after) : null,
+        })),
       })
       setSubmitted(true)
       reset()

@@ -76,8 +76,13 @@ def connect() -> sqlite3.Connection:
 class _Conn:
     """The slice of asyncpg's connection API the auth modules use."""
 
-    def __init__(self, con: sqlite3.Connection):
+    def __init__(self, con: sqlite3.Connection, in_transaction: bool = False):
         self._con = con
+        # Inside `db.transaction()` the block decides when to commit. Committing
+        # per statement made the rollback on the way out a no-op, so a failure
+        # half way through onboarding left a patient with half a prescription —
+        # exactly what that route's docstring says the transaction prevents.
+        self._in_transaction = in_transaction
 
     @staticmethod
     def _q(sql: str, args: tuple) -> tuple[str, list]:
@@ -117,7 +122,8 @@ class _Conn:
     async def execute(self, sql: str, *args):
         q, p = self._q(sql, args)
         self._con.execute(q, p)
-        self._con.commit()
+        if not self._in_transaction:
+            self._con.commit()
 
 
 class _ConnCtx:
@@ -127,9 +133,11 @@ class _ConnCtx:
     cheap, and sharing one across async handlers would need a lock to be safe.
     """
 
+    IN_TRANSACTION = False
+
     async def __aenter__(self) -> _Conn:
         self._con = connect()
-        return _Conn(self._con)
+        return _Conn(self._con, self.IN_TRANSACTION)
 
     async def __aexit__(self, *exc):
         self._con.close()
@@ -140,6 +148,8 @@ class _TxCtx(_ConnCtx):
     """`async with db.transaction() as conn:` — commits on clean exit, rolls
     back on exception. sqlite3 opens a transaction implicitly on the first
     write, so this only has to decide how it ends."""
+
+    IN_TRANSACTION = True
 
     async def __aexit__(self, exc_type, *rest):
         try:
@@ -291,8 +301,25 @@ def _migrate(con: sqlite3.Connection) -> list[str]:
     return added
 
 
+def seed_enabled() -> bool:
+    """Whether the demo household may be written into an empty database.
+
+    Opt-in, and default off. The seed is a whole fabricated family — Shubh, his
+    mother, her three medicines and a week of calls — and while the app read from
+    a client-side mock it was harmless scaffolding. Now that every screen reads
+    the real API, a deployment that seeds itself hands the first real caregiver a
+    patient who does not exist. Reads are caregiver-scoped, so they would not in
+    fact see it, but the row is still there to be joined to by anything that
+    forgets, and "there is a fake patient in the health record" is not a state to
+    leave switched on by default.
+
+    Set KINVOX_SEED=1 for the demo and the fixtures the tests build against.
+    """
+    return os.getenv("KINVOX_SEED", "").strip().lower() in {"1", "true", "yes"}
+
+
 def init(reset: bool = False) -> None:
-    """Create the schema, and seed it the first time.
+    """Create the schema, and seed it the first time, if seeding is switched on.
 
     Seeding only happens when `caregivers` is empty, so restarting the API never
     overwrites a schedule someone signed off through the app.
@@ -308,7 +335,7 @@ def init(reset: bool = False) -> None:
             import logging
             logging.getLogger("kinvox.api").info("migrated: added %s", ", ".join(added))
         already = con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0]
-        if not already:
+        if not already and seed_enabled():
             _seed(con)
         con.commit()
     finally:

@@ -31,6 +31,7 @@ from api.rx_extract import (
 )
 from api.rx_extract.normalize import normalize
 from api import db
+from api.config import get_settings
 from api.routes_app import router as app_router
 
 load_dotenv()
@@ -90,10 +91,6 @@ async def lifespan(app: FastAPI):
                 var,
                 settings.dev_otp_bypass_code,
             )
-    try:
-        yield
-    finally:
-        await db.close_pool()
     # Schema first: the read endpoints must work even if no VLM key is configured.
     # Seeding only runs on an empty database, so a restart never overwrites a
     # schedule someone signed off through the app.
@@ -105,7 +102,10 @@ async def lifespan(app: FastAPI):
     except (MissingCredentialsError, ValueError, NotImplementedError, FileNotFoundError) as exc:
         _state["config_error"] = f"{type(exc).__name__}: {exc}"
         log.error("pipeline_b NOT available — /extract will fail: %s", _state["config_error"])
-    yield
+    try:
+        yield
+    finally:
+        await db.close_pool()
 
 
 app = FastAPI(title="Kinvox Care API", lifespan=lifespan)

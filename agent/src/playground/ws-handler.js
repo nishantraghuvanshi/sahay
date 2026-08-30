@@ -9,7 +9,8 @@
  *
  * Message protocol (browser → server):
  *   JSON text frames:
- *     { type: "start", language: "hi"|"en", phone, direction: "inbound"|"outbound" }
+ *     { type: "start", language: "hi"|"en", phone, direction: "inbound"|"outbound",
+ *       drugName, mealRelation: "before"|"after", meal: "breakfast"|"lunch"|"dinner" }
  *     { type: "stop" }
  *     { type: "barge-in" }           — User interrupted during agent speech
  *     { type: "speech-detected" }    — VAD detected speech (resets silence timer)
@@ -96,6 +97,13 @@ function handlePlaygroundConnection(ws, deps) {
               language: message.language || 'hi',
               phone: message.phone || null,
               direction: message.direction === 'outbound' ? 'outbound' : 'inbound',
+              // The dose being simulated. Unvalidated here on purpose: the use
+              // case owns what a meal and a relation may be (dose-timing.js
+              // drops anything it does not recognise), and this handler's job
+              // is to carry the message, not to know the schedule vocabulary.
+              drugName: message.drugName || null,
+              mealRelation: message.mealRelation || null,
+              meal: message.meal || null,
               onTranscript: (text, isFinal) => {
                 send({ type: 'transcript', text, isFinal });
               },

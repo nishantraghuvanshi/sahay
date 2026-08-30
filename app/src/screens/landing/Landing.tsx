@@ -30,7 +30,12 @@ export default function Landing() {
   const { draft } = useSetupDraft()
   // Someone who started signing up and came back should not have to find their
   // way in again. The draft is the only thing that survives a reload pre-session.
-  const resumable = Boolean(draft.phone && !draft.scheduleConfirmed)
+  //
+  // Read off the parent/prescription steps, not `draft.phone`: the auth fields are
+  // no longer persisted (store.ts), so a phone number is only ever present in the
+  // tab that typed it and would offer the banner to nobody who reloaded.
+  const started = Boolean(draft.parentName || draft.files.length || draft.medicines.length)
+  const resumable = started && !draft.scheduleConfirmed
 
   return (
     <div className="flex min-h-full flex-col bg-canvas">

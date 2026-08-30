@@ -3,9 +3,18 @@
 Every test runs against a throwaway SQLite file seeded from the same fixture the
 app was built against, so a shape change here fails loudly rather than showing up
 as an empty screen.
+
+Every `/app/*` endpoint is behind the session cookie, so the fixtures mint a real
+session rather than calling anonymously. `client` is the seeded caregiver;
+`other_client` is a second account on the same server, which is what the
+cross-household tests need.
 """
+import hashlib
 import json
+import os
+import secrets
 import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,34 +23,118 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from api import db, main as api_main, routes_app
+os.environ.setdefault("OTP_PEPPER", "a-long-enough-test-pepper-value")
+# The fixture household is what these tests assert against, so seeding is on here
+# even though it is off by default everywhere else (api/db.py::seed_enabled).
+os.environ["KINVOX_SEED"] = "1"
+
+from api import db, main as api_main, routes_app  # noqa: E402
+from api.config import get_settings  # noqa: E402
+
+SEEDED_CAREGIVER_PHONE = "+919812345678"
+
+
+def _sign_in(client: TestClient, caregiver_id: str) -> None:
+    """Put a working session cookie on `client`.
+
+    Straight into `auth_sessions` rather than through the OTP endpoints: what these
+    tests are about is what a signed-in caregiver can read, and routing every one of
+    them through a delivery bypass, a resend cooldown and an attempt counter would
+    make an unrelated change to the OTP flow fail forty tests here.
+    api/tests/test_demo_call.py covers the real sign-in path.
+    """
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    con = db.connect()
+    try:
+        con.execute(
+            "INSERT INTO auth_sessions (id, caregiver_id, token_hash, expires_at, "
+            "last_seen_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                str(uuid.uuid4()),
+                caregiver_id,
+                hashlib.sha256(token.encode()).digest(),
+                (now + timedelta(days=30)).isoformat(),
+                now.isoformat(),
+                now.isoformat(),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+    client.cookies.set(get_settings().session_cookie_name, token)
+
+
+def _caregiver_id(phone: str) -> str:
+    con = db.connect()
+    try:
+        return con.execute(
+            "SELECT id FROM caregivers WHERE phone_e164 = ?", (phone,)
+        ).fetchone()["id"]
+    finally:
+        con.close()
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def anon_client(tmp_path, monkeypatch):
+    """A browser with no session. Everything under /app must refuse it."""
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
+    get_settings.cache_clear()
     db.init(reset=True)
     with TestClient(api_main.app) as c:
         yield c
 
 
+@pytest.fixture
+def client(anon_client):
+    """The seeded caregiver, signed in."""
+    _sign_in(anon_client, _caregiver_id(SEEDED_CAREGIVER_PHONE))
+    return anon_client
+
+
+@pytest.fixture
+def other_client(client):
+    """A second caregiver on the same server, with no household of their own."""
+    other_id = str(uuid.uuid4())
+    con = db.connect()
+    try:
+        con.execute(
+            "INSERT INTO caregivers (id, name, phone_e164, created_at) VALUES (?,?,?,?)",
+            (other_id, "Neighbour", "+919700000001",
+             datetime.now(timezone.utc).isoformat()),
+        )
+        con.commit()
+    finally:
+        con.close()
+    c = TestClient(api_main.app)
+    _sign_in(c, other_id)
+    return c
+
+
 def draft(**over):
+    """The body app/src/screens/setup/Consent.tsx actually posts.
+
+    snake_case, and identical in shape to what the screen sends — the previous
+    version of this helper was camelCase against a second, unauthenticated
+    `POST /app/onboarding` that shadowed this one, so the tests passed while every
+    real onboarding from the app answered 422.
+    """
     base = {
-        "phone": "+919812345678", "email": "a@b.com",
-        "phoneVerified": True, "emailVerified": True,
-        "parentName": "Kamala", "honorific": "ji", "age": "71", "relation": "son",
-        "parentPhone": "+919000000042", "language": "hi-IN",
+        "caregiver_name": "", "relation": "son",
+        "parent_name": "Kamala", "honorific": "ji", "age": 71,
+        "parent_phone": "+919000000042", "language": "hi-IN",
         "conditions": ["hypertension"], "allergies": ["sulfa"],
-        "mealTimes": {"breakfast": "07:30", "lunch": "13:00", "dinner": "20:00"},
-        "escalation": [{"name": "Priya", "relationship": "daughter", "after": "30"}],
+        "doctor_name": None, "doctor_phone": None, "address": None,
+        "meal_times": {"breakfast": "07:30", "lunch": "13:00", "dinner": "20:00"},
+        "escalation": [{"name": "Priya", "relationship": "daughter", "after": 30}],
         "medicines": [{
             "name": "Pan-D 40", "dose": "40mg", "slots": ["08:00", "20:30"],
-            "with_food": "after", "is_priority": True, "unclear": False,
+            "with_food": "after", "is_priority": True,
             "raw_line": "1) T. Pan-D 40 40mg 1-0-1 x 5 days (a/f)", "confidence": 0.98,
             "flags": [], "duration_days": 5, "excluded": False, "exclusion_reason": None,
         }],
-        "scheduleConfirmed": True,
-        "introCall": "later", "introCallAt": "2026-08-31T10:30:00+05:30",
+        "schedule_confirmed": True,
+        "intro_call": "later", "intro_call_at": "2026-08-31T10:30:00+05:30",
         "consents": {"informed": True, "recording": True, "no_advice": True},
         "extraction": {"doc_id": "rx_test_0001"},
     }
@@ -145,7 +238,7 @@ def test_an_escalation_can_name_the_dose_it_fired_about(client):
 def test_an_unsigned_schedule_is_refused(client):
     """FR-4 / design doc S1. The rule cannot live only in a disabled button —
     anything can POST."""
-    r = client.post("/app/onboarding", json=draft(scheduleConfirmed=False))
+    r = client.post("/app/onboarding", json=draft(schedule_confirmed=False))
     assert r.json() == {"ok": False, "error": "schedule_not_signed_off"}
     # and nothing was written
     assert client.get("/app/record").json()["patient"]["name"] != "Kamala"
@@ -157,7 +250,7 @@ def test_two_priority_medicines_are_refused(client):
         {**d["medicines"][0], "name": "A", "is_priority": True},
         {**d["medicines"][0], "name": "B", "is_priority": True},
     ]
-    assert client.post("/app/onboarding", json=d).json()["error"] == "multiple_priority_medicines"
+    assert client.post("/app/onboarding", json=d).json()["error"] == "multiple_priority"
 
 
 def test_an_empty_schedule_is_refused(client):
@@ -209,7 +302,7 @@ def test_intro_call_is_recorded_as_pending_and_reaches_the_calendar(client):
 
 
 def test_calling_now_marks_the_intro_call_done(client):
-    client.post("/app/onboarding", json=draft(introCall="now", introCallAt=None))
+    client.post("/app/onboarding", json=draft(intro_call="now", intro_call_at=None))
     assert client.get("/app/record").json()["patient"]["intro_call_status"] == "done"
 
 
@@ -577,3 +670,121 @@ def test_restarting_does_not_overwrite_a_signed_off_schedule(client):
     client.post("/app/onboarding", json=draft())
     db.init()  # as a restart would
     assert client.get("/app/record").json()["patient"]["name"] == "Kamala"
+
+
+# ------------------------------------------------- session scoping (regressions)
+
+APP_READS = ["/app/record", "/app/doses", "/app/observations", "/app/escalations",
+             "/app/calls", "/app/summary", "/app/intake/anything"]
+
+
+@pytest.mark.parametrize("path", APP_READS)
+def test_every_app_read_refuses_a_browser_with_no_session(anon_client, path):
+    """These endpoints had no auth at all. A 401 and not the `{ok:false}` envelope:
+    the route guard has to tell "signed out" from "this endpoint broke", and only
+    the status code carries that (api/auth/deps.py)."""
+    assert anon_client.get(path).status_code == 401
+
+
+@pytest.mark.parametrize("path,body", [
+    ("/app/doses", {"medication_id": "x", "slot_time": "2026-01-01T08:00:00+05:30"}),
+    ("/app/doses/move", {"medication_id": "x", "from_slot_time": "a", "to_slot_time": "b"}),
+    ("/app/medications", {"medications": [], "diff": [], "consent_text": "x", "consent_ack": True}),
+    ("/app/onboarding", {}),
+])
+def test_every_app_write_refuses_a_browser_with_no_session(anon_client, path, body):
+    assert anon_client.post(path, json=body).status_code == 401
+
+
+def test_a_caregiver_does_not_see_another_households_record(other_client):
+    """The bug this replaced: `current_patient()` was
+    `SELECT * FROM patients ORDER BY created_at DESC LIMIT 1` with no session, so
+    every signed-in caregiver read whichever household onboarded most recently.
+    The seeded patient exists and belongs to someone else; this caregiver has none.
+    """
+    assert other_client.get("/app/record").json() == {"ok": False, "error": "not_found"}
+    for path in ("/app/doses", "/app/observations", "/app/escalations", "/app/calls"):
+        assert other_client.get(path).json() == []
+    assert other_client.get("/app/summary").json()["items"] == []
+
+
+def test_onboarding_lands_on_the_caregiver_who_posted_it(client, other_client):
+    assert client.post("/app/onboarding", json=draft()).json()["ok"] is True
+
+    assert client.get("/app/record").json()["patient"]["name"] == "Kamala"
+    # ...and is invisible to everyone else, which is the whole point of the scoping.
+    assert other_client.get("/app/record").json() == {"ok": False, "error": "not_found"}
+
+    con = db.connect()
+    try:
+        row = con.execute(
+            "SELECT caregiver_id FROM patients WHERE name = 'Kamala'"
+        ).fetchone()
+    finally:
+        con.close()
+    assert row["caregiver_id"] == _caregiver_id(SEEDED_CAREGIVER_PHONE)
+
+
+def test_a_patient_phone_belonging_to_another_caregiver_is_refused(client, other_client):
+    """Two caregivers cannot both claim the same parent. Without the ON CONFLICT
+    guard the second POST would reassign the first caregiver's patient."""
+    assert client.post("/app/onboarding", json=draft()).json()["ok"] is True
+    assert other_client.post("/app/onboarding", json=draft()).json() == {
+        "ok": False, "error": "patient_phone_taken"
+    }
+
+
+def test_an_intake_record_from_another_household_is_not_readable(client, other_client):
+    """The id is in the URL, which is not the same as being authorised to read it."""
+    con = db.connect()
+    try:
+        rid = con.execute("SELECT id FROM intake_records LIMIT 1").fetchone()["id"]
+    finally:
+        con.close()
+    assert client.get(f"/app/intake/{rid}").json()["id"] == rid
+    assert other_client.get(f"/app/intake/{rid}").json() == {"ok": False, "error": "not_found"}
+
+
+def test_the_record_does_not_ship_the_caregivers_password(client):
+    """`SELECT *` put password_hash, password_salt, failed_logins and locked_until
+    in a body the browser can read. None of them are in the app's `Caregiver` type,
+    so nothing would have noticed."""
+    caregiver = client.get("/app/record").json()["caregiver"]
+    assert set(caregiver) == {"id", "name", "phone_e164", "email", "relationship", "created_at"}
+
+
+def test_only_one_onboarding_endpoint_is_registered():
+    """Two routers both claimed POST /app/onboarding. Starlette matches the first
+    registration, so the unauthenticated one won and the authenticated one was
+    unreachable — and because their field names differed, every onboarding the app
+    posted answered 422 and no patient was ever written."""
+    matches = [
+        r for r in api_main.app.routes
+        if getattr(r, "path", None) == "/app/onboarding" and "POST" in getattr(r, "methods", ())
+    ]
+    assert len(matches) == 1, [r.endpoint.__module__ for r in matches]
+    assert matches[0].endpoint.__module__ == "api.caregiver.routes"
+
+
+def test_onboarding_stores_a_usable_medication_id(client):
+    """SQLite lets a TEXT PRIMARY KEY hold NULL and treats NULLs as distinct, so an
+    INSERT that omitted `id` wrote a whole schedule of rows with none — which the
+    app keys its list on and dose_events point at."""
+    client.post("/app/onboarding", json=draft())
+    meds = client.get("/app/record").json()["medications"]
+    assert meds and all(m["id"] for m in meds)
+    assert len({m["id"] for m in meds}) == len(meds)
+
+
+def test_seeding_is_off_unless_it_is_asked_for(tmp_path, monkeypatch):
+    """The seed is a fabricated family. Harmless while the app read a client-side
+    mock; a fake patient in a real health record once it reads the API."""
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "unseeded.db")
+    monkeypatch.delenv("KINVOX_SEED", raising=False)
+    db.init(reset=True)
+    con = db.connect()
+    try:
+        assert con.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0
+        assert con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0] == 0
+    finally:
+        con.close()

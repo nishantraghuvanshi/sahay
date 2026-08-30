@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { DEV_MODE } from './config'
 import AppShell from './shell/AppShell'
 import RequireAuth from './auth/RequireAuth'
+import RequireHousehold from './auth/RequireHousehold'
 import { useSession } from './auth/SessionProvider'
 import Landing from './screens/landing/Landing'
 import KitchenSink from './screens/KitchenSink'
@@ -64,20 +65,24 @@ export default function App() {
 
       {/* the four tabs + everything reachable from them */}
       <Route element={<RequireAuth />}>
-        <Route element={<AppShell />}>
-          <Route path="/home" element={<Home />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/medicines/edit" element={<MedicinesEdit />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/alerts/:id" element={<AlertDetail />} />
-          <Route path="/calls" element={<Calls />} />
-          <Route path="/calls/:id" element={<CallDetail />} />
-          <Route path="/record" element={<CareRecord />} />
-          <Route path="/doses" element={<DoseHistory />} />
-          <Route path="/observations" element={<Observations />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* dev-only review surface — tree-shaken out of the production bundle */}
-          {import.meta.env.DEV && <Route path="/kitchen-sink" element={<KitchenSink />} />}
+        {/* Signed in but not yet onboarded belongs in /setup, not on a home screen
+            that has nothing to show. */}
+        <Route element={<RequireHousehold />}>
+          <Route element={<AppShell />}>
+            <Route path="/home" element={<Home />} />
+            <Route path="/calendar" element={<Calendar />} />
+            <Route path="/medicines/edit" element={<MedicinesEdit />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/alerts/:id" element={<AlertDetail />} />
+            <Route path="/calls" element={<Calls />} />
+            <Route path="/calls/:id" element={<CallDetail />} />
+            <Route path="/record" element={<CareRecord />} />
+            <Route path="/doses" element={<DoseHistory />} />
+            <Route path="/observations" element={<Observations />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* dev-only review surface — tree-shaken out of the production bundle */}
+            {import.meta.env.DEV && <Route path="/kitchen-sink" element={<KitchenSink />} />}
+          </Route>
         </Route>
       </Route>
 

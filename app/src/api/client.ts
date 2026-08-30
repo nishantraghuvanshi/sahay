@@ -127,6 +127,8 @@ function humanise(code: string): string {
       return 'Please enter your name.'
 
     // ---- onboarding (api/caregiver/routes.py)
+    case 'schedule_not_signed_off':
+      return 'Confirm the schedule before finishing.'
     case 'consent_missing':
       return 'All three consents are needed before we can call.'
     case 'no_medicines':

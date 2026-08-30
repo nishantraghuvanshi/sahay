@@ -409,3 +409,69 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   user_agent   TEXT,
   created_at   TEXT NOT NULL
 );
+
+-- ============ money ============
+--
+-- No payment gateway. Razorpay and Cashfree both need merchant KYC that takes
+-- 1-2 working days at best, so on the build clock the only route to a real rupee
+-- is a UPI transfer to our own VPA. That gives real money and no callback: the
+-- bank tells us nothing, so `payments` has to be reconcilable by eye.
+--
+-- Which is what `amount_paise` is for. Every open order gets a unique paise
+-- suffix (Care is 499.01, 499.02, ...), so an incoming credit maps to exactly
+-- one order with no guessing. The buyer's UTR is collected as corroboration and
+-- as the idempotency key, not as the primary match — a mistyped UTR must not be
+-- able to confirm somebody else's order, and the unique index below is what
+-- stops one UTR being spent twice.
+
+CREATE TABLE IF NOT EXISTS payments (
+  id            TEXT PRIMARY KEY,   -- KVX-XXXX, short enough to read down a phone
+  caregiver_id  TEXT NOT NULL REFERENCES caregivers(id),
+  plan          TEXT NOT NULL,      -- care | care_plus
+  amount_paise  INTEGER NOT NULL,   -- plan price + the reconciliation suffix
+  currency      TEXT NOT NULL DEFAULT 'INR',
+  provider      TEXT NOT NULL DEFAULT 'upi',
+  payee_vpa     TEXT,               -- the VPA at the time; ours may change
+  -- created  — link issued, nothing paid
+  -- claimed  — buyer says they paid and gave a UTR, nobody has looked yet
+  -- confirmed— a human matched the credit in the UPI app
+  -- expired  — the window closed with no claim, and the paise suffix is free again
+  status        TEXT NOT NULL,
+  utr           TEXT,               -- 12-digit UPI reference, typed by the buyer
+  claimed_at    TEXT,
+  confirmed_at  TEXT,
+  confirmed_by  TEXT,               -- who eyeballed the credit; evidence, not audit
+  expires_at    TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+
+-- One UTR, one order, ever. Without this the same real payment could be claimed
+-- against a second order and buy a month nobody paid for.
+CREATE UNIQUE INDEX IF NOT EXISTS payments_utr_unique
+  ON payments(utr) WHERE utr IS NOT NULL;
+
+-- The reconciliation guarantee: no two orders may be *awaiting* the same amount.
+-- Partial, so a settled order stops reserving its suffix.
+CREATE UNIQUE INDEX IF NOT EXISTS payments_open_amount_unique
+  ON payments(amount_paise) WHERE status = 'created';
+
+CREATE INDEX IF NOT EXISTS payments_caregiver ON payments(caregiver_id, created_at);
+
+-- One row per caregiver, updated in place. A renewal extends current_period_end
+-- rather than inserting, so "what am I on" is a single row and never a fold over
+-- a payment history that could disagree with itself.
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id                   TEXT PRIMARY KEY,
+  caregiver_id         TEXT NOT NULL REFERENCES caregivers(id),
+  plan                 TEXT NOT NULL,
+  status               TEXT NOT NULL,   -- active | expired | cancelled
+  amount_paise         INTEGER NOT NULL,
+  payment_id           TEXT REFERENCES payments(id),
+  current_period_start TEXT NOT NULL,
+  current_period_end   TEXT NOT NULL,
+  created_at           TEXT NOT NULL,
+  updated_at           TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_caregiver_unique
+  ON subscriptions(caregiver_id);
