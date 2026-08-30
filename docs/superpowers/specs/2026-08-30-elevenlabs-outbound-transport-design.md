@@ -211,3 +211,33 @@ product's agent for inbound. Reassigning it to ours would break inbound rather t
 improve it: our prompt is an outbound dose-reminder opener, and with no dynamic variables
 on an inbound call the placeholders arrive empty or are spoken literally. Inbound needs
 the conversation-initiation webhook first.
+
+## The English prompt has drifted, and is not shippable
+
+`config/use-cases/medication-adherence-en.yaml` is at version 6 while the Hindi
+config is at version 12. Every prompt fix made on 30 August — the output
+contract that stops the model narrating its reasoning aloud, atomic escalation,
+the reminder that makes it a reminder call, asking why a dose was refused, the
+"when in doubt record DENIED" tiebreak, the mandatory spoken closing, and the
+rule against reading CONFIRMED out of "maybe" — landed only in the Hindi file.
+
+It is unreachable rather than merely stale: `server.js` builds the strategy with
+no language argument and the constructor defaults to `hi`, and the adapter sends
+`language: 'hi'` unconditionally. Nothing in `src/` selects `en`. So English is
+dead config today, which is the only reason the drift has cost nothing yet.
+
+Worth recording how it stayed invisible. `tests/prompt-safety-guardrails.test.js`
+is named "ported guardrails exist in both languages" and was green throughout.
+It regex-matches guardrail *labels* in both files. A label is not a behaviour,
+and six versions of divergence sat underneath a passing test — the same shape as
+the four API contracts this document already records, where a test pinned a name
+rather than a contract.
+
+Porting is three jobs. Translating v7-v12 is not mechanical, because several
+rules lean on Hindi exemplars that carry the meaning: "अब क्या फायदा" is what
+distinguishes hopelessness from an ordinary refusal, and the forbidden timing
+instructions are listed as the phrases themselves. Language then has to be
+threaded through `server.js` to the strategy and into `buildAssistantConfig`.
+Finally the 21 scenarios in `scripts/lib/el-scenarios.js` are Hindi throughout —
+simulated callers and `mustSay` patterns alike — so an English battery has to be
+written before any English claim can be verified.
