@@ -1,0 +1,104 @@
+'use strict';
+
+const { test, describe } = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const { generate } = require('../scripts/generate-assistant-config');
+
+/**
+ * config/assistant.json is what create-assistant.js / update-assistant.js PATCH
+ * to the LIVE Vapi assistant — it is the prompt that actually answers the phone.
+ *
+ * It shipped once as a byte-for-byte copy of a DISABLE_GUARDRAILS=true build:
+ * the entire SR-1..SR-4 block absent, while the CALL FLOW section still told
+ * the model to "follow the matching sequence in your guardrails" — a dangling
+ * reference to text that was not in the file. A debug flag left set in one
+ * local .env had walked into a committed deployable, and nothing caught it,
+ * because the file was still valid JSON with a full prompt and a full tool list.
+ *
+ * tools.json already had a staleness test (tests/generate-tools.test.js). This
+ * is the same guard applied to the higher-stakes artifact — the pattern existed,
+ * it just had not been pointed at the file where a miss reaches a patient.
+ *
+ * The guardrail assertions below are deliberately not a substitute for the
+ * staleness check: staleness catches drift, and the explicit assertions state
+ * WHICH clauses may never silently disappear, so a regression names itself.
+ */
+
+const ASSISTANT_JSON = path.join(__dirname, '..', 'config', 'assistant.json');
+
+function systemPromptOf(config) {
+  const message = config.model.messages.find((m) => m.role === 'system');
+  assert.ok(message, 'assistant config should carry a system message');
+  return message.content;
+}
+
+describe('committed config/assistant.json is not stale', () => {
+  test('assistant.json exists', () => {
+    assert.ok(fs.existsSync(ASSISTANT_JSON), 'config/assistant.json should exist');
+  });
+
+  test('matches what the generator would write', () => {
+    const onDisk = JSON.parse(fs.readFileSync(ASSISTANT_JSON, 'utf8'));
+    const { assistantConfig } = generate();
+    assert.deepStrictEqual(
+      onDisk,
+      assistantConfig,
+      'config/assistant.json is stale — run `node scripts/generate-assistant-config.js`'
+    );
+  });
+});
+
+describe('the deployed prompt carries its safety guardrails', () => {
+  // Each entry is a clause whose absence would change what the agent may say to
+  // an elderly caller in an emergency. Matched case-insensitively against the
+  // committed file, not against a fresh generation, so this fails if the
+  // artifact on disk is unsafe even when the source is fine.
+  const REQUIRED_CLAUSES = [
+    'GUARDRAILS',
+    'NON-NEGOTIABLE',
+    'MEDICAL EMERGENCY',
+    'EMOTIONAL DISTRESS',
+    'ambulance',
+    'diagnose',
+    'dosage',
+  ];
+
+  const prompt = () => systemPromptOf(JSON.parse(fs.readFileSync(ASSISTANT_JSON, 'utf8')));
+
+  for (const clause of REQUIRED_CLAUSES) {
+    test(`retains the "${clause}" guardrail text`, () => {
+      assert.ok(
+        prompt().toLowerCase().includes(clause.toLowerCase()),
+        `config/assistant.json is missing "${clause}". It was probably generated with ` +
+          'DISABLE_GUARDRAILS set. Regenerate with the flag unset before committing.'
+      );
+    });
+  }
+
+  test('is not the guardrails-stripped build', () => {
+    // The stripped build measured 3997 characters against 6485 with guardrails
+    // on. An exact length assertion would break on every prompt edit, so this
+    // asserts the floor the block cannot be removed without crossing.
+    assert.ok(
+      prompt().length > 5000,
+      `system prompt is ${prompt().length} chars — short enough to suggest the ` +
+        'guardrail block was stripped. Regenerate with DISABLE_GUARDRAILS unset.'
+    );
+  });
+
+  test('does not reference guardrails it lacks', () => {
+    // The specific failure that shipped: CALL FLOW pointed at "your guardrails"
+    // while the block itself was absent, so the model had a dangling reference
+    // and improvised its emergency behaviour.
+    const text = prompt();
+    if (/your guardrails/i.test(text)) {
+      assert.ok(
+        /GUARDRAILS/i.test(text),
+        'prompt refers to "your guardrails" but contains no guardrail block'
+      );
+    }
+  });
+});
