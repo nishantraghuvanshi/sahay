@@ -322,6 +322,21 @@ export function AuthSteps({
             if (isOtp(code)) void verifyPhone(code)
           }}
         />
+        {/*
+          No SMS is actually sent. WhatsApp needs an approved template and SMS to
+          Indian numbers needs DLT registration, so the API runs with
+          DEV_OTP_BYPASS_NUMBERS=* and every number takes one fixed code. Without
+          saying so, a tester waits on this screen for a message that never
+          arrives.
+
+          Deliberately unconditional — not gated on the step being active, and not
+          behind a build flag. Someone reading the card before requesting a code
+          is exactly who needs to know no SMS is coming. Remove this line and the
+          API's bypass together.
+        */}
+        <p className="mt-2 text-2xs text-muted-strong">
+          Testing build — no SMS is sent. Enter <strong>424242</strong> for any number.
+        </p>
         {phoneOtpStep === 'active' && (
           <Resend
             seconds={phoneCooldown}
