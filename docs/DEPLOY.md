@@ -63,8 +63,24 @@ turso db tokens create voxikin       # -> TURSO_AUTH_TOKEN
 Both services need **both** variables. Free plan is 5 GB, 500M row reads and 10M
 row writes a month — far beyond this workload.
 
-**Status: done.** `voxikin-soumya0343.aws-ap-south-1.turso.io` is created and the
-schema is loaded — 18 tables, 35 indexes, no seed rows. Verified against it:
+**Status: done.** `voxikin-us-soumya-gupta-24.aws-us-east-2.turso.io` (Ohio) is
+created and the schema is loaded — 18 tables, 35 indexes, no seed rows.
+
+**Region is chosen to match the compute, not the callers.** Northflank's free
+Sandbox only offers **US Central**, and a database's primary region cannot be
+changed after creation — only replicated. A Mumbai primary would put an ocean in
+the middle of every query, several times per request, *during a live phone call*.
+Measured from a laptop in India: 118 ms/read to `ap-south-1` versus 571 ms to
+`us-east-2` — which is exactly the penalty the services will *not* pay, because
+they sit beside the Ohio database rather than beside the caller. This follows the
+rule already in `agent/docs/SETUP.md`: *"Deploy near Vapi, not near your
+callers. The hop you control is Vapi→you."*
+
+The cost is ~200-250 ms on each caregiver-facing API call from India. Acceptable
+for CRUD screens; it is not on the voice path.
+
+An earlier `ap-south-1` database was created and can be deleted — it holds
+nothing. Verified against the live Ohio database:
 
 | Check | Result |
 |---|---|
@@ -73,8 +89,8 @@ schema is loaded — 18 tables, 35 indexes, no seed rows. Verified against it:
 | `db.insert()` upsert on `caregivers` | sessions survive; the caregiver stays signed in |
 | Raw `INSERT OR REPLACE` on `caregivers` | **still destroys sessions (2 → 0)** |
 | Python API writes → Node agent reads | confirmed, same rows |
-| Latency from a dev laptop | ~120 ms/read, ~210 ms write+read round trip |
-| `db.init()` over the network | 1.6 s |
+| Latency from a dev laptop in India | ~571 ms/read (Ohio). Irrelevant in production — the services are US Central |
+| `db.init()` over the network | 6.2 s from India; the reason it is gated off by default |
 
 The fourth row matters: the `_CASCADE_PARENTS` upsert in `api/db.py` is
 **load-bearing on Turso, not vestigial**. The cascade that silently signed

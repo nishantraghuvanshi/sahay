@@ -8,6 +8,17 @@
 # threw on first boot the moment VOXIKIN_MIGRATE_ON_BOOT was on.
 FROM node:22-slim
 
+# libsql is a native Rust addon and opens its own TLS connection to Turso using
+# the SYSTEM root store at /etc/ssl/certs. node:22-slim ships without one.
+#
+# This is invisible at build time: Node compiles its own CA bundle in, so
+# `npm ci` over HTTPS succeeds in an image that cannot make a TLS connection at
+# runtime. The failure is at construction — "InvalidTlsConfiguration ... no valid
+# native root CA certificates found (0 invalid)" — and the container crash-loops.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy package files and install dependencies

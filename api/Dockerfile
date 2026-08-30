@@ -12,6 +12,14 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Same reason as agent/Dockerfile: the libsql client is a native extension that
+# reads the system root store to reach Turso, and the slim images do not ship one.
+# pip succeeds regardless because it uses certifi's bundled roots, so a missing
+# store only shows up as a TLS failure on the first database call.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY api/requirements.txt ./api/requirements.txt
