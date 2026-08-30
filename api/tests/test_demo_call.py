@@ -248,3 +248,53 @@ def test_an_agent_error_does_not_burn_the_demo(monkeypatch):
         assert body["ok"] is False
         assert body["error"] == "demo_failed"
         assert c.get("/app/demo-call").json()["available"] is True
+
+
+def test_the_call_buttons_name_the_patient_the_screens_show(monkeypatch):
+    """A caregiver with two patients must not see one parent's schedule and be
+    offered a call to the other.
+
+    The lookups here were a bare `LIMIT 1` — whatever row SQLite reached first —
+    while `/app/record` has always ordered by `created_at DESC`. With two rows
+    they disagreed, and the disagreement was invisible: the button reads "Call
+    +91… now?", which is the one fact the caregiver is asked to check, and it
+    named a number from a household that was not on screen.
+    """
+    stub = _StubAgent()
+    monkeypatch.setattr(httpx, "AsyncClient", stub)
+
+    with TestClient(app) as c:
+        _signed_in(c)
+        _give_patient()
+
+        con = db.connect()
+        try:
+            cg = con.execute(
+                "SELECT id FROM caregivers WHERE phone_e164 = ?", ("+919999900001",)
+            ).fetchone()["id"]
+            # A second, newer parent for the same caregiver. Inserted after
+            # 'pt-demo', whose created_at is 2026-01-01.
+            con.execute(
+                "INSERT INTO patients (id, caregiver_id, name, phone_e164, language, "
+                "conditions, allergies, timezone, calls_paused, created_at) "
+                "VALUES ('pt-newer', ?, 'नई', '+919998800002', 'hi-IN', '[]', '[]', "
+                "'Asia/Kolkata', 0, '2026-06-01T00:00:00+00:00')",
+                (cg,),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        shown = c.get("/app/record").json()["patient"]
+        assert shown["phone_e164"] == "+919998800002", "the newer patient is what the app shows"
+
+        # Both buttons must agree with it — the status the caregiver reads...
+        assert c.get("/app/test-call").json()["will_call"] == shown["phone_e164"]
+        assert c.get("/app/demo-call").json()["ready"] is True
+
+        # ...and the number actually handed to the agent.
+        placed = c.post("/app/test-call").json()
+        assert placed["ok"] is True, placed
+        assert placed["calling"] == shown["phone_e164"]
+        assert stub.seen["json"]["phone"] == shown["phone_e164"]
+

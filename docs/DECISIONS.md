@@ -136,6 +136,8 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 | 14:55 | `allow_credentials=True` on the CORS middleware, carried over from the dropped branch | Every `/app/*` endpoint reads the session cookie, and a `credentials: 'include'` fetch is blocked unless the response carries `Access-Control-Allow-Credentials`. Masked in development because `vite.config.ts` proxies `/auth` and `/app`, but `app/.env.local` points `VITE_API_BASE` straight at `:8000`, which does not go through that proxy |
 | 14:57 | The app↔API onboarding shape is pinned by a test that reads `Consent.tsx` — now also checking `test_end_to_end.py`'s own literal | The Python tests post their own dict, so they were green throughout the original 422 and red for the wrong reason after the merge. Verified against the broken state: it names every drifted key |
 
+| 15:10 | ⚠️ **The two call buttons could name a different patient than the screens show.** All six patient lookups in `api/caregiver/routes.py` now order by `created_at DESC` before `LIMIT 1`, matching `current_patient()` | They were a bare `LIMIT 1` — whatever row SQLite reached first — while `/app/record` has always ordered. With two patients under one caregiver they disagreed, and the disagreement was invisible in the worst way: the button reads *"Call +91… now?"*, which is the single fact the caregiver is asked to check before a real telephone rings, and it could name a household that was not on screen |
+
 
 ---
 

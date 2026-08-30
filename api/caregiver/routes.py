@@ -28,6 +28,14 @@ log = logging.getLogger("voxikin.caregiver")
 
 router = APIRouter(prefix="/app", tags=["caregiver app"])
 
+# Every patient lookup below orders by `created_at DESC` before `LIMIT 1`, which
+# is the same selection `current_patient()` in api/routes_app.py makes for the
+# screens. They used to be a bare `LIMIT 1` — whatever row SQLite reached first —
+# so a caregiver with more than one patient could see one parent's schedule on the
+# Calendar and be offered a call to a different one. "We will call this number" is
+# the single fact the caregiver is asked to check before pressing the button, and
+# it must name the household they are looking at.
+
 
 class DraftMedicine(BaseModel):
     name: str
@@ -308,7 +316,7 @@ async def demo_call_status(caregiver: CaregiverDep):
             "SELECT demo_call_used_at FROM caregivers WHERE id = $1", caregiver.id
         )
         patient = await conn.fetchrow(
-            "SELECT name, phone_e164 FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            "SELECT name, phone_e164 FROM patients WHERE caregiver_id = $1 ORDER BY created_at DESC LIMIT 1",
             caregiver.id,
         )
     return {
@@ -347,7 +355,7 @@ async def demo_call(body: DemoCallBody, caregiver: CaregiverDep, settings: Setti
             return {"ok": False, "error": "demo_already_used", "used_at": used_at}
 
         patient = await conn.fetchrow(
-            "SELECT name, phone_e164, drug_name FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            "SELECT name, phone_e164, drug_name FROM patients WHERE caregiver_id = $1 ORDER BY created_at DESC LIMIT 1",
             caregiver.id,
         )
         if patient is None:
@@ -355,7 +363,7 @@ async def demo_call(body: DemoCallBody, caregiver: CaregiverDep, settings: Setti
 
         med = await conn.fetchval(
             "SELECT name FROM medications WHERE patient_id = "
-            "(SELECT id FROM patients WHERE caregiver_id = $1 LIMIT 1) "
+            "(SELECT id FROM patients WHERE caregiver_id = $1 ORDER BY created_at DESC LIMIT 1) "
             "AND excluded = 0 AND stopped_at IS NULL LIMIT 1",
             caregiver.id,
         )
@@ -423,7 +431,7 @@ async def test_call_status(caregiver: CaregiverDep):
             "SELECT test_call_used_at FROM caregivers WHERE id = $1", caregiver.id
         )
         patient = await conn.fetchrow(
-            "SELECT name, phone_e164 FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            "SELECT name, phone_e164 FROM patients WHERE caregiver_id = $1 ORDER BY created_at DESC LIMIT 1",
             caregiver.id,
         )
     return {
@@ -461,7 +469,7 @@ async def test_call(caregiver: CaregiverDep, settings: SettingsDep):
             return {"ok": False, "error": "test_call_already_used", "used_at": used_at}
 
         patient = await conn.fetchrow(
-            "SELECT name, phone_e164, drug_name FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            "SELECT name, phone_e164, drug_name FROM patients WHERE caregiver_id = $1 ORDER BY created_at DESC LIMIT 1",
             caregiver.id,
         )
         if patient is None:
@@ -471,7 +479,7 @@ async def test_call(caregiver: CaregiverDep, settings: SettingsDep):
 
         med = await conn.fetchval(
             "SELECT name FROM medications WHERE patient_id = "
-            "(SELECT id FROM patients WHERE caregiver_id = $1 LIMIT 1) "
+            "(SELECT id FROM patients WHERE caregiver_id = $1 ORDER BY created_at DESC LIMIT 1) "
             "AND excluded = 0 AND stopped_at IS NULL LIMIT 1",
             caregiver.id,
         )
