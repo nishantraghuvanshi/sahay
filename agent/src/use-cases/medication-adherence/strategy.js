@@ -1,5 +1,6 @@
 'use strict';
 
+const logger = require('../../utils/logger');
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
@@ -78,10 +79,27 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
    * @returns {string}
    */
   buildSystemPrompt(variables, mode = 'outbound') {
+    // DISABLE_GUARDRAILS is a debugging escape hatch, deliberately built as a
+    // flag rather than by deleting the guardrail text: nothing is lost, and it
+    // announces itself every single time it is used.
+    //
+    // With it set, the agent will not run the medical-emergency sequence, will
+    // not escalate a reported symptom, and may give medical advice. It must
+    // never be set for a call to a real number or for any recorded run.
+    const guardrailsDisabled = process.env.DISABLE_GUARDRAILS === 'true';
+    if (guardrailsDisabled) {
+      logger.log('GUARDRAILS_DISABLED', {
+        mode,
+        warning:
+          'Safety guardrails are NOT in this prompt. No symptom escalation, no ' +
+          'emergency sequence. Debug use only — never a real caller.',
+      });
+    }
+
     const composed = [
       this.getModeBlock(mode).system_prompt,
       this.config.shared_rules,
-      this.config.guardrails,
+      guardrailsDisabled ? null : this.config.guardrails,
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -164,7 +182,7 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
     return {
       version: this.config.version,
       silenceTimeoutSeconds: 15,
-      maxDurationSeconds: 90,
+      maxDurationSeconds: 180,
       maxIdleSeconds: 30,
       backgroundSound: 'office',
       denoiseEnabled: true,

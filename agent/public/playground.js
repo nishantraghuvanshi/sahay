@@ -766,6 +766,14 @@
    * Start a conversation: connect, request mic, and notify the server.
    */
   async function startConversation() {
+    // Disable FIRST, before any await. Connecting the socket and getting mic
+    // permission are both async and the permission prompt can sit for seconds;
+    // the button used to stay live for that whole window, so a second click
+    // sent a second {type:'start'} down the SAME open socket and the agent
+    // greeted twice, in two voices, from two conversations.
+    if (isRunning || startBtn.disabled) return;
+    startBtn.disabled = true;
+
     clearError();
     // Clear any previous outcome banner and mode badge.
     outcomeBox.className = '';
@@ -778,6 +786,7 @@
 
     if (!phone) {
       showError('Pick a patient before starting.');
+      startBtn.disabled = false;
       return;
     }
 
@@ -793,9 +802,8 @@
       // 3. Tell the server to start the conversation.
       sendJSON({ type: 'start', language, phone, direction });
 
-      // 4. Update UI state.
+      // 4. Update UI state. (The button was already disabled on entry.)
       isRunning = true;
-      startBtn.disabled = true;
       stopBtn.disabled = false;
     } catch (err) {
       console.error('Failed to start conversation:', err);

@@ -22,6 +22,7 @@ require('dotenv').config();
 
 const SqliteRepository = require('../src/adapters/persistence/sqlite');
 const ConsoleRepository = require('../src/adapters/persistence/console');
+const { localSlotToUtc } = require('../src/utils/time');
 
 /**
  * Edit this by hand for each pilot patient. `times` are "HH:MM" 24h local
@@ -31,8 +32,60 @@ const ConsoleRepository = require('../src/adapters/persistence/console');
  */
 const SEED_PATIENTS = [
   {
+    phone: '+918104348262',
+    name: 'Anmol',
+    drugName: 'Metformin',
+    language: 'hi',
+    caregiverName: 'Shubh',
+    caregiverPhone: '+919876500000',
+    timezone: 'Asia/Kolkata',
+    notes: 'Verified Twilio caller ID — live outbound test.',
+    medications: [
+      {
+        name: 'Metformin',
+        dose: '500mg',
+        times: ['08:00', '20:00'],
+        foodRule: 'after',
+        startDate: '2026-01-01',
+        endDate: null,
+        active: true,
+      },
+    ],
+  },
+  {
+    phone: '+919748670058',
+    name: 'Anmol',
+    drugName: 'Metformin',
+    language: 'hi',
+    caregiverName: 'Shubh',
+    caregiverPhone: '+919876500000',
+    timezone: 'Asia/Kolkata',
+    notes: 'Live inbound test — own phone, consented.',
+    medications: [
+      {
+        name: 'Metformin',
+        dose: '500mg',
+        times: ['08:00', '20:00'],
+        foodRule: 'after',
+        startDate: '2026-01-01',
+        endDate: null,
+        active: true,
+      },
+    ],
+  },
+  {
     phone: '+919876543210',
-    name: 'Sharma-ji',
+    // The prompt appends 'जी'; do not bake the honorific into the name.
+    name: 'Sharma',
+    // Every variable the prompt interpolates. Left null, drug_name renders as
+    // an empty string and caregiver_name falls back to the generic
+    // "आपके परिवार" — which is why a seeded call sounded oddly impersonal.
+    drugName: 'Metformin',
+    language: 'hi',
+    caregiverName: 'Shubh',
+    caregiverPhone: '+919876500000',
+    timezone: 'Asia/Kolkata',
+    notes: 'Pilot test patient. Team phone only.',
     medications: [
       {
         name: 'Metformin',
@@ -70,10 +123,21 @@ function toDateOnly(date) {
 
 /**
  * Every "HH:MM" slot, for every day from today through `days` ahead,
- * clipped to the medication's [startDate, endDate].
- * @returns {string[]} ISO-8601 slot_time values
+ * clipped to the medication's [startDate, endDate]. Each slot is computed
+ * through localSlotToUtc with the patient's own timezone — med.times are
+ * local wall-clock strings, not UTC.
+ *
+ * Each entry also carries legacySlotTime: the value the pre-fix formula
+ * (`new Date(\`${dateOnly}T${time}:00.000Z\`)`, which stamped the local
+ * time directly as UTC) would have produced for the same slot. main() uses
+ * it to find and remove the stale row a database seeded before this fix
+ * left behind, since the corrected slotTime is a different string and so
+ * lands as a new row under the (medication_id, slot_time) unique index
+ * rather than overwriting the old one.
+ *
+ * @returns {{slotTime: string, legacySlotTime: string}[]}
  */
-function generateSlots(med, days, now) {
+function generateSlots(med, days, now, timeZone) {
   const slots = [];
   const start = med.startDate ? new Date(`${med.startDate}T00:00:00.000Z`) : null;
   const end = med.endDate ? new Date(`${med.endDate}T23:59:59.999Z`) : null;
@@ -86,7 +150,10 @@ function generateSlots(med, days, now) {
     if (end && day > end) continue;
 
     for (const time of med.times) {
-      slots.push(new Date(`${dateOnly}T${time}:00.000Z`).toISOString());
+      slots.push({
+        slotTime: localSlotToUtc(dateOnly, time, timeZone),
+        legacySlotTime: `${dateOnly}T${time}:00.000Z`,
+      });
     }
   }
   return slots;
@@ -110,9 +177,18 @@ async function main() {
 
   let medicationCount = 0;
   let doseEventCount = 0;
+  let staleRowsRemoved = 0;
 
   for (const patientSeed of SEED_PATIENTS) {
-    await repo.upsertPatient({ phone: patientSeed.phone, name: patientSeed.name });
+          await repo.upsertPatient({
+        phone: patientSeed.phone,
+        name: patientSeed.name,
+        drugName: patientSeed.drugName,
+        language: patientSeed.language,
+        caregiverName: patientSeed.caregiverName,
+        caregiverPhone: patientSeed.caregiverPhone,
+        notes: patientSeed.notes,
+      });
     const patient = await repo.findPatientByPhone(patientSeed.phone);
 
     for (const medSeed of patientSeed.medications) {
@@ -121,8 +197,18 @@ async function main() {
 
       if (!med.active) continue; // don't schedule doses for a discontinued medication
 
-      const slots = generateSlots(medSeed, days, now);
-      for (const slotTime of slots) {
+      const slots = generateSlots(medSeed, days, now, patient.timezone);
+      for (const { slotTime, legacySlotTime } of slots) {
+        // A database seeded before this fix has a pending row at
+        // legacySlotTime for this same local slot — remove it so the
+        // corrected row is the only one, not a second generation sitting
+        // alongside it. No-op (returns false) on a database that never
+        // had the bug, or on a re-run of this same corrected seed.
+        if (legacySlotTime !== slotTime) {
+          const removed = await repo.deleteStalePendingDoseEvent(med.id, legacySlotTime);
+          if (removed) staleRowsRemoved++;
+        }
+
         await repo.upsertDoseEvent({
           medicationId: med.id,
           patientId: patient.id,
@@ -137,6 +223,7 @@ async function main() {
     JSON.stringify({
       event: 'seed_complete',
       patients: SEED_PATIENTS.length,
+      staleRowsRemoved,
       medications: medicationCount,
       doseEvents: doseEventCount,
       lookaheadDays: days,
@@ -146,7 +233,11 @@ async function main() {
   await repo.close();
 }
 
-main().catch((err) => {
-  console.error(JSON.stringify({ event: 'seed_failed', error: err.message }));
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(JSON.stringify({ event: 'seed_failed', error: err.message }));
+    process.exit(1);
+  });
+}
+
+module.exports = { generateSlots, buildRepository, toDateOnly, main };

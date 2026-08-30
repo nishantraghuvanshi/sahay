@@ -162,6 +162,10 @@ describe('webhook tool-call handling for capture_field', () => {
     const res = await postCapture('no-such-call', 'onset', 'today');
     assert.strictEqual(res.status, 200);
     const body = await res.json();
-    assert.strictEqual(body.status, 'ok');
+    // The documented tool-call response envelope (results: [{toolCallId,
+    // result}]), not the old generic {status:'ok'} the handler fell back
+    // to before it dispatched 'tool-call'/'tool-calls' at all.
+    assert.ok(Array.isArray(body.results));
+    assert.strictEqual(body.results[0].result, 'ok');
   });
 });

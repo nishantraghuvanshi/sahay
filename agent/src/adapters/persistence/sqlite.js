@@ -23,6 +23,23 @@ const DOSE_EVENT_STATUSES = [
 ];
 
 /**
+ * Applied at the read site, never backfilled, when patients.timezone is
+ * NULL — see the schema comment on that column. spec:
+ * .superpowers/sdd/scheduler/task-1-brief.md
+ */
+const DEFAULT_PATIENT_TIMEZONE = 'Asia/Kolkata';
+
+/**
+ * Immutable default-fill: a stored NULL timezone reads as
+ * DEFAULT_PATIENT_TIMEZONE without touching the row on disk.
+ * @param {Object} patientRow
+ * @returns {Object} a new object, never a mutation of patientRow
+ */
+function _withDefaultTimezone(patientRow) {
+  return { ...patientRow, timezone: patientRow.timezone || DEFAULT_PATIENT_TIMEZONE };
+}
+
+/**
  * SQLite Repository
  *
  * Phase 1 persistence adapter — stores call outcomes and conversation
@@ -123,6 +140,21 @@ class SqliteRepository extends OutcomeRepositoryPort {
         caregiver_name TEXT,
         caregiver_phone TEXT,
         notes TEXT,
+        -- IANA zone name, e.g. "Asia/Kolkata". NULL defaults to
+        -- DEFAULT_PATIENT_TIMEZONE at the read site (findPatientByPhone /
+        -- listPatients) rather than being backfilled here.
+        timezone TEXT,
+        -- ISO-8601 UTC, set by setPatientSchedule(). NULL means no call is
+        -- ever placed for this patient's schedule — a refusal for the
+        -- scheduler to act on, not a warning. Left unset here (not
+        -- backfilled) so a patient seeded before sign-off existed stays
+        -- correctly un-signed-off rather than silently granted consent.
+        schedule_signed_off_at TEXT,
+        -- JSON array of {"start":"HH:MM","end":"HH:MM"}, patient-local, e.g.
+        -- caregiver-declared do-not-call hours. Stored and read as a raw
+        -- JSON string — never parsed at this layer — matching how
+        -- medications.times is handled; the caller parses it.
+        quiet_windows TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT
       );
@@ -178,6 +210,9 @@ class SqliteRepository extends OutcomeRepositoryPort {
         start_date TEXT NOT NULL,
         end_date TEXT,
         active INTEGER NOT NULL DEFAULT 1,
+        -- 0/1. A priority medication overrides a caregiver's do-not-call
+        -- quiet window — see the scheduling policy that reads this.
+        is_priority INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
@@ -235,6 +270,16 @@ class SqliteRepository extends OutcomeRepositoryPort {
         actor TEXT,
         confirmed_at TEXT,
         call_id TEXT,
+        -- Retry bookkeeping, written by recordDoseAttempt(). The initial
+        -- dial at slot_time plus retries counts up from here; the policy
+        -- that decides when attempt_count hits its ceiling lives outside
+        -- this repository.
+        attempt_count INTEGER DEFAULT 0,
+        -- ISO-8601 UTC; when the next attempt becomes eligible. dueDoseEvents
+        -- excludes a row whose next_attempt_at is still in the future, so a
+        -- dose already dialled once is not picked up again before its retry
+        -- offset has elapsed.
+        next_attempt_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE,
@@ -262,6 +307,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // database already has the column from the CREATE TABLE above, so this
     // is a no-op there.
     this._ensureColumn('calls', 'recording_url', 'TEXT');
+    this._ensureColumn('patients', 'timezone', 'TEXT');
+    this._ensureColumn('patients', 'schedule_signed_off_at', 'TEXT');
+    this._ensureColumn('patients', 'quiet_windows', 'TEXT');
+    this._ensureColumn('medications', 'is_priority', 'INTEGER DEFAULT 0');
+    this._ensureColumn('dose_events', 'attempt_count', 'INTEGER DEFAULT 0');
+    this._ensureColumn('dose_events', 'next_attempt_at', 'TEXT');
   }
 
   /**
@@ -329,12 +380,86 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async findPatientByPhone(phone) {
     const stmt = this.db.prepare('SELECT * FROM patients WHERE phone_e164 = ?');
-    return stmt.get(phone) || null;
+    const row = stmt.get(phone);
+    return row ? _withDefaultTimezone(row) : null;
   }
 
   /** @returns {Array} All patients. */
   async listPatients() {
-    return this.db.prepare('SELECT * FROM patients ORDER BY id ASC').all();
+    const rows = this.db.prepare('SELECT * FROM patients ORDER BY id ASC').all();
+    return rows.map(_withDefaultTimezone);
+  }
+
+  /**
+   * Set the scheduling gate on a patient: sign-off, quiet windows, and
+   * timezone. CRUD only — no policy. Whether an unsigned-off schedule
+   * blocks a dial, and whether a quiet window is honoured, both live in
+   * the scheduling policy that reads these columns, not here.
+   *
+   * Partial patch, not full replace: only the keys actually present in
+   * `updates` are written, so calling this with just `{ signedOffAt }`
+   * leaves quietWindows/timezone untouched. This is a dynamic SET clause
+   * (like listDoseEvents' dynamic WHERE) rather than upsertPatient's
+   * COALESCE-on-every-column approach, because COALESCE cannot tell an
+   * omitted field from an explicit `null` — and revoking sign-off
+   * (signedOffAt: null) must be possible.
+   *
+   * Throws when no row matches rather than silently no-opping — the same
+   * lesson as endSession()/setDoseStatus() above.
+   *
+   * @param {number} patientId
+   * @param {Object} updates - { signedOffAt, quietWindows, timezone }
+   *   signedOffAt: ISO-8601 UTC string, or null to revoke sign-off.
+   *   quietWindows: array of {start,end} "HH:MM" objects, or null to clear.
+   *     Stored as a JSON string; not parsed back out here (see the schema
+   *     comment on quiet_windows).
+   *   timezone: IANA zone name, or null.
+   * @returns {Object} The updated patient row
+   */
+  async setPatientSchedule(patientId, updates = {}) {
+    const sets = [];
+    const params = [];
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'signedOffAt')) {
+      sets.push('schedule_signed_off_at = ?');
+      params.push(updates.signedOffAt ?? null);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'quietWindows')) {
+      sets.push('quiet_windows = ?');
+      params.push(updates.quietWindows == null ? null : JSON.stringify(updates.quietWindows));
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'timezone')) {
+      sets.push('timezone = ?');
+      params.push(updates.timezone ?? null);
+    }
+
+    if (sets.length === 0) {
+      throw new Error(
+        'setPatientSchedule requires at least one of signedOffAt, quietWindows, timezone'
+      );
+    }
+
+    sets.push('updated_at = ?');
+    params.push(new Date().toISOString());
+    params.push(patientId);
+
+    const result = this.db
+      .prepare(`UPDATE patients SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
+
+    if (result.changes === 0) {
+      throw new Error(`Unknown patient: ${patientId}`);
+    }
+
+    logger.log('db_patient_schedule_set', {
+      patientId,
+      signedOff: Object.prototype.hasOwnProperty.call(updates, 'signedOffAt')
+        ? updates.signedOffAt != null
+        : undefined,
+    });
+
+    const row = this.db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
+    return _withDefaultTimezone(row);
   }
 
   // ── Sessions ────────────────────────────────────────────────────
@@ -669,6 +794,30 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
+   * Delete a still-pending dose_events row by its natural key. Used only
+   * by the seed script to remove the row a medication's slot generated
+   * under the pre-fix bug (local "HH:MM" stamped directly as UTC) once the
+   * corrected UTC instant is recomputed for the same local slot — see
+   * generateSlots() in scripts/seed-medications.js. (medication_id,
+   * slot_time) is unique, so the corrected time lands as a new row rather
+   * than updating the stale one, and only a 'pending' row is ever removed
+   * here: a dose that was actually acted on is call history, never
+   * deleted by a re-seed.
+   *
+   * @param {number} medicationId
+   * @param {string} slotTime
+   * @returns {boolean} true if a row was deleted
+   */
+  async deleteStalePendingDoseEvent(medicationId, slotTime) {
+    const result = this.db
+      .prepare(
+        `DELETE FROM dose_events WHERE medication_id = ? AND slot_time = ? AND status = 'pending'`
+      )
+      .run(medicationId, slotTime);
+    return result.changes > 0;
+  }
+
+  /**
    * Set the status of an existing dose event, identified by
    * (medicationId, slotTime).
    *
@@ -715,6 +864,53 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
+   * Record that a dial attempt was made against a dose, identified by
+   * (medicationId, slotTime). CRUD only: writes exactly the callId,
+   * attemptCount and nextAttemptAt it is given — the retry arithmetic
+   * (when to give up, what the next offset is) is the scheduling policy's
+   * job, not this repository's. Does not touch `status`; recording an
+   * attempt is not a resolution.
+   *
+   * Throws when no row matches rather than silently no-opping — the same
+   * lesson as setDoseStatus() above: a scheduler that believes an attempt
+   * was recorded when it wasn't will keep re-dialling the same dose.
+   *
+   * @param {number} medicationId
+   * @param {string} slotTime
+   * @param {Object} [opts] - { callId, attemptCount, nextAttemptAt, now }
+   *   now: injected clock for updated_at; defaults to wall time.
+   * @returns {Object} The updated dose event row
+   */
+  async recordDoseAttempt(medicationId, slotTime, opts = {}) {
+    const nowIso = (opts.now || new Date()).toISOString();
+    const result = this.db
+      .prepare(
+        `UPDATE dose_events SET call_id = ?, attempt_count = ?, next_attempt_at = ?, updated_at = ?
+         WHERE medication_id = ? AND slot_time = ?`
+      )
+      .run(
+        opts.callId ?? null,
+        opts.attemptCount ?? null,
+        opts.nextAttemptAt ?? null,
+        nowIso,
+        medicationId,
+        slotTime
+      );
+
+    if (result.changes === 0) {
+      throw new Error(`Unknown dose event: medication ${medicationId} at ${slotTime}`);
+    }
+
+    logger.log('db_dose_attempt_recorded', {
+      medicationId,
+      slotTime,
+      attemptCount: opts.attemptCount,
+      nextAttemptAt: opts.nextAttemptAt,
+    });
+    return this._getDoseEvent(medicationId, slotTime);
+  }
+
+  /**
    * @param {Object} [filters] - { patientId, from, to, status }
    *   from/to bound slot_time (inclusive), as ISO-8601 strings.
    * @returns {Array}
@@ -746,7 +942,10 @@ class SqliteRepository extends OutcomeRepositoryPort {
 
   /**
    * Pending dose events whose slot_time has arrived — what a scheduler will
-   * later poll to decide who to call next.
+   * later poll to decide who to call next. Also excludes a row whose
+   * next_attempt_at is still in the future: that row was already dialled
+   * once (recordDoseAttempt), and its retry offset hasn't elapsed yet, so
+   * it is not due again.
    *
    * @param {Date} now - Injected clock, so this is testable without sleeping.
    * @param {Object} [opts] - { withinMinutes } - when set, also excludes
@@ -764,6 +963,8 @@ class SqliteRepository extends OutcomeRepositoryPort {
       sql += ' AND slot_time >= ?';
       params.push(cutoff);
     }
+    sql += ' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)';
+    params.push(nowIso);
     sql += ' ORDER BY slot_time ASC';
 
     return this.db.prepare(sql).all(...params);

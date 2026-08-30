@@ -82,7 +82,7 @@ function main() {
     transcriber: assistantConfig.transcriber.provider,
     model: assistantConfig.model.provider,
     voice: assistantConfig.voice.provider,
-    tools: assistantConfig.tools.map(t => t.type === 'function' ? t.function.name : t.type),
+    tools: (assistantConfig.model.tools || []).map(t => t.type === 'function' ? t.function.name : t.type),
     silenceTimeout: assistantConfig.silenceTimeoutSeconds,
     maxDuration: assistantConfig.maxDurationSeconds,
     webhookUrl,

@@ -48,11 +48,17 @@ describe('loadProvidersConfig', () => {
   });
 
   test('active providers match the native-routing target config', () => {
-    // stt stays sarvam (bridge); llm moved to openai (bridge, Phase 3a
-    // adapter); tts moved to elevenlabs (native — Vapi calls it directly).
+    // stt sarvam (bridge); llm sarvam (bridge); tts elevenlabs (native — Vapi
+    // calls it directly).
+    //
+    // The LLM moved off openai deliberately: that project can reach only
+    // gpt-5-nano, which needs reasoning_effort 'minimal' to emit any content
+    // at all and still could not hold the safety guardrails — it spoke its own
+    // instructions aloud and failed to escalate a reported chest complaint.
+    // sarvam-105b-conversations follows them unprompted, in Hindi.
     const config = loadProvidersConfig();
     assert.strictEqual(config.active.stt, 'sarvam');
-    assert.strictEqual(config.active.llm, 'openai');
+    assert.strictEqual(config.active.llm, 'sarvam');
     assert.strictEqual(config.active.tts, 'elevenlabs');
   });
 
@@ -143,7 +149,7 @@ describe('MedicationAdherenceStrategy config loading', () => {
     assert.ok(cfg.version);
     assert.ok(cfg.silenceTimeoutSeconds);
     assert.ok(cfg.maxDurationSeconds);
-    assert.strictEqual(cfg.maxDurationSeconds, 90);
+    assert.strictEqual(cfg.maxDurationSeconds, 180);
   });
 
   test('getPromptVersion returns version from config', () => {
@@ -230,7 +236,7 @@ describe('ProviderRegistry', () => {
     assert.ok(names.llm, 'should have llm name');
     assert.ok(names.tts, 'should have tts name');
     assert.strictEqual(names.stt, 'sarvam');
-    assert.strictEqual(names.llm, 'openai');
+    assert.strictEqual(names.llm, 'sarvam');
     assert.strictEqual(names.tts, 'elevenlabs');
   });
 

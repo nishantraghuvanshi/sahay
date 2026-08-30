@@ -65,6 +65,8 @@ class VapiTransportAdapter extends TransportPort {
           try {
             if (isBinary) {
               // Binary frame = audio chunk
+              // Vapi streams 2-channel PCM; the caller declares this because the
+              // playground streams mono through the same adapter.
               await sttAdapter.transcribe(data, (transcript, isFinal, channel) => {
                 const response = {
                   type: 'transcriber-response',
@@ -73,7 +75,7 @@ class VapiTransportAdapter extends TransportPort {
                   transcriptType: isFinal ? 'final' : 'partial',
                 };
                 if (ws.readyState === 1) ws.send(JSON.stringify(response));
-              });
+              }, { channels: 2 });
             } else {
               // Text frame = JSON config message
               const message = JSON.parse(data.toString());
@@ -108,12 +110,61 @@ class VapiTransportAdapter extends TransportPort {
       app.post('/llm/chat/completions', async (req, res) => {
         const llmAdapter = this.providerRegistry.getActiveLLM();
         const llmConfig = this.providerRegistry.getLLMConfig();
+
+        // Vapi's custom-LLM contract is SSE, not a blocking JSON response —
+        // https://docs.vapi.ai/customization/tool-calling-integration: the
+        // response must be `Content-Type: text/event-stream`, one
+        // `data: <chunk>\n\n` per OpenAI-format chunk, terminated with
+        // `data: [DONE]\n\n`. The blocking `chatCompletion()` used to be
+        // called here instead of the already-built `chatCompletionStream()`
+        // (present on both the openai and sarvam adapters), so Vapi never
+        // got a stream to parse. `getActiveLLM()` returns whichever adapter
+        // is configured, so this works for either without naming one.
+        //
+        // The adapter's onToken callback only exposes accumulated text
+        // deltas and a final merged tool_calls array (see openai.js /
+        // sarvam.js), not the underlying provider's raw chunks, so this
+        // re-encodes each piece as its own OpenAI-format SSE chunk rather
+        // than piping a raw stream through — functionally equivalent, since
+        // Vapi merges tool-call deltas by index either way.
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
         try {
-          const response = await llmAdapter.chatCompletion(req.body, llmConfig, process.env);
-          res.json(response);
+          const result = await llmAdapter.chatCompletionStream(
+            req.body,
+            llmConfig,
+            process.env,
+            (textDelta) => {
+              res.write(`data: ${JSON.stringify({
+                choices: [{ index: 0, delta: { content: textDelta } }],
+              })}\n\n`);
+            }
+          );
+
+          if (result.tool_calls) {
+            const toolCallDeltas = result.tool_calls.map((tc, index) => ({
+              index,
+              id: tc.id,
+              type: tc.type,
+              function: tc.function,
+            }));
+            res.write(`data: ${JSON.stringify({
+              choices: [{ index: 0, delta: { tool_calls: toolCallDeltas }, finish_reason: 'tool_calls' }],
+            })}\n\n`);
+          }
+
+          res.write('data: [DONE]\n\n');
+          res.end();
         } catch (err) {
           logger.error('llm_error', err);
-          res.status(500).json({ error: err.message });
+          if (res.headersSent) {
+            res.write('data: [DONE]\n\n');
+            res.end();
+          } else {
+            res.status(500).json({ error: err.message });
+          }
         }
       });
     } else {
@@ -179,28 +230,45 @@ class VapiTransportAdapter extends TransportPort {
             });
             break;
 
+          // Vapi's real server message for a tool invocation is 'tool-calls'
+          // (plural) — see https://docs.vapi.ai/server-url/events. The
+          // singular 'tool-call' handled here too is kept only for backward
+          // compatibility with whatever shape this code was originally
+          // written against; it has never been confirmed against a live
+          // payload and may not be a real Vapi event at all.
+          case 'tool-calls':
           case 'tool-call': {
             const callId = message.call?.id;
-            const toolName = message.tool?.name;
-            const args = message.tool?.arguments || {};
+            const calls = this._extractToolCalls(message);
+            const results = [];
 
-            await eventBus.emit(EVENT_TYPES.TOOL_CALLED, {
-              callId,
-              tool: toolName,
-              args,
-            });
+            for (const call of calls) {
+              await eventBus.emit(EVENT_TYPES.TOOL_CALLED, {
+                callId,
+                tool: call.name,
+                args: call.arguments,
+              });
 
-            if (toolName === 'capture_field') {
-              await this._captureField(callId, args);
+              if (call.name === 'capture_field') {
+                await this._captureField(callId, call.arguments);
+              }
+
+              await recordTurn({
+                repository: this.repository,
+                callId,
+                role: 'assistant',
+                toolCalls: [{ name: call.name, arguments: call.arguments }],
+              });
+
+              // Per https://docs.vapi.ai/tools/custom-tools, the response
+              // must be { results: [{ toolCallId, result }] } with a
+              // single-line string result — the previous fallback to the
+              // generic { status: 'ok' } gave Vapi no toolCallId to match,
+              // so the assistant stalled waiting on every tool call.
+              results.push({ toolCallId: call.toolCallId, result: 'ok' });
             }
 
-            await recordTurn({
-              repository: this.repository,
-              callId,
-              role: 'assistant',
-              toolCalls: [{ name: toolName, arguments: args }],
-            });
-            break;
+            return res.status(200).json({ results });
           }
 
           // UNVERIFIED: 'transcript' / 'role' / 'transcriptType' are this
@@ -297,6 +365,67 @@ class VapiTransportAdapter extends TransportPort {
       value,
       allowedFields: INTAKE_FIELDS.map((f) => f.key),
     });
+  }
+
+  /**
+   * Normalize the tool-call list out of a 'tool-calls' (or legacy
+   * 'tool-call') webhook message.
+   *
+   * UNVERIFIABLE: docs.vapi.ai never returned the exact field carrying the
+   * call list on a real request body — 'toolCalls' and 'toolCallList' are
+   * both plausible, and the legacy singular event carries one call under
+   * 'tool' with no list at all. Every shape is read defensively rather than
+   * guessed at, and which one matched is logged so a single live call
+   * settles it — see agent/.superpowers/sdd/audit-vapi.md §4.
+   *
+   * @param {Object} message - Vapi webhook message
+   * @returns {Array<{toolCallId: string|null, name: string, arguments: Object}>}
+   * @private
+   */
+  _extractToolCalls(message) {
+    const list = message.toolCalls || message.toolCallList;
+    if (Array.isArray(list)) {
+      logger.log('tool_calls_shape_matched', {
+        shape: message.toolCalls ? 'toolCalls' : 'toolCallList',
+      });
+      return list.map((call) => {
+        const fn = call.function || call;
+        return {
+          toolCallId: call.id || call.toolCallId || null,
+          name: fn.name,
+          arguments: this._normalizeToolArgs(fn.arguments),
+        };
+      });
+    }
+
+    if (message.tool) {
+      logger.log('tool_calls_shape_matched', { shape: 'tool' });
+      return [{
+        toolCallId: message.toolCallId || message.tool.id || null,
+        name: message.tool.name,
+        arguments: this._normalizeToolArgs(message.tool.arguments),
+      }];
+    }
+
+    logger.log('tool_calls_shape_unmatched', { keys: Object.keys(message) });
+    return [];
+  }
+
+  /**
+   * A tool call's arguments may already be an object or a JSON string
+   * (the OpenAI-style shape 'toolCalls' would carry sends it as a string).
+   * @private
+   */
+  _normalizeToolArgs(args) {
+    if (typeof args === 'string') {
+      try {
+        return JSON.parse(args);
+      } catch (err) {
+        logger.error('tool_call_args_parse_error', err);
+        return {};
+      }
+    }
+    return args || {};
   }
 
   /**
@@ -415,6 +544,11 @@ class VapiTransportAdapter extends TransportPort {
         messages: [systemMessage],
         temperature: llm.temperature,
         maxTokens: llm.max_tokens,
+        // Vapi rejects a top-level `tools` property (400: "property tools
+        // should not exist"). They belong on the model — the native branch
+        // below always had this right; the bridged branch did not, so the
+        // assistant was being created with no tools at all.
+        tools: [...strategy.getTools(), { type: 'endCall' }],
       };
     } else {
       // Native shape: Vapi calls the provider itself. No native LLM
@@ -463,32 +597,52 @@ class VapiTransportAdapter extends TransportPort {
     );
 
     return {
-      name: 'Elderly Medication Adherence Agent',
+      name: 'Voxi',
       transcriber,
       model,
       voice,
       firstMessage,
       firstMessageInterruptionsEnabled: false,  // Don't let user interrupt the greeting
-      voicemailMessage: 'नमस्ते, मैं स्वास्थ्य सहायक से बोल रहा हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
+      voicemailMessage: 'नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
       silenceTimeoutSeconds: strategyConfig.silenceTimeoutSeconds,
       maxDurationSeconds: strategyConfig.maxDurationSeconds,
-      maxIdleSeconds: strategyConfig.maxIdleSeconds,
       backgroundSound: strategyConfig.backgroundSound,
-      denoiseEnabled: strategyConfig.denoiseEnabled,
+      // 'backgroundDenoisingEnabled' as a bare boolean is not a real Vapi
+      // property — verified against
+      // docs.vapi.ai/documentation/assistants/conversation-behavior/background-speech-denoising,
+      // which documents this nested shape instead.
+      backgroundSpeechDenoisingPlan: {
+        smartDenoisingPlan: { enabled: strategyConfig.denoiseEnabled },
+      },
       // Turn-taking: when the assistant starts speaking after user pauses
       startSpeakingPlan: {
         waitSeconds: 0.4,  // 400ms pause before responding (elderly-friendly)
         smartEndpointingPlan: {
-          enabled: true,
+          provider: 'vapi',
         },
       },
       // Turn-taking: when the assistant stops on user interruption
+      // Barge-in is on by default; this tunes HOW READILY it triggers.
+      // Shapes verified against docs.vapi.ai/customization/voice-pipeline-configuration
+      // after Vapi rejected `enabled`, `sensitivity` and `backchannelingEnabled`
+      // outright — those properties do not exist and never configured anything.
+      //
+      // numWords: 2 selects transcription-based detection instead of raw VAD, so
+      // a cough or a throat-clear does not cut the agent off mid-sentence. It
+      // costs 200-500ms versus VAD, which is the right trade for an elderly
+      // caller who is easy to talk over.
+      //
+      // voiceSeconds is deliberately absent: it only applies when numWords is 0.
+      //
+      // acknowledgementPhrases stops a listening noise from being treated as an
+      // interruption. "हाँ" is deliberately NOT in this list — it is the actual
+      // answer to "क्या आपने दवाई ले ली है?", and the one word this call exists
+      // to hear must never be classed as a filler.
       stopSpeakingPlan: {
-        enabled: true,          // Allow barge-in
-        sensitivity: 'medium',  // Don't stop on every noise (elderly may cough)
-        backchannelingEnabled: true,  // Agent says "हम्म" while listening
+        numWords: 2,
+        backoffSeconds: 1.0,
+        acknowledgementPhrases: ['अच्छा', 'ठीक', 'ठीक है', 'हम्म', 'जी', 'ओके', 'okay'],
       },
-      tools: [...strategy.getTools(), { type: 'endCall' }],
       server: { url: `${webhookUrl}/webhook` },
       // Recording is deliberately enabled — previously nothing set this, so
       // whether a call was recorded depended on an unverified account
@@ -505,11 +659,28 @@ class VapiTransportAdapter extends TransportPort {
       artifactPlan: {
         recordingEnabled: true,
       },
+      // Verified against docs.vapi.ai/assistants/call-analysis:
+      // summaryPlan takes a `summaryPrompt` string (not `messages`), and
+      // structuredDataPlan's schema goes under `structuredDataSchema` (not
+      // `schema`) — the previous field names matched neither documented
+      // shape, so both sub-plans were silently dropped.
       analysisPlan: {
-        summary: 'Summarize the call in 1-2 sentences.',
-        structuredData: {
-          outcome: 'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
-          reason: 'Brief reason for the outcome',
+        // Flat fields. Vapi rejects summaryPlan/structuredDataPlan wrappers
+        // ("property summaryPrompt should not exist") — these live directly on
+        // analysisPlan. https://docs.vapi.ai/assistants/call-analysis
+        summaryPrompt: 'Summarize the call in 1-2 sentences.',
+        structuredDataPrompt:
+          'Extract the call outcome and a brief reason from the transcript.',
+        structuredDataSchema: {
+          type: 'object',
+          properties: {
+            outcome: {
+              type: 'string',
+              description:
+                'CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER',
+            },
+            reason: { type: 'string', description: 'Brief reason for the outcome' },
+          },
         },
       },
     };
@@ -526,6 +697,13 @@ class VapiTransportAdapter extends TransportPort {
   async createCall(assistantId, phoneNumber, variables = {}) {
     const apiKey = process.env.VAPI_PRIVATE_KEY;
     if (!apiKey) throw new Error('Missing env var: VAPI_PRIVATE_KEY');
+    if (!process.env.VAPI_PHONE_NUMBER_ID) {
+      throw new Error(
+        'Missing env var: VAPI_PHONE_NUMBER_ID. Import a Twilio number into ' +
+          'Vapi (POST /phone-number) and set its id here — outbound calls are ' +
+          'rejected without a number to call from.'
+      );
+    }
 
     const response = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
@@ -535,6 +713,11 @@ class VapiTransportAdapter extends TransportPort {
       },
       body: JSON.stringify({
         assistantId,
+        // REQUIRED for outbound: Vapi needs to know which number to call FROM.
+        // https://docs.vapi.ai/calls/outbound-calling — a call without it is
+        // rejected, and free Vapi numbers cannot place outbound calls at all,
+        // so this must be an imported Twilio/Vonage/Telnyx number.
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
         customer: { number: phoneNumber },
         assistantOverrides: { variableValues: variables },
       }),
