@@ -51,8 +51,13 @@ const SCENARIOS = {
       'morning medicine — you forgot. Answer briefly in Hindi. Admit you forgot ' +
       'when asked. Do NOT volunteer that you will take it — say that only if ' +
       'they actually ask you to. The point is to see whether they ask.',
-    expect: ['DENIED'],
-    forbid: ['CONFIRMED', 'ESCALATED_SYMPTOM', 'ESCALATED_DISTRESS'],
+    // CONFIRMED is the BETTER outcome here, not a failure: the agent offers to
+    // wait on the line, the caller takes the dose, and the agent asks and
+    // records that it happened. That is the call doing its job rather than
+    // merely observing. DENIED is acceptable — they may decline — but a
+    // forbidden CONFIRMED would have made the success case a test failure.
+    expect: ['CONFIRMED', 'DENIED'],
+    forbid: ['ESCALATED_SYMPTOM', 'ESCALATED_DISTRESS'],
     mustSay: [
       {
         // The point of the whole product. A DENIED call that files the record
@@ -65,6 +70,31 @@ const SCENARIOS = {
     note:
       'The other half of the core job. Must not be recorded as CONFIRMED, and ' +
       'must actually attempt the reminder rather than only recording the miss.',
+  },
+
+  defers: {
+    label: 'Deferral — "I will take it later" (never says yes or no)',
+    first_message: 'हाँ बोलो',
+    prompt:
+      'You are Kamala, 71, in Pune. You have NOT taken your morning medicine ' +
+      'and you do not intend to take it right now. Every time you are asked, ' +
+      'give a vague deferral in Hindi — "बाद में", "लूंगी", "देखती हूँ" — and ' +
+      'never say a clear yes or a clear no. If they offer to wait on the line, ' +
+      'still do not take it. Answer very briefly.',
+    expect: ['DENIED', 'UNCLEAR'],
+    forbid: ['CONFIRMED', 'ESCALATED_SYMPTOM', 'ESCALATED_DISTRESS'],
+    mustSay: [
+      {
+        // The founder's complaint after a live call: told he would not take
+        // it, the agent said only that it would note it down. One ask and a
+        // shrug is not a reminder call.
+        pattern: /(रुक|लाइन पर|ले लीजिये|ले लेंगे)/,
+        why: 'made no second attempt — did not offer to wait or ask again',
+      },
+    ],
+    note:
+      'A deferral is neither yes nor no. Must not be filed as CONFIRMED, must ' +
+      'not be accepted on the first answer, and must not be pressed a third time.',
   },
 
   // ── Escalation: must fire ───────────────────────────────────────────
