@@ -79,57 +79,58 @@ const repository = useSqlite
   ? new SqliteRepository({ dbPath: useSqlite })
   : new ConsoleRepository();
 
-// Redact userinfo (user:password@) out of a value before it reaches a log
-// line. db_path is meant to be a SQLite filesystem path, but DB_PATH,
-// DATABASE_URL and VOXIKIN_DB have all been seen set to a Postgres
-// connection string by mistake — SqliteRepository takes that literally as a
-// filename (see agent/postgresql:/... in this working tree), and logging it
-// verbatim would put the password in the log. Applied before path.resolve()
-// below: resolving first would collapse the connection string's "//" and
-// hide the credential from a "//user:pass@" pattern while leaving the raw
-// password characters in the string, so redact the source value instead.
+// db_path is meant to be a SQLite filesystem path, but DB_PATH, DATABASE_URL
+// and VOXIKIN_DB have all been seen set to a Postgres connection string by
+// mistake — SqliteRepository takes that literally as a filename (see
+// agent/postgresql:/... in this working tree) — and logging it verbatim
+// would put the password in the log.
 //
-// Not `new URL()`: it throws on an ordinary filesystem path (no scheme),
-// which is the common case and must pass through untouched — that part is
-// fine — but it also throws on a password containing an unencoded '/'
-// (RFC 3986 says such a password must be percent-encoded, so the URL parser
-// treats the '/' as the start of the path and the string stops looking like
-// a URL at all), and an unencoded '/' in a password is exactly the kind of
-// value someone finds out about the hard way. A thrown error there would
-// leave the raw value to fall through unredacted, defeating the point.
+// This used to try to parse out just the userinfo and leave the rest of the
+// value intact. Three rounds of review found three different bypasses of
+// that (a password containing '@', one containing '/', one containing
+// both) — precisely extracting a credential out of an arbitrary string is
+// the wrong job for a log-safety helper to take on. So: no parsing.
 //
-// Only a substring shaped like an actual URL scheme (`word://`) is ever
-// touched, so a plain filesystem path — which never contains "://" — is
-// never misread as one. Within that, the userinfo/host boundary is the
-// LAST '@' before the authority's own
-// terminating '/', '?' or '#' — a password may itself contain '@' (RFC 3986
-// again allows unencoded '@' in userinfo), so scanning for the first '@'
-// redacts too little, as happened in the previous version of this function.
-// If that bounded scan finds no '@' at all, an unencoded '/' inside the
-// password may have made the real boundary look like a path already
-// started — fall back to the last '@' in the whole remainder so that case
-// is still redacted rather than left in the clear.
+// A value containing "://" is not a filesystem path — a real one never
+// contains that substring — so its details aren't worth the risk of getting
+// a corner case wrong a fourth time. Collapse it to the scheme and nothing
+// else; zero userinfo characters can survive because none of the original
+// string after the scheme is kept, by construction rather than by pattern.
+// A value with no "://" is an ordinary path and is returned completely
+// untouched — not even copied through a regex — so a real path can never be
+// corrupted into pointing at the wrong database (that mattered more than
+// the leak: Task 4 already makes a DB_PATH carrying a URL scheme refuse to
+// boot outright, so this is defence-in-depth for a value about to be
+// rejected anyway, not the primary defense).
+//
+// Never throws: String(value) tolerates any input, and the only other
+// operation is a single non-backtracking regex match. Not new URL() for the
+// same reason as before — it throws on the exact strings this function must
+// still produce a safe answer for.
+function isSchemeChar(ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+    ch === '+' || ch === '.' || ch === '-';
+}
+
 function redactCredentials(value) {
   const str = String(value);
-  return str.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([\s\S]*)$/, (full, scheme, rest) => {
-    const boundary = rest.search(/[/?#]/);
-    const authority = boundary === -1 ? rest : rest.slice(0, boundary);
+  // indexOf is a single linear scan; only once "://" is actually found does
+  // the (bounded) backward walk for the scheme name run. A regex trying to
+  // match a scheme at every position of a long string with no "://" at all
+  // backtracks quadratically — confirmed by hand: 4M 'a' characters hung
+  // for minutes under `/([a-zA-Z][a-zA-Z0-9+.-]*):\/\//`. This shape can't
+  // do that: worst case is one linear scan plus one bounded walk.
+  const idx = str.indexOf('://');
+  if (idx === -1) return str;
 
-    let atIndex = authority.lastIndexOf('@');
-    if (atIndex === -1) atIndex = rest.lastIndexOf('@');
-    if (atIndex === -1) return full; // no userinfo — nothing to redact
+  let start = idx;
+  while (start > 0 && isSchemeChar(str[start - 1])) start--;
+  const scheme = str.slice(start, idx);
+  const first = scheme.charCodeAt(0);
+  const startsWithLetter = (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
+  if (!scheme || !startsWithLetter) return str; // "://" with no real scheme before it isn't a URL
 
-    const userinfo = rest.slice(0, atIndex);
-    const afterAt = rest.slice(atIndex + 1);
-    const colonIndex = userinfo.indexOf(':');
-    if (colonIndex === -1) return `${scheme}${userinfo}@${afterAt}`; // username only, no password
-
-    const password = userinfo.slice(colonIndex + 1);
-    if (password === '') return full; // explicit empty password — nothing to leak
-
-    const user = userinfo.slice(0, colonIndex);
-    return `${scheme}${user}:***@${afterAt}`;
-  });
+  return `${scheme}://<redacted>`;
 }
 
 // Resolved absolute path for the boot log — repository.dbPath may be
