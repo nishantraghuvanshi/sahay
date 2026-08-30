@@ -59,6 +59,11 @@ const DEFAULTS = {
   turns: 14,
   timeout_ms: 180000,
   concurrency: 4,
+  // Outcomes vary run to run. A single run cannot tell a regression from
+  // variance, and reading one as the other has already cost real time twice:
+  // once trimming the prompt, once after the food branch landed. Repeat and
+  // report rates instead.
+  repeat: 1,
   out: '',
 };
 
@@ -132,6 +137,17 @@ async function runScenario(key, scenario, args, credentials) {
 
   const body = await res.json();
   const turns = body.simulated_conversation || [];
+
+  // ElevenLabs' own end-of-call reading of the transcript, extracted from the
+  // dose_outcome field the adapter configures. deriveOutcome uses this as tier
+  // 2 — below a real report_outcome, above keyword matching — so it is what
+  // rescues a call whose agent ended without reporting anything.
+  //
+  // Simulations DO produce this, contrary to what the tool-mocking note above
+  // might suggest: the extraction runs on the transcript after the fact, not
+  // through the tools. So the backstop is measurable here after all.
+  const extractedRaw = body.analysis?.data_collection_results?.dose_outcome;
+  const extracted = extractedRaw && extractedRaw.value ? String(extractedRaw.value) : null;
 
   const toolCalls = [];
   const leaked = new Set();
@@ -219,6 +235,10 @@ async function runScenario(key, scenario, args, credentials) {
   const first = chain[0];
   const last = chain[chain.length - 1];
 
+  // What the engine would actually persist. Mirrors deriveOutcome's tiers: a
+  // reported outcome wins, otherwise the analysis extraction.
+  const persisted = derived || extracted || null;
+
   // A stuck agent repeats itself until the turn cap: minutes of call time, no
   // outcome, and a caller who cannot get off the phone. Only visible by
   // looking at the speech, since every individual turn is well-formed.
@@ -238,15 +258,27 @@ async function runScenario(key, scenario, args, credentials) {
     );
   }
 
-  if (!outcomes.length) {
-    problems.push('report_outcome never fired');
-  } else {
-    if (scenario.expect?.length && !scenario.expect.includes(derived)) {
-      problems.push(`derived ${derived}, expected one of ${scenario.expect.join('/')}`);
+  if (!outcomes.length && !extracted) {
+    problems.push('no outcome at all: no report_outcome and no extraction');
+  }
+
+  // Judge what the ENGINE would persist, which is the tool call when there is
+  // one and the extraction otherwise — not the tool call alone.
+  //
+  // Checking `derived` only meant that a call which filed no outcome skipped
+  // expect and forbid completely, so a despair scenario that failed to escalate
+  // but extracted DENIED counted as a pass. A test that stops looking exactly
+  // when the agent misbehaves is not a test.
+  if (persisted) {
+    if (scenario.expect?.length && !scenario.expect.includes(persisted)) {
+      problems.push(`would persist ${persisted}, expected one of ${scenario.expect.join('/')}`);
     }
-    if (scenario.forbid?.includes(derived)) {
-      problems.push(`derived ${derived} is forbidden here`);
+    if (scenario.forbid?.includes(persisted)) {
+      problems.push(`would persist ${persisted}, which is forbidden here`);
     }
+  }
+
+  if (outcomes.length) {
     if (outcomes.length > 1) {
       // tools.json says "Call this EXACTLY ONCE per call". It does not comply.
       warnings.push(`report_outcome fired ${outcomes.length}x: ${chain.join(' -> ')}`);
@@ -264,10 +296,20 @@ async function runScenario(key, scenario, args, credentials) {
     }
   }
 
+  if (!outcomes.length && extracted) {
+    warnings.push(`no report_outcome, but extraction gives ${extracted} — tier 2 covers this`);
+  }
+  if (outcomes.length && extracted && derived !== extracted) {
+    // Worth seeing: two independent readings of the same call disagreeing.
+    warnings.push(`agent said ${derived}, extraction said ${extracted}`);
+  }
+
   return {
     key,
     label: scenario.label,
     note: scenario.note,
+    extracted,
+    persisted,
     turns,
     turnCount: turns.length,
     outcomes,
@@ -351,10 +393,40 @@ async function main() {
   console.log('note       tool calls are MOCKED — nothing reaches our webhook or the engine\n');
 
   const started = Date.now();
-  const results = await pool(selected, args.all ? args.concurrency : 1, ([k, s]) =>
-    runScenario(k, s, args, { key, agentId })
-  );
+  const rounds = [];
+  for (let round = 0; round < Math.max(1, args.repeat); round += 1) {
+    if (args.repeat > 1) console.log(`round ${round + 1}/${args.repeat}`);
+    rounds.push(
+      await pool(selected, args.all ? args.concurrency : 1, ([k, s]) =>
+        runScenario(k, s, args, { key, agentId })
+      )
+    );
+  }
+  const results = rounds[rounds.length - 1];
   const elapsed = (Date.now() - started) / 1000;
+
+  // Across rounds, per scenario: how often it passed and what it decided. This
+  // is the number to quote when claiming a fix worked.
+  if (args.repeat > 1) {
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`${'scenario'.padEnd(21)}${'passed'.padStart(7)}   outcomes seen`);
+    console.log('-'.repeat(80));
+    for (const [i, [k]] of selected.entries()) {
+      const runs = rounds.map((r) => r[i]).filter(Boolean);
+      const passed = runs.filter((r) => !r.error && r.passed).length;
+      const seen = {};
+      for (const r of runs) {
+        const label = r.error ? 'ERROR' : r.persisted || '(none)';
+        seen[label] = (seen[label] || 0) + 1;
+      }
+      const spread = Object.entries(seen)
+        .sort((a, b) => b[1] - a[1])
+        .map(([lbl, n]) => `${lbl}\u00d7${n}`)
+        .join('  ');
+      console.log(`${k.padEnd(21)}${`${passed}/${runs.length}`.padStart(7)}   ${spread}`);
+    }
+    console.log('-'.repeat(80));
+  }
 
   if (!args.quiet) for (const r of results) printTranscript(r);
 
@@ -366,7 +438,7 @@ async function main() {
       console.log(`${r.key.padEnd(19)}${'—'.padStart(5)}  ${'ERROR'.padEnd(38)} ${r.error.slice(0, 30)}`);
       continue;
     }
-    const chain = r.outcomes.length ? r.chain.join('→') : '(none)';
+    const chain = r.outcomes.length ? r.chain.join('→') : `(none) ext:${r.extracted || '—'}`;
     const verdict = r.passed ? (r.warnings.length ? 'pass (warn)' : 'pass') : 'FAIL';
     console.log(
       `${r.key.padEnd(19)}${String(r.turnCount).padStart(5)}  ${chain.slice(0, 38).padEnd(38)} ${verdict}`

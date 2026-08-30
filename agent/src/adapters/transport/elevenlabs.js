@@ -28,6 +28,23 @@ const DEFAULT_TURN_EAGERNESS = 'normal';
 // that setting one does not drop the other from the turn object.
 const DEFAULT_TURN_TIMEOUT = 7;
 
+// A dose call is four or five exchanges. One that has run three minutes has
+// failed whatever it contains, and on a real line the caller is stuck on the
+// phone with it. ElevenLabs' own default is 300s.
+//
+// This is deliberately a hard bound rather than another prompt rule. Two
+// scenarios loop by repeating a single refusal until the turn cap, and every
+// attempt to fix that in the prompt has half-worked, because the model cannot
+// count its own turns. The cap ends the call; the post-call webhook still
+// fires and tier-2 extraction still files an outcome, so a bounded call is a
+// recorded call rather than a lost one.
+const DEFAULT_MAX_CALL_SECONDS = 180;
+
+// Spoken before the cap cuts in. A call that simply stops is indistinguishable
+// from the line dropping, which to an elderly caller is exactly the abandonment
+// this product exists to prevent.
+const MAX_DURATION_MESSAGE = 'माफ़ कीजिए, मुझे अब रुकना होगा। मैंने नोट कर लिया है। अपना ख़याल रखियेगा।';
+
 // What ElevenLabs is asked to pull out of the transcript once the call ends.
 // Spells out the promise-versus-taken distinction because that is the mistake
 // the agent's own report_outcome intermittently makes — "मैं ले लूँगी" filed as
@@ -129,6 +146,8 @@ class ElevenLabsTransportAdapter extends TransportPort {
       providersConfig?.transport?.elevenlabs?.turn_eagerness || DEFAULT_TURN_EAGERNESS;
     this.turnTimeout =
       providersConfig?.transport?.elevenlabs?.turn_timeout ?? DEFAULT_TURN_TIMEOUT;
+    this.maxCallSeconds =
+      providersConfig?.transport?.elevenlabs?.max_call_seconds ?? DEFAULT_MAX_CALL_SECONDS;
   }
 
   get apiKey() {
@@ -154,6 +173,8 @@ class ElevenLabsTransportAdapter extends TransportPort {
       config.providersConfig?.transport?.elevenlabs?.turn_eagerness || this.turnEagerness;
     this.turnTimeout =
       config.providersConfig?.transport?.elevenlabs?.turn_timeout ?? this.turnTimeout;
+    this.maxCallSeconds =
+      config.providersConfig?.transport?.elevenlabs?.max_call_seconds ?? this.maxCallSeconds;
 
     const KNOWN_TOOLS = new Set(['report_outcome', 'capture_field']);
 
@@ -585,6 +606,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         agent: {
           language: 'hi',
           first_message: strategy.buildFirstMessage(placeholders),
+          max_conversation_duration_message: MAX_DURATION_MESSAGE,
           ...(Object.keys(templated).length
             ? { dynamic_variables: { dynamic_variable_placeholders: templated } }
             : {}),
@@ -601,6 +623,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
               ...SYSTEM_TOOLS,
             ],
           },
+        },
+        conversation: {
+          max_duration_seconds: this.maxCallSeconds ?? DEFAULT_MAX_CALL_SECONDS,
         },
         turn: {
           turn_eagerness: eagerness,

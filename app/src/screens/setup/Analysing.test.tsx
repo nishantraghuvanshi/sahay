@@ -1,18 +1,3 @@
-/**
- * SKIPPED BY THE origin/main MERGE — reinstate or rewrite, do not delete.
- *
- * These assertions were written against the pre-merge Analysing. That screen was
- * replaced wholesale by origin/main's redesign, which this merge took on the
- * founder's instruction ("take the UI from origin main"). The behaviours below
- * are still the ones this screen ought to have; the selectors and structure they
- * reach for no longer exist.
- *
- * They are skipped rather than removed because several of them pin things that
- * matter beyond layout — that a no-answer renders as "not known" and never as
- * "missed", that only a dialable route is offered as dialable, that a
- * prescription is read exactly once under StrictMode. Whoever reconciles the two
- * designs should port these forward; nothing else in the suite covers them.
- */
 import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -54,7 +39,7 @@ beforeEach(() => {
   extract.mockReset()
 })
 
-describe.skip('reading a prescription', () => {
+describe('reading a prescription', () => {
   it('issues exactly one request under StrictMode, and completes', async () => {
     // The regression test for the hang. The effect used to abort its own only
     // request in cleanup, then decline to start another because the single-flight
@@ -114,7 +99,7 @@ describe.skip('reading a prescription', () => {
   })
 })
 
-describe.skip('coming back to this screen', () => {
+describe('coming back to this screen', () => {
   it('does not re-read the same prescription', async () => {
     // Re-reading would overwrite edits the caregiver has made since (FR-4).
     seedDraft({

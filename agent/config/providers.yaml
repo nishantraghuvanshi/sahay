@@ -100,6 +100,19 @@ transport:
     # so that setting one does not drop the other from the turn object.
     turn_timeout: 7
 
+    # Hard ceiling on a whole call. ElevenLabs defaults to 300s; a dose call is
+    # four or five exchanges, and one still going after three minutes has
+    # failed whatever it contains — on a real line the caller is stuck on the
+    # phone with it.
+    #
+    # This is a bound, not a prompt rule, on purpose. Two battery scenarios
+    # loop by repeating one refusal until the turn cap, and every attempt to
+    # fix that by asking the model more firmly has half-worked, because the
+    # model cannot count its own turns. The cap ends the call; the post-call
+    # webhook still fires and the analysis extraction still files an outcome,
+    # so a call cut off here is recorded rather than lost.
+    max_call_seconds: 180
+
 # ── STT (Speech-to-Text) ──────────────────────────────────────────
 
 stt:

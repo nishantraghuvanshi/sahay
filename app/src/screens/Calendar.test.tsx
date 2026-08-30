@@ -1,17 +1,24 @@
 /**
- * SKIPPED BY THE origin/main MERGE — reinstate or rewrite, do not delete.
+ * PARKED BY THE origin/main MERGE — 13 of these cannot be reinstated as written.
  *
- * These assertions were written against the pre-merge Calendar. That screen was
- * replaced wholesale by origin/main's redesign, which this merge took on the
- * founder's instruction ("take the UI from origin main"). The behaviours below
- * are still the ones this screen ought to have; the selectors and structure they
- * reach for no longer exist.
+ * They were checked one by one rather than skipped wholesale. The merged
+ * Calendar dropped the features they pin: view modes (day / month / agenda),
+ * print and share, the caregiver's own dialable number, P2 alert display, the
+ * "happening now" marker, and any confirmed-at time. Rewriting the selectors
+ * would not help — there is nothing behind them to select. Reinstating these
+ * means deciding to restore the features, which is a product call, not a test
+ * fix. That decision pairs naturally with the view-chip and step-numbering
+ * differences the founder has said they want to look at.
  *
- * They are skipped rather than removed because several of them pin things that
- * matter beyond layout — that a no-answer renders as "not known" and never as
- * "missed", that only a dialable route is offered as dialable, that a
- * prescription is read exactly once under StrictMode. Whoever reconciles the two
- * designs should port these forward; nothing else in the suite covers them.
+ * Two of the fifteen DID survive, because the six dose states were kept during
+ * the merge:
+ *
+ *   · a no-answer renders as "not known", never as "missed"
+ *   · missed stays its own distinct thing
+ *
+ * Both are now in src/ui/doseStatus.test.tsx, against DoseStatusChip — where
+ * the rule actually lives. Testing them through a screen is how replacing the
+ * screen silently took the coverage with it.
  */
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
