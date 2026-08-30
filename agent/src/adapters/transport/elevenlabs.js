@@ -148,8 +148,40 @@ class ElevenLabsTransportAdapter extends TransportPort {
     };
   }
 
+  /**
+   * Dispatch an outbound call.
+   *
+   * Endpoint and required fields come from the ElevenLabs OpenAPI spec
+   * (/v1/convai/twilio/outbound-call requires agent_id, agent_phone_number_id
+   * and to_number), not from the prose docs, which describe only the dashboard
+   * flow.
+   */
   async createCall(assistantId, phoneNumber, variables = {}) {
-    throw new Error('not implemented yet');
+    if (!this.phoneNumberId) {
+      throw new Error(
+        'Missing phone_number_id for the elevenlabs transport. Set it under ' +
+          'transport.elevenlabs in config/providers.yaml — an outbound call has ' +
+          'no number to call from without it.'
+      );
+    }
+
+    const res = await fetch(`${API}/v1/convai/twilio/outbound-call`, {
+      method: 'POST',
+      headers: { 'xi-api-key': this.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: assistantId,
+        agent_phone_number_id: this.phoneNumberId,
+        to_number: phoneNumber,
+        conversation_initiation_client_data: { dynamic_variables: variables },
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`ElevenLabs createCall error (${res.status}): ${await res.text()}`);
+    }
+    const body = await res.json();
+    logger.log('el_call_created', { conversationId: body.conversation_id });
+    return body;
   }
 }
 

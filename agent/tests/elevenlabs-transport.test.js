@@ -100,3 +100,61 @@ describe('buildAssistantConfig', () => {
     }
   });
 });
+
+describe('createCall', () => {
+  const PHONE_ID = 'phnum_2001m0m0dch2fvhv1jar36bfzd5p';
+
+  function stubFetch(capture) {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      capture.url = url;
+      capture.body = JSON.parse(opts.body);
+      capture.headers = opts.headers;
+      return { ok: true, status: 200, json: async () => ({ conversation_id: 'conv_1', callSid: 'CA1' }) };
+    };
+    return () => { globalThis.fetch = real; };
+  }
+
+  test('posts the documented required fields', async () => {
+    process.env.ELEVENLABS_API_KEY = 'test-key';
+    const cap = {};
+    const restore = stubFetch(cap);
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      a.phoneNumberId = PHONE_ID;
+      await a.createCall('agent_x', '+919000000042', { patient_name: 'Kamala' });
+    } finally { restore(); }
+
+    assert.strictEqual(cap.url, 'https://api.elevenlabs.io/v1/convai/twilio/outbound-call');
+    assert.strictEqual(cap.body.agent_id, 'agent_x');
+    assert.strictEqual(cap.body.agent_phone_number_id, PHONE_ID);
+    assert.strictEqual(cap.body.to_number, '+919000000042');
+    assert.strictEqual(cap.headers['xi-api-key'], 'test-key');
+  });
+
+  test('per-call variables go in dynamic_variables, where the prompt reads them', async () => {
+    process.env.ELEVENLABS_API_KEY = 'test-key';
+    const cap = {};
+    const restore = stubFetch(cap);
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      a.phoneNumberId = PHONE_ID;
+      await a.createCall('agent_x', '+919000000042', { patient_name: 'Kamala', meal_slot: 'morning' });
+    } finally { restore(); }
+
+    assert.deepStrictEqual(
+      cap.body.conversation_initiation_client_data.dynamic_variables,
+      { patient_name: 'Kamala', meal_slot: 'morning' }
+    );
+  });
+
+  test('a missing phone number id is named, not left as a 422 from the API', async () => {
+    process.env.ELEVENLABS_API_KEY = 'test-key';
+    const a = new ElevenLabsTransportAdapter({});
+    a.phoneNumberId = null;
+    await assert.rejects(
+      () => a.createCall('agent_x', '+919000000042', {}),
+      /phone_number_id/
+    );
+  });
+});
