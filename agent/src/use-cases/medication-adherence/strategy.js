@@ -7,6 +7,7 @@ const yaml = require('js-yaml');
 const ConversationStrategy = require('../../core/strategy/base');
 const { deriveOutcome, OUTCOMES } = require('./outcomes');
 const { TOOLS } = require('./tools');
+const { MEMBERS, GLOBAL_MEMBERS, GLOBAL_DESTINATIONS } = require('./squad');
 
 /**
  * Medication Adherence Strategy
@@ -96,8 +97,27 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
       });
     }
 
+    return this._composeWithGuardrails(this.getModeBlock(mode).system_prompt, variables, guardrailsDisabled);
+  }
+
+  /**
+   * The single place a prompt is assembled.
+   *
+   * Every prompt this agent ever speaks behind — the three call modes AND every
+   * squad member — goes through here, so guardrails cannot be omitted by
+   * building a prompt some other way. That matters more for a squad than for a
+   * single assistant: one missing block in one of a dozen members is a member
+   * that will give medical advice, and it looks exactly like the others.
+   *
+   * @private
+   * @param {string} leadBlock - the mode block or the member's goal block
+   * @param {Object} variables
+   * @param {boolean} guardrailsDisabled
+   * @returns {string}
+   */
+  _composeWithGuardrails(leadBlock, variables, guardrailsDisabled) {
     const composed = [
-      this.getModeBlock(mode).system_prompt,
+      leadBlock,
       this.config.shared_rules,
       guardrailsDisabled ? null : this.config.guardrails,
     ]
@@ -106,6 +126,70 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
 
     const vars = { ...this.config.variables, ...variables };
     return this._substitute(composed, { ...vars, alert_delivered_line: this._resolveAlertDeliveredLine(vars) });
+  }
+
+  /**
+   * Build the squad members for a call: the multi-state form of the prompt.
+   *
+   * Each member's prompt goes through _composeWithGuardrails, the SAME path
+   * buildSystemPrompt uses — so a member physically cannot exist without the
+   * safety block. That is asserted in tests rather than trusted.
+   *
+   * Globals (emergency, opt-out) are appended as destinations on every
+   * non-terminal member, so an emergency reported during the wellbeing question
+   * exits as surely as one reported at the greeting.
+   *
+   * @param {Object} variables - per-call variable values
+   * @returns {Array<{key,label,first,terminal,systemPrompt,destinations}>}
+   */
+  buildSquadMembers(variables = {}) {
+    const guardrailsDisabled = process.env.DISABLE_GUARDRAILS === 'true';
+    if (guardrailsDisabled) {
+      logger.log('GUARDRAILS_DISABLED', {
+        mode: 'squad',
+        warning:
+          'Safety guardrails are NOT in these member prompts. No symptom escalation, ' +
+          'no emergency sequence. Debug use only — never a real caller.',
+      });
+    }
+
+    const byKey = new Map(MEMBERS.map((m) => [m.key, m]));
+
+    return MEMBERS.map((member) => {
+      const destinations = [...member.destinations];
+
+      // Globals reach every member that can still transition. A terminal
+      // member (close, emergency, opt_out) is where the call ends; giving it
+      // an escape hatch would let the agent leave a completed emergency.
+      if (!member.terminal) {
+        for (const key of GLOBAL_MEMBERS) {
+          if (key === member.key) continue;
+          destinations.push({ to: key, description: GLOBAL_DESTINATIONS[key] });
+        }
+      }
+
+      for (const d of destinations) {
+        if (!byKey.has(d.to)) {
+          throw new Error(
+            `Squad member "${member.key}" points at unknown member "${d.to}" — ` +
+              'a dangling destination is a dead end mid-call.'
+          );
+        }
+      }
+
+      return {
+        key: member.key,
+        label: member.label,
+        first: Boolean(member.first),
+        terminal: Boolean(member.terminal),
+        systemPrompt: this._composeWithGuardrails(member.goal, variables, guardrailsDisabled),
+        destinations: destinations.map((d) => ({
+          to: d.to,
+          label: byKey.get(d.to).label,
+          description: d.description,
+        })),
+      };
+    });
   }
 
   /**

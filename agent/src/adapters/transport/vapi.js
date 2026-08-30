@@ -678,6 +678,70 @@ class VapiTransportAdapter extends TransportPort {
    * @param {Object} [opts] - { mode, variables } for inbound and resume
    * @returns {Object} Vapi assistant config
    */
+  /**
+   * Build a Vapi squad — the multi-state form of the call.
+   *
+   * Shape per docs.vapi.ai/squads-example: { members: [{ assistant,
+   * assistantDestinations }] }, first member handles the call, the rest are
+   * reached by transfer. Returned from assistant-request as `{ squad }` rather
+   * than `{ assistant }`, which is what lets inbound stay dynamic per caller —
+   * a Vapi Workflow attaches to the phone number instead and would have cost
+   * the resolve-caller design entirely.
+   *
+   * Each member is built by buildAssistantConfig with only its prompt
+   * overridden, so providers, secrets, hooks and timeouts cannot drift between
+   * members.
+   *
+   * @param {Object} strategy
+   * @param {Object} providers
+   * @param {string} webhookUrl
+   * @param {Object} [opts] - { mode, variables }
+   * @returns {{ members: Array }}
+   */
+  buildSquadConfig(strategy, providers, webhookUrl, opts = {}) {
+    if (typeof strategy.buildSquadMembers !== 'function') {
+      throw new Error(
+        'Active strategy has no buildSquadMembers() — it cannot run as a squad. '
+          + 'Use buildAssistantConfig for single-state strategies.'
+      );
+    }
+
+    const variables = { ...strategy.getVariables(), ...(opts.variables || {}) };
+    const members = strategy.buildSquadMembers(variables);
+
+    const entry = members.filter((m) => m.first);
+    if (entry.length !== 1) {
+      throw new Error(`A squad needs exactly one entry member, found ${entry.length}.`);
+    }
+    // Vapi hands the call to members[0], so the entry member must lead.
+    const ordered = [...entry, ...members.filter((m) => !m.first)];
+
+    return {
+      members: ordered.map((member) => ({
+        assistant: this.buildAssistantConfig(strategy, providers, webhookUrl, {
+          ...opts,
+          variables,
+          name: member.label,
+          systemPrompt: member.systemPrompt,
+          // Only the entry member greets. A first message on an internal
+          // member would narrate the state change to the patient — the seam a
+          // state machine exists to hide.
+          firstMessage: member.first ? undefined : '',
+          firstMessageMode: member.first ? undefined : 'assistant-waits-for-user',
+        }),
+        assistantDestinations: member.destinations.map((d) => ({
+          type: 'assistant',
+          assistantName: d.label,
+          // Silent handoff. "Please hold while I transfer you" is right for a
+          // call centre and wrong here: these are steps inside one
+          // conversation, and announcing them makes the machinery audible.
+          message: '',
+          description: d.description,
+        })),
+      })),
+    };
+  }
+
   buildAssistantConfig(strategy, providers, webhookUrl, opts = {}) {
     const mode = opts.mode || 'outbound';
     const variables = opts.variables || {};
@@ -708,9 +772,15 @@ class VapiTransportAdapter extends TransportPort {
     // identically either way.
     const vapiSecret = process.env.VAPI_SECRET || '';
 
+    // A squad member supplies its own already-composed prompt (built through
+    // the strategy's single guardrail path). Everything else — providers,
+    // secrets, hooks, timeouts — is identical for every member, which is the
+    // reason this builds them rather than a parallel squad-specific builder.
     const systemMessage = {
       role: 'system',
-      content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
+      content:
+        opts.systemPrompt
+        || strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
     };
 
     // Build transcriber config
@@ -809,11 +879,15 @@ class VapiTransportAdapter extends TransportPort {
     );
 
     return {
-      name: 'Voxi',
+      name: opts.name || 'Voxi',
       transcriber,
       model,
       voice,
-      firstMessage,
+      // Only the squad's entry member greets. A mid-call member that speaks a
+      // first message would announce every internal state change to the
+      // patient, which is exactly the seam a state machine should hide.
+      firstMessage: opts.firstMessage !== undefined ? opts.firstMessage : firstMessage,
+      ...(opts.firstMessageMode ? { firstMessageMode: opts.firstMessageMode } : {}),
       firstMessageInterruptionsEnabled: false,  // Don't let user interrupt the greeting
       voicemailMessage: 'नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
       // Answer silence with a prompt, not a hangup. Three escalating
