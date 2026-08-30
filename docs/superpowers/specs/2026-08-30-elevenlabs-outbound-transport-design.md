@@ -1,6 +1,6 @@
 # ElevenLabs as a second outbound pipeline
 
-**Status:** design, awaiting review
+**Status:** implemented (branch `feat/elevenlabs-transport`), one item outstanding — see *Implementation notes* at the end
 **Date:** 2026-08-30
 **Scope:** outbound dose calls only. Inbound deferred — see *Out of scope*.
 
@@ -158,3 +158,56 @@ live calling path.
 | The webhook request/response shape is undocumented in EL's prose docs | Discover it empirically via `simulate-conversation` before relying on it |
 | A dead tunnel silently breaks tool calls, as it already has once | Re-PATCH on boot; log the URL being installed |
 | `hi-IN` on `scribe_realtime` is unverified for this use | Establish it in simulation before any real call |
+
+
+---
+
+# Implementation notes, 30 Aug
+
+Built across 9 tasks plus 4 fix rounds. 633 tests green. `active.transport: elevenlabs`
+is the committed default, with a `TRANSPORT` env override.
+
+## Four contracts in this design were wrong
+
+Every one was written from their OpenAPI spec or inferred from a live agent, and every
+one was still wrong until a real call or a real PATCH rejected it. Recorded because the
+lesson generalises: **ElevenLabs' prose docs do not specify request shapes, and their
+OpenAPI spec carries enums without descriptions.**
+
+| What the design said | What is true | How it was found |
+|---|---|---|
+| `execution_mode: 'sync'` | `'immediate'` / `'post_tool_speech'` / `'async'` | 400 on the first live PATCH |
+| Tool property mirrors the live schema's field set | A property may set only ONE of `description`, `dynamic_variable`, `is_system_provided`, `constant_value`, `is_omitted` | 400 on a later PATCH |
+| Agent takes a `post_call_webhook_url` | No such field exists. A workspace webhook object is created separately and referenced by `post_call_webhook_id` | Searching the spec after the brief's own "verify, don't guess" step |
+| Route emits `tool:<name>` | The engine listens on `EVENT_TYPES.TOOL_CALLED` = `'tool.called'` | A real call: tools fired, nothing persisted |
+
+The tests passed throughout, because they asserted the shapes this document invented.
+A test that pins your own guess is not verification.
+
+## The prompt must be templated, not interpolated
+
+`buildAssistantConfig` originally passed `strategy.getVariables()` — the use-case config's
+demo defaults — into `buildSystemPrompt`. That froze one script at boot with
+`parent_name: "रोहन"` and `drug_name: "Crocin"`, and the first real call greeted the
+patient by the sample name and asked about the sample medicine. It read as a vague,
+uncomprehending agent; it was an agent given the wrong facts.
+
+It now substitutes `{{key}}` for each key, producing a template ElevenLabs fills per call
+from `dynamic_variables`. **Keys used for control flow are excluded** — the three
+defaulting to `""` would flip an empty-check branch, and `alert_delivered` with its two
+`_line` companions would either select the wrong guardrail line or speak a literal
+placeholder aloud. Callers must send `parent_name` and `drug_name`, not `patient_name`.
+
+## Outstanding
+
+**The post-call webhook is not registered.** Creating it requires `webhooks_manage`, a
+workspace role permission — not an API-key scope, so widening a key cannot fix it. Until
+it exists, tool calls reach the engine mid-call but call *endings* do not, and outcomes
+are never persisted. `ELEVENLABS_POST_CALL_WEBHOOK_ID` is read on boot and the wiring is
+written and tested.
+
+**Inbound remains unbuilt.** The `+18145243223` number is still assigned to the prior
+product's agent for inbound. Reassigning it to ours would break inbound rather than
+improve it: our prompt is an outbound dose-reminder opener, and with no dynamic variables
+on an inbound call the placeholders arrive empty or are spoken literally. Inbound needs
+the conversation-initiation webhook first.
