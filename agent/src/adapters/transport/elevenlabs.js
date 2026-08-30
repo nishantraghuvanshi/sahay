@@ -10,6 +10,14 @@ const logger = require('../../utils/logger');
 
 const API = 'https://api.elevenlabs.io';
 
+// What the agent shipped with and what every recorded call so far used.
+// Overridden by transport.elevenlabs.llm in providers.yaml.
+const DEFAULT_LLM = 'gemini-2.5-flash';
+
+// 0 turns internal reasoning off. gemini-2.5-flash otherwise thinks by
+// default, which the agent was paying for on every single turn.
+const DEFAULT_THINKING_BUDGET = 0;
+
 /**
  * ElevenLabs' own system tools.
  *
@@ -82,6 +90,14 @@ class ElevenLabsTransportAdapter extends TransportPort {
     this.agentId = process.env.ELEVENLABS_AGENT_ID || null;
     this.phoneNumberId =
       providersConfig?.transport?.elevenlabs?.phone_number_id || null;
+    // The largest single contributor to how long a caller waits. Measured on a
+    // real call: LLM ttfb 1029-1700ms of a 2252-3882ms silence-to-first-audio,
+    // against ~160ms for TTS and ~30ms for ASR. Configurable so candidates can
+    // be compared without a code change, like every other provider here.
+    this.llm = providersConfig?.transport?.elevenlabs?.llm || DEFAULT_LLM;
+    // ?? not ||, so an explicit 0 survives.
+    this.thinkingBudget =
+      providersConfig?.transport?.elevenlabs?.thinking_budget ?? DEFAULT_THINKING_BUDGET;
   }
 
   get apiKey() {
@@ -100,6 +116,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
     // configured number; otherwise keep what the constructor resolved.
     this.phoneNumberId =
       config.providersConfig?.transport?.elevenlabs?.phone_number_id || this.phoneNumberId;
+    this.llm = config.providersConfig?.transport?.elevenlabs?.llm || this.llm;
+    this.thinkingBudget =
+      config.providersConfig?.transport?.elevenlabs?.thinking_budget ?? this.thinkingBudget;
 
     const KNOWN_TOOLS = new Set(['report_outcome', 'capture_field']);
 
@@ -511,7 +530,12 @@ class ElevenLabsTransportAdapter extends TransportPort {
             : {}),
           prompt: {
             prompt: strategy.buildSystemPrompt(placeholders),
-            llm: 'gemini-2.5-flash',
+            llm: this.llm || DEFAULT_LLM,
+            // A dose call is a scripted branch, not a puzzle. Thinking costs
+            // time on every turn, and the v6 transcript shows it being spoken
+            // aloud to a patient when it leaks.
+            thinking_budget: this.thinkingBudget ?? DEFAULT_THINKING_BUDGET,
+            enable_reasoning_summary: false,
             tools: [
               ...strategy.getTools().map((t) => this._toolDeclaration(t, webhookUrl)),
               ...SYSTEM_TOOLS,

@@ -123,7 +123,19 @@ async function runScenario(key, scenario, args, credentials) {
   const toolCalls = [];
   const leaked = new Set();
   const agentSpeech = [];
+  // Simulated turns carry the same conversation_turn_metrics a real call does,
+  // so LLM time-to-first-sentence is measurable here without ringing anyone.
+  // That is the only latency figure this harness can honestly report: ASR
+  // endpointing and TTS never run, so silence-to-first-audio cannot be.
+  const llmMs = [];
+  let reasonedTurns = 0;
   for (const turn of turns) {
+    if (turn.role === 'agent') {
+      if (turn.reasoned) reasonedTurns += 1;
+      const metrics = turn.conversation_turn_metrics?.metrics || {};
+      const ttf = metrics.convai_llm_service_ttf_sentence?.elapsed_time;
+      if (ttf) llmMs.push(ttf * 1000);
+    }
     if (turn.message) {
       if (turn.role === 'agent') agentSpeech.push(turn.message);
       for (const m of turn.message.match(/{{[a-zA-Z0-9_]+}}/g) || []) leaked.add(m);
@@ -233,6 +245,8 @@ async function runScenario(key, scenario, args, credentials) {
     turns,
     turnCount: turns.length,
     outcomes,
+    llmMs,
+    reasonedTurns,
     chain,
     derived,
     first,
@@ -333,6 +347,24 @@ async function main() {
     );
   }
   console.log('-'.repeat(80));
+
+  // Latency, pooled across every scenario in the run.
+  const allLlm = results.flatMap((r) => r.llmMs || []).sort((a, b) => a - b);
+  const reasoned = results.reduce((n, r) => n + (r.reasonedTurns || 0), 0);
+  if (allLlm.length) {
+    const at = (q) => allLlm[Math.min(Math.floor(allLlm.length * q), allLlm.length - 1)];
+    console.log(
+      `llm ttf(ms)  n=${allLlm.length}  min=${allLlm[0].toFixed(0)}  ` +
+        `median=${at(0.5).toFixed(0)}  p90=${at(0.9).toFixed(0)}  max=${allLlm[allLlm.length - 1].toFixed(0)}` +
+        `  reasoned turns=${reasoned}`
+    );
+    if (reasoned > 0) {
+      // thinking_budget: 0 in providers.yaml should make this zero. Reasoning
+      // costs a caller time on every turn, and a v6 transcript shows it being
+      // spoken aloud to a patient when it leaks.
+      console.log(`             ${reasoned} turn(s) reasoned — check transport.elevenlabs.thinking_budget`);
+    }
+  }
 
   const failed = results.filter((r) => r.error || !r.passed);
   const warned = results.filter((r) => !r.error && r.passed && r.warnings.length);

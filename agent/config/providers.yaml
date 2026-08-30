@@ -52,6 +52,35 @@ transport:
     agent_id_env: "ELEVENLABS_AGENT_ID"
     phone_number_id: "phnum_2001m0m0dch2fvhv1jar36bfzd5p"
 
+    # The model ElevenLabs runs. This is the biggest lever on how long a
+    # caller waits: measured on a real call, LLM time-to-first-sentence was
+    # 1029-1700ms out of a 2252-3882ms gap between the caller falling silent
+    # and hearing a reply — against ~160ms for TTS and ~30ms for ASR.
+    #
+    # gemini-2.5-flash reasons internally before answering, which costs time
+    # and is the most likely source of the v6 bug where the agent spoke its
+    # own deliberation aloud to a patient. Lower-latency candidates worth
+    # comparing: gemini-2.0-flash, gemini-2.5-flash-lite, claude-haiku-4-5.
+    #
+    # Changing this changes behaviour as well as speed. Re-run
+    # `npm run simulate-elevenlabs -- --all` before trusting a swap: a faster
+    # model that mishandles the escalation branches is not an improvement.
+    llm: "gemini-2.5-flash"
+
+    # 0 turns the model's internal reasoning off. gemini-2.5-flash thinks by
+    # default, and this agent was paying for it on every turn: LLM
+    # time-to-first-sentence measured 1029-1700ms on a real call. A dose call
+    # is a scripted branch, not a puzzle.
+    #
+    # It is also a safety setting. The v6 transcript shows the model's
+    # deliberation being spoken aloud to a patient, in English, mid-sentence:
+    # "The user just said ... However, the guardrail for emotional dist...".
+    # Reasoning it does not do cannot leak.
+    #
+    # Raise it if a guardrail branch turns out to need the headroom — but
+    # re-run the battery, because that is the only way to tell.
+    thinking_budget: 0
+
 # ── STT (Speech-to-Text) ──────────────────────────────────────────
 
 stt:

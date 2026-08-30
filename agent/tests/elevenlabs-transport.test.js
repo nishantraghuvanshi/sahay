@@ -586,3 +586,70 @@ describe('system tools — the agent must be able to hang up', () => {
     assert.strictEqual('built_in_tools' in prompt, false);
   });
 });
+
+describe('llm selection — swappable without a code change', () => {
+  // The model was hardcoded to gemini-2.5-flash. It is the largest single
+  // contributor to perceived latency: measured on a real call, LLM ttfb ran
+  // 1029-1700ms out of a 2252-3882ms silence-to-first-audio, against ~160ms
+  // for TTS and ~30ms for ASR. Comparing candidates needs the model to come
+  // from config, like every other provider choice in this repo.
+  test('reads the model from providers.yaml', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { llm: 'gemini-2.0-flash' } },
+    });
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.agent.prompt.llm, 'gemini-2.0-flash');
+  });
+
+  test('falls back to the known-good model when unconfigured', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.agent.prompt.llm, 'gemini-2.5-flash');
+  });
+
+  test('start() config can override the constructor, as it does for the phone number', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { llm: 'gemini-2.0-flash' } },
+    });
+    return a
+      .start(null, null, {
+        providersConfig: { transport: { elevenlabs: { llm: 'claude-haiku-4-5' } } },
+      })
+      .then(() => {
+        const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+        assert.strictEqual(cfg.conversation_config.agent.prompt.llm, 'claude-haiku-4-5');
+      });
+  });
+});
+
+describe('thinking_budget — the agent should answer, not deliberate', () => {
+  // gemini-2.5-flash reasons internally before replying. The agent had
+  // thinking_budget: null, i.e. the model default, which for that model means
+  // dynamic thinking is ON. That reasoning is paid for twice: once in latency
+  // (LLM ttf_sentence measured 1029-1700ms of a 2252-3882ms wait) and once in
+  // risk — the v6 transcript shows the deliberation being spoken aloud to a
+  // patient in English.
+  //
+  // A dose call is a scripted branch, not a puzzle. The schema documents
+  // "Use 0 to turn off if supported by the model".
+  test('turns thinking off by default', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.agent.prompt.thinking_budget, 0);
+  });
+
+  test('can be raised from providers.yaml if a branch turns out to need it', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { thinking_budget: 512 } },
+    });
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.agent.prompt.thinking_budget, 512);
+  });
+
+  test('does not ask the provider for reasoning summaries', () => {
+    // Documented as costing TTFB, and we would never show them to a caller.
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.agent.prompt.enable_reasoning_summary, false);
+  });
+});
