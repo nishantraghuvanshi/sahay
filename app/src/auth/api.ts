@@ -25,7 +25,23 @@ interface VerifyResponse {
   is_new: boolean
 }
 
+/** What `/auth/check` knows about a phone or email before anyone types a password. */
+export interface CheckResponse {
+  /** The server declined to answer — throttled, or the identifier was unusable.
+   *  Treat it as "no idea", never as "no account". */
+  unknown: boolean
+  exists: boolean
+  /** An account that finished step 5 and can actually sign in. `exists` without
+   *  this is a half-finished signup: send them back to /signup, not to /login. */
+  has_password: boolean
+}
+
 export const auth = {
+  /** Which of the two pages this person belongs on. See api/auth/routes.py —
+   *  the one place in auth that answers "does this account exist", on purpose. */
+  check: (identifier: string) =>
+    authApi.post<CheckResponse>('/auth/check', { identifier }),
+
   start: (channel: Channel, destination: string) =>
     authApi.post<StartResponse>('/auth/otp/start', { channel, destination }),
 

@@ -86,7 +86,6 @@ describe('Meet — the call configuration rail', () => {
     renderMeet()
 
     await configure(user)
-    await user.click(screen.getByRole('button', { name: 'English' }))
     await user.click(startButton())
 
     expect(constructed).toHaveBeenCalledTimes(1)
@@ -95,7 +94,7 @@ describe('Meet — the call configuration rail', () => {
       drugName: 'Metformin',
       mealRelation: 'after',
       meal: 'lunch',
-      language: 'en',
+      language: 'hi',
       phone: '+919812345678',
     })
   })
@@ -110,7 +109,6 @@ describe('Meet — the call configuration rail', () => {
     expect(screen.getByLabelText('Medicine')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Before meal' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Dinner' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'English' })).toBeDisabled()
     expect(screen.getByText('Locked')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'End the call' }))

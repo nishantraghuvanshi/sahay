@@ -98,6 +98,17 @@ class TurnManager {
     // --- Endpointing tracking ---
     this.lastPartialTranscript = '';
     this.speechStarted = false;
+    /**
+     * Final transcripts for the CURRENT utterance, in order.
+     *
+     * STT emits a final at every pause, not at every end of turn — someone
+     * saying "हाँ … मैंने दवाई ले ली" produces two. Endpointing on the first
+     * one answered half a sentence and talked over the rest, which is what a
+     * caller experiences as "it is not listening to me".
+     */
+    this.finalTranscripts = [];
+    /** True once the browser's VAD has reported silence for this utterance. */
+    this.silenceSignalled = false;
 
     // --- Silence timeout tracking ---
     /** Consecutive silence timeouts; 1 = retry prompt, 2 = end conversation. */
@@ -215,7 +226,19 @@ class TurnManager {
 
     if (isFinal) {
       if (text && String(text).trim()) {
-        this._endpoint(String(text).trim());
+        this.finalTranscripts.push(String(text).trim());
+        this.lastPartialTranscript = '';
+        if (!this.speechStarted) this._onSpeechStarted();
+
+        // The browser's VAD has already said this utterance is over, so this
+        // final is the last piece of it: answer now, exactly as before.
+        // Otherwise hold it and let the endpoint timer (or that silence
+        // signal, when it comes) decide — the person may still be talking.
+        if (this.silenceSignalled) {
+          this._endpoint();
+        } else {
+          this._startEndpointTimer();
+        }
       }
       // Empty final transcript — ignore (STT detected end-of-speech with no words).
     } else {
@@ -240,7 +263,14 @@ class TurnManager {
    * @param {string|null} text - Response text (may be empty/null)
    * @param {Array<Object>} [toolCalls] - Tool calls from the LLM
    */
-  llmResponse(text, toolCalls) {
+  llmResponse(text, toolCalls, options = {}) {
+    // `alreadySpoken` is the streaming pipeline telling us it has synthesized
+    // this reply already, sentence by sentence, as the tokens arrived. Without
+    // it every reply went out twice: once streamed, once whole. The state
+    // machine is unchanged either way — SPEAKING is still entered and left
+    // through ttsFinished, so pendingOutcome and the return to LISTENING have
+    // exactly one path out.
+    const alreadySpoken = options.alreadySpoken === true;
     if (this.ended) {
       this._warn('llmResponse', 'conversation ended');
       return;
@@ -257,7 +287,7 @@ class TurnManager {
         // Speak farewell text, then end after TTS finishes.
         this.pendingOutcome = outcome;
         this._transition(STATE.SPEAKING);
-        this.onAgentSpeak(String(text).trim());
+        this._speakOrFinish(String(text).trim(), alreadySpoken);
       } else {
         // No farewell (or barge-in pending) — end immediately.
         this.bargeInPending = false;
@@ -277,7 +307,7 @@ class TurnManager {
     // 3. Normal response — speak the text.
     if (text && String(text).trim()) {
       this._transition(STATE.SPEAKING);
-      this.onAgentSpeak(String(text).trim());
+      this._speakOrFinish(String(text).trim(), alreadySpoken);
     } else {
       // No text and no outcome — resume listening.
       this._warn('llmResponse', 'no text and no outcome, resuming listening');
@@ -321,6 +351,16 @@ class TurnManager {
       this._warn('silenceDetected', `unexpected state: ${this.state}`);
       return;
     }
+    this.silenceSignalled = true;
+
+    // A final is already waiting: the VAD saying "they have stopped" is the
+    // signal it was waiting for. Answer now rather than sitting out the
+    // endpoint timer on top of the silence the VAD already measured.
+    if (this.finalTranscripts.length > 0) {
+      this._endpoint();
+      return;
+    }
+
     if (this.speechStarted && !this._endpointTimer) {
       this._startEndpointTimer();
     }
@@ -372,6 +412,9 @@ class TurnManager {
    * @private
    */
   _onSpeechStarted() {
+    // A new burst of speech: whatever silence the VAD reported before it is
+    // no longer the end of anything.
+    this.silenceSignalled = false;
     this.speechStarted = true;
     this._clearSilenceTimer();
     this._startMaxSpeechTimer();
@@ -381,10 +424,28 @@ class TurnManager {
    * Enter LISTENING state: reset tracking, start silence timer, notify callback.
    * @private
    */
+  /**
+   * Speak this text, or — when the caller has already spoken it — go straight
+   * to the end-of-speech transition.
+   *
+   * @param {string} text
+   * @param {boolean} alreadySpoken
+   * @private
+   */
+  _speakOrFinish(text, alreadySpoken) {
+    if (!alreadySpoken) {
+      this.onAgentSpeak(text);
+      return;
+    }
+    this.ttsFinished();
+  }
+
   _enterListening() {
     this._clearTimers();
     this.speechStarted = false;
     this.lastPartialTranscript = '';
+    this.finalTranscripts = [];
+    this.silenceSignalled = false;
     this._transition(STATE.LISTENING);
     this._startSilenceTimer();
     this.onStartListening();
@@ -392,12 +453,26 @@ class TurnManager {
 
   /**
    * Endpoint: user speech is complete — stop listening and send to LLM.
-   * @param {string} transcript - Final user transcript
+   *
+   * The utterance is every final STT produced for it, joined in order, with
+   * any trailing partial that never got a final of its own. Passing one
+   * transcript in was what made a pause mid-sentence cost the second half.
+   *
+   * @param {string} [fallback] - Used when nothing was captured (max-speech force)
    * @private
    */
-  _endpoint(transcript) {
+  _endpoint(fallback) {
+    const parts = this.finalTranscripts.slice();
+    const trailing = (this.lastPartialTranscript || '').trim();
+    if (trailing) parts.push(trailing);
+
+    const transcript = parts.join(' ').trim() || (fallback || '').trim();
+
     this._clearTimers();
     this.consecutiveSilenceTimeouts = 0;
+    this.finalTranscripts = [];
+    this.lastPartialTranscript = '';
+    this.silenceSignalled = false;
     this.onStopListening();
     this._transition(STATE.PROCESSING);
     this.onProcessUserSpeech(transcript);
@@ -471,9 +546,15 @@ class TurnManager {
       this._endpointTimer = null;
       if (this.ended || this.state !== STATE.LISTENING) return;
 
-      if (this.lastPartialTranscript && this.lastPartialTranscript.trim()) {
-        logger.log('turn_endpoint_silence', { transcript: this.lastPartialTranscript });
-        this._endpoint(this.lastPartialTranscript.trim());
+      const pending =
+        this.finalTranscripts.length > 0 ||
+        Boolean(this.lastPartialTranscript && this.lastPartialTranscript.trim());
+
+      if (pending) {
+        logger.log('turn_endpoint_silence', {
+          transcript: [...this.finalTranscripts, this.lastPartialTranscript].join(' ').trim(),
+        });
+        this._endpoint();
       } else {
         // False alarm — VAD detected speech but STT produced nothing.
         this.speechStarted = false;
@@ -493,10 +574,11 @@ class TurnManager {
       this._maxSpeechTimer = null;
       if (this.ended || this.state !== STATE.LISTENING) return;
 
-      const transcript = (this.lastPartialTranscript || '').trim();
-      logger.log('turn_max_speech', { transcript });
-      // Force endpoint even with empty transcript — let LLM handle it.
-      this._endpoint(transcript);
+      logger.log('turn_max_speech', {
+        transcript: [...this.finalTranscripts, this.lastPartialTranscript].join(' ').trim(),
+      });
+      // Force endpoint even with nothing captured — let the LLM handle it.
+      this._endpoint('');
     }, this.maxSpeechDurationMs);
   }
 

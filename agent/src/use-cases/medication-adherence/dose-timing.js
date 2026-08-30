@@ -1,5 +1,7 @@
 'use strict';
 
+const { FOOD_LINES, FOOD_QUESTION, FOOD_WAIT_LINES } = require('./scheduling/call-variables');
+
 /**
  * Meal-relative dose timing, as a phrase a prompt can drop into a sentence.
  *
@@ -50,4 +52,45 @@ function buildDoseTiming({ mealRelation, meal } = {}, language = 'hi') {
   return mealRelation === 'before' ? `${mealWord} से पहले` : `${mealWord} के बाद`;
 }
 
-module.exports = { buildDoseTiming, MEALS, RELATIONS };
+/**
+ * The food variables the prompt branches on, for a dose whose meal relation
+ * was chosen rather than read off a schedule (the playground).
+ *
+ * The wording is imported, never re-written: `FOOD_LINES` and `FOOD_QUESTION`
+ * in scheduling/call-variables.js are the only sentences the agent is allowed
+ * to say about food, because they restate a prescription rather than compose
+ * one. A second copy here would be a second thing to keep in step with the
+ * guardrail, and the guardrail is the reason they exist — a real call once had
+ * the agent announce "Metformin खाने के बाद लेनी होती है" for a medicine with
+ * no food rule on file at all.
+ *
+ * Empty for anything unrecognised, and empty for English: the English prompt
+ * carries no food placeholders yet (it trails the Hindi one), so there is
+ * nothing there to fill and nothing it could say.
+ *
+ * @param {Object} args
+ * @param {'before'|'after'} [args.mealRelation]
+ * @param {'hi'|'en'} [language=hi]
+ * @returns {{food_question: string, food_line: string, food_wait_line: string}}
+ */
+function buildFoodVariables({ mealRelation } = {}, language = 'hi') {
+  const empty = { food_question: '', food_line: '', food_wait_line: '' };
+  if (language === 'en') return empty;
+  if (!RELATIONS.includes(mealRelation)) return empty;
+
+  const line = FOOD_LINES[mealRelation];
+  if (!line) return empty;
+
+  // All three together or none: the prompt asks the question, says the line,
+  // and — when they have not eaten — says what to do instead. A question with
+  // no answer behind it is worse than silence, and a food rule with no
+  // "then when?" is what left a real call telling someone to take an
+  // after-food medicine on an empty stomach.
+  return {
+    food_question: FOOD_QUESTION,
+    food_line: line,
+    food_wait_line: FOOD_WAIT_LINES[mealRelation] || '',
+  };
+}
+
+module.exports = { buildDoseTiming, buildFoodVariables, MEALS, RELATIONS };
