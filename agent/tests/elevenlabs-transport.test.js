@@ -839,7 +839,7 @@ describe('inbound — the agent must be told who is calling', () => {
     assert.strictEqual(hook.url, 'https://x.ngrok-free.dev/el/conversation-init');
     // Same shared secret as the tool routes: this endpoint is on the same
     // public tunnel and it decides what the agent says to a caller.
-    assert.ok(hook.request_headers['X-Kinvox-Token'] !== undefined);
+    assert.ok(hook.request_headers['X-Voxikin-Token'] !== undefined);
   });
 
   test('turns the webhook on, which is off by default', () => {

@@ -479,7 +479,7 @@ describe('POST /el/conversation-init — who is calling, and what to say to them
     const { app } = inboundHarness();
     assert.strictEqual((await post(app, '/el/conversation-init', init())).status, 401);
     assert.strictEqual(
-      (await post(app, '/el/conversation-init', init(), { 'X-Kinvox-Token': 'wrong' })).status,
+      (await post(app, '/el/conversation-init', init(), { 'X-Voxikin-Token': 'wrong' })).status,
       401
     );
   });

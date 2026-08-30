@@ -252,7 +252,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
       // agent_id, called_number, call_sid, conversation_id.
       config.app.post('/el/conversation-init', async (req, res) => {
         const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
-        if (!expected || req.get('X-Kinvox-Token') !== expected) {
+        if (!expected || req.get('X-Voxikin-Token') !== expected) {
           logger.log('el_init_unauthorized', {});
           return res.status(401).json({ ok: false, error: 'unauthorized' });
         }
@@ -789,7 +789,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // the same public tunnel and decides what the agent says to whoever
             // dialled; leaving it open would let anyone who finds the URL
             // choose the prompt for a real caller.
-            request_headers: { 'X-Kinvox-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
+            request_headers: { 'X-Voxikin-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
           },
           ...(process.env.ELEVENLABS_POST_CALL_WEBHOOK_ID
             ? {

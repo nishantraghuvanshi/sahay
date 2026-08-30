@@ -527,9 +527,15 @@ class SqliteRepository extends OutcomeRepositoryPort {
         .prepare(
           `SELECT * FROM sessions
            WHERE patient_id = ? AND status = 'dropped' AND ended_at >= ?
-           -- id breaks ties: two sessions ending in the same millisecond
-           -- share an ISO timestamp, leaving ended_at alone non-deterministic.
-           ORDER BY ended_at DESC, id DESC LIMIT 1`
+           -- Ties are real: two sessions ended in the same millisecond share an
+           -- ISO ended_at, so that column alone cannot decide a winner.
+           --
+           -- rowid breaks it by insertion order. The id column cannot: it holds a
+           -- TEXT uuid, and random uuids do not order, so this picked the winner
+           -- at random and the most-recent-dropped-session test failed about half
+           -- the time. The other three queries in this file were moved to rowid
+           -- when the two schemas merged; this one was missed.
+           ORDER BY ended_at DESC, rowid DESC LIMIT 1`
         )
         .get(patientId, cutoff) || null
     );

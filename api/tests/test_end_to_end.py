@@ -128,21 +128,30 @@ def _fresh_db(monkeypatch):
 # recorded as an open issue; this test documents the behaviour as it actually
 # is rather than as it ought to be, because a test that describes the intended
 # handler would pass against a route nobody reaches.
+# snake_case, and no caregiver identity, because that is what the surviving
+# handler reads — `OnboardingBody` in api/caregiver/routes.py — and it is exactly
+# what app/src/screens/setup/Consent.tsx posts.
+#
+# This constant was camelCase until the feat/app merge, which moved onboarding to
+# the other handler and left this test posting the old shape at it: five tests in
+# this file failed on a 422 that no source change had caused. The same drift the
+# merge was fixing, reintroduced in the test. api/tests/test_onboarding_contract.py
+# now compares these keys against the screen's so it cannot happen quietly again.
 ONBOARDING = {
-    "phone": CAREGIVER_PHONE,
-    "phoneVerified": True,
-    "parentName": "कमला",
-    "age": "71",
+    "caregiver_name": "",
     "relation": "son",
-    "parentPhone": PARENT_PHONE,
+    "parent_name": "कमला",
+    "honorific": None,
+    "age": 71,
+    "parent_phone": PARENT_PHONE,
     "language": "hi-IN",
     "conditions": ["diabetes"],
     "allergies": [],
-    "doctorName": "Dr Rao",
-    "doctorPhone": "+919555522222",
+    "doctor_name": "Dr Rao",
+    "doctor_phone": "+919555522222",
     "address": "Pune",
     # Dinner before the evening dose, so the next-call line can name a meal.
-    "mealTimes": {"breakfast": "07:30", "lunch": "13:00", "dinner": "19:30"},
+    "meal_times": {"breakfast": "07:30", "lunch": "13:00", "dinner": "19:30"},
     "medicines": [
         {
             "name": "Metformin",
@@ -154,7 +163,7 @@ ONBOARDING = {
     ],
     # Enforced server-side, not just by a disabled button: no schedule enters
     # the reminder system without an explicit human confirmation.
-    "scheduleConfirmed": True,
+    "schedule_confirmed": True,
     "consents": {"informed": True, "recording": True, "no_advice": True},
 }
 

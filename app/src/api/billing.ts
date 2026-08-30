@@ -10,7 +10,7 @@ import { ApiError, api } from './client'
  * so nothing here can know a payment landed — a person confirms it, and the
  * screen says so.
  *
- * Live only, for the same reason `postOnboarding` is: `API_BASE=/mock` means
+ * Live only, for the same reason onboarding is: `API_BASE=/mock` means
  * there is no server to charge, and a mock that returned a cheerful order id
  * would be a fake receipt. Money is the one place a fixture is worse than a
  * refusal.

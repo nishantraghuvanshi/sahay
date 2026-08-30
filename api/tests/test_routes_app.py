@@ -758,9 +758,22 @@ def test_only_one_onboarding_endpoint_is_registered():
     registration, so the unauthenticated one won and the authenticated one was
     unreachable — and because their field names differed, every onboarding the app
     posted answered 422 and no patient was ever written."""
+    def walk(routes):
+        """Recurse. `app.routes` is not flat in this FastAPI: `include_router`
+        leaves an `_IncludedRouter` wrapper in the list rather than splicing the
+        child routes in, and the wrapper exposes them only as `original_router`.
+        Iterating one level deep therefore finds neither handler, so the check
+        read `assert len([]) == 1` and failed for a reason that had nothing to do
+        with how many onboarding endpoints exist."""
+        for r in routes:
+            if getattr(r, "path", None) is not None:
+                yield r
+            nested = getattr(r, "original_router", None)
+            yield from walk(getattr(nested, "routes", ()) or getattr(r, "routes", ()) or ())
+
     matches = [
-        r for r in api_main.app.routes
-        if getattr(r, "path", None) == "/app/onboarding" and "POST" in getattr(r, "methods", ())
+        r for r in walk(api_main.app.routes)
+        if r.path == "/app/onboarding" and "POST" in (getattr(r, "methods", None) or ())
     ]
     assert len(matches) == 1, [r.endpoint.__module__ for r in matches]
     assert matches[0].endpoint.__module__ == "api.caregiver.routes"

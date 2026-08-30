@@ -30,14 +30,13 @@ const source = {
   handoff: (token: string) => (live ? api.get<HandoffView>(`/h/${token}`) : mock.handoff(token)),
 }
 
-/**
- * Post a completed onboarding. Live only — there is nothing to write to in mock
- * mode, and pretending to save would be worse than saying so.
+/*
+ * There is deliberately no postOnboarding() here. One used to exist, called from
+ * nowhere, and it posted through `api` — the mockable base, which does not carry
+ * the session cookie, so anything that had used it would have got a 401. The one
+ * real caller is app/src/screens/setup/Consent.tsx, and it goes through `authApi`
+ * because onboarding must never be mocked and must always be authenticated.
  */
-export async function postOnboarding(draft: unknown): Promise<{ patient_id: string }> {
-  if (!live) throw new ApiError('No Care API configured — nothing was saved.', 'unreachable')
-  return api.post<{ patient_id: string }>('/app/onboarding', draft)
-}
 
 /**
  * Persist an edited schedule together with the attestation that justified it.

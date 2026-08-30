@@ -135,9 +135,23 @@ except Exception as exc:  # pragma: no cover - surfaced at boot, not hidden
     log.error("caregiver auth routes not mounted: %s", exc)
 
 # The caregiver app runs on a different origin in development (Vite on :5173).
+#
+# `allow_credentials=True` is load-bearing now that every /app/* endpoint reads the
+# session cookie. A `credentials: 'include'` fetch — which is what client.ts sends,
+# because the session is httpOnly and no script can attach it by hand — is blocked
+# by the browser unless the response carries Access-Control-Allow-Credentials, so
+# without this a cross-origin caller could not authenticate at all. It went
+# unnoticed while the endpoints were open, and again afterwards because
+# vite.config.ts proxies /auth and /app in development, making them same-origin
+# where CORS does not apply. app/.env.local points VITE_API_BASE straight at
+# :8000, which does not go through that proxy.
+#
+# Safe only because the origins are an explicit list: the browser refuses
+# `Allow-Origin: *` together with credentials, so CORS_ORIGINS must never be `*`.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
