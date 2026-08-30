@@ -111,6 +111,16 @@ carrier hop. Every other rule — hashing, expiry, attempt counting, session iss
 exactly as in production. Team destinations only, with consent (`SR-7`); leave empty in
 any real deployment.
 
+`DEV_OTP_BYPASS_NUMBERS=*` extends that to every phone number, which is what the demo
+build runs while no WhatsApp sender is approved — without it, step 2 of signup cannot be
+completed and there is no app to show. `DEV_OTP_BYPASS_EMAILS=*` does the same for every
+email address, and is switched independently, since the two channels break for different
+reasons. Either way nothing is sent: the code is always `DEV_OTP_BYPASS_CODE`.
+
+Treat both as master keys: anyone who knows `DEV_OTP_BYPASS_CODE` can pass that channel
+for any destination, including one that already has an account. The API logs a warning
+per wildcard on every boot while they are set.
+
 ### Caregiver app
 
 ```bash

@@ -39,7 +39,7 @@ export default function Parent() {
         <button
           type="button"
           aria-label="Back"
-          onClick={() => navigate('/login')}
+          onClick={() => navigate('/setup/meet')}
           className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           &larr;

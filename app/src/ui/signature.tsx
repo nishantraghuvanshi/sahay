@@ -18,18 +18,22 @@ import type { Severity } from '../api/types'
 /* ------------------------------------------------------------------ wordmark */
 
 /** "Kinvox" with the i-dot lifted onto the hairline that runs under the word. */
-export function Wordmark({ className, size = 15 }: { className?: string; size?: number }) {
+/**
+ * The rule and the accent dot are sized in `em`, not pixels, so the whole mark
+ * scales from one font-size — which is what lets a caller size it with a
+ * responsive class (`text-[17px] 2xl:text-[24px]`) instead of a fixed number.
+ * Pass `size` for a fixed pixel size; omit it and the mark inherits, so
+ * breakpoints reach it.
+ */
+export function Wordmark({ className, size }: { className?: string; size?: number }) {
   return (
     <span
-      className={clsx('relative inline-block pb-[5px] leading-none', className)}
-      style={{ fontFamily: 'var(--font-display)', fontSize: size }}
+      className={clsx('relative inline-block pb-[0.33em] leading-none', className)}
+      style={{ fontFamily: 'var(--font-display)', ...(size ? { fontSize: size } : null) }}
     >
       <span className="tracking-[-0.01em]">Kinvox</span>
       <span className="absolute inset-x-0 bottom-0 h-px bg-current" />
-      <span
-        className="absolute bottom-[-1.5px] size-[3px] rounded-full bg-accent"
-        style={{ left: size * 0.38 }}
-      />
+      <span className="absolute bottom-[-0.1em] left-[0.38em] size-[0.2em] rounded-full bg-accent" />
     </span>
   )
 }

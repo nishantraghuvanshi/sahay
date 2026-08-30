@@ -7,6 +7,7 @@ import Landing from './screens/landing/Landing'
 import KitchenSink from './screens/KitchenSink'
 import Login from './screens/setup/Login'
 import Signup from './screens/setup/Signup'
+import Meet from './screens/setup/Meet'
 import Parent from './screens/setup/Parent'
 import Prescription from './screens/setup/Prescription'
 import Analysing from './screens/setup/Analysing'
@@ -48,6 +49,8 @@ export default function App() {
           same gate as the app itself — step 2 of login is what opens it. */}
       <Route element={<RequireAuth />}>
         <Route path="/setup">
+          {/* First stop after signup: hear the agent before describing a parent to it. */}
+          <Route path="meet" element={<Meet />} />
           <Route path="parent" element={<Parent />} />
           <Route path="prescription" element={<Prescription />} />
           <Route path="analysing" element={<Analysing />} />

@@ -132,7 +132,7 @@ export function AuthSteps({
    *  comes back as `state.from`, so the alert someone opened is still the
    *  screen they reach. */
   const destination = () => {
-    if (isNew) return '/setup/parent'
+    if (isNew) return '/setup/meet'
     const from = (location.state as { from?: string } | null)?.from
     return from ?? '/home'
   }

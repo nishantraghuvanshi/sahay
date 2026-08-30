@@ -36,6 +36,22 @@ async def lifespan(app: FastAPI):
     settings = get_settings()  # raises here, not on the first request, if a secret is missing
     await db.open_pool()
     logging.getLogger(__name__).info("care api up · app origin %s", settings.app_origin)
+    # Loud, every boot, and never downgraded to info: a wildcard bypass is a
+    # master key for that channel, and the one way it does real harm is by being
+    # forgotten in an environment that outlived the demo. The two channels are
+    # reported separately because they are switched separately.
+    for var, on in (
+        ("DEV_OTP_BYPASS_NUMBERS", settings.bypass_all_numbers),
+        ("DEV_OTP_BYPASS_EMAILS", settings.bypass_all_emails),
+    ):
+        if on:
+            logging.getLogger(__name__).warning(
+                "%s=* — EVERY destination on that channel accepts the fixed code %s, "
+                "and nothing is sent. Demo only. Clear it before real caregivers use "
+                "this deployment.",
+                var,
+                settings.dev_otp_bypass_code,
+            )
     try:
         yield
     finally:

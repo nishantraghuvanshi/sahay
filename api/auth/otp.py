@@ -126,9 +126,9 @@ async def prepare_send(
     # real one: same hash, same expiry, same attempt budget. Only the carrier
     # hop is skipped, so the demo path and the production path share every rule.
     is_bypass = (
-        destination in settings.bypass_numbers
+        settings.phone_is_bypassed(destination)
         if channel is Channel.sms
-        else destination in settings.bypass_emails
+        else settings.email_is_bypassed(destination)
     )
     code = settings.dev_otp_bypass_code if is_bypass else generate_code()
 

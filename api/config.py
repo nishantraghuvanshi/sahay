@@ -73,10 +73,20 @@ class Settings(BaseSettings):
     # Demo fallback for un-DLT-registered Indian A2P SMS: these numbers get a
     # fixed code and no carrier hop. Every other step — hashing, expiry, attempt
     # counting, session issue — runs exactly as in production.
+    #
+    # A single `*` means EVERY phone number. That is the demo setting for a
+    # build with no WhatsApp sender approved yet: with no delivery configured
+    # and no bypass, step 2 of signup can never be completed, so there is no
+    # app to show. It is also, unavoidably, a master key — anyone who knows
+    # DEV_OTP_BYPASS_CODE can sign in as any phone number, including one that
+    # already has an account. Never ship it to a deployment with real
+    # caregivers on it (SR-7).
     dev_otp_bypass_numbers: str = ""
-    # Same escape hatch for email. Without a Resend key nothing can be
-    # delivered, and steps 3-4 gate the Continue button — so with neither key
-    # nor bypass, signup is not completable at all.
+    # Same escape hatch for email, and the same `*` wildcard, switched
+    # independently of the phone one: the two channels fail for different
+    # reasons (no approved WhatsApp sender vs no mail credential), and they get
+    # fixed at different times. Without a working mail path and without this,
+    # steps 3-4 gate the Continue button and signup is not completable at all.
     dev_otp_bypass_emails: str = ""
     dev_otp_bypass_code: str = "424242"
 
@@ -95,8 +105,24 @@ class Settings(BaseSettings):
         return {n.strip() for n in self.dev_otp_bypass_numbers.split(",") if n.strip()}
 
     @property
+    def bypass_all_numbers(self) -> bool:
+        """`*` in the list: every phone destination takes the fixed code."""
+        return "*" in self.bypass_numbers
+
+    def phone_is_bypassed(self, destination: str) -> bool:
+        return self.bypass_all_numbers or destination in self.bypass_numbers
+
+    @property
     def bypass_emails(self) -> set[str]:
         return {e.strip().lower() for e in self.dev_otp_bypass_emails.split(",") if e.strip()}
+
+    @property
+    def bypass_all_emails(self) -> bool:
+        """`*` in the list: every email destination takes the fixed code."""
+        return "*" in self.bypass_emails
+
+    def email_is_bypassed(self, destination: str) -> bool:
+        return self.bypass_all_emails or destination.strip().lower() in self.bypass_emails
 
     @property
     def sms_configured(self) -> bool:

@@ -226,6 +226,7 @@ called Mom yet"** until the intro call is scheduled.
 | Route | Frame |
 |---|---|
 | `/` (marketing + login) | `2a` |
+| `/setup/meet` | *no frame — added after the wireframes: the in-browser voice playground a caregiver meets right after signup* |
 | `/setup/parent` · `/setup/prescription` · `/setup/schedule` | `2b` · `2c` · `2d` |
 | **`kinvox.app/setup/consent`** | **`2D.2`** |
 | `/home` | `2e`, alts `2l` `2n` |

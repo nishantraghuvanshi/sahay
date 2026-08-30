@@ -72,9 +72,9 @@ function SkipLink() {
 
 function Sidebar() {
   return (
-    <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4">
-      <div className="flex items-center px-1 pb-4">
-        <Wordmark size={17} />
+    <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4 xl:w-[240px] xl:p-5 2xl:w-[264px] 2xl:p-6">
+      <div className="flex items-center px-1 pb-4 2xl:pb-5">
+        <Wordmark className="text-[17px] xl:text-[20px] 2xl:text-[24px]" />
       </div>
 
       <PatientCard />
@@ -165,11 +165,19 @@ function PatientCard() {
   )
 }
 
+/**
+ * The bar scales with the window. A fixed 56px strip carrying 20px type is right
+ * on a 13" laptop and reads as a leftover toolbar on a 27" display — the chrome
+ * has to grow with the room, or the whole app looks like it is running in a
+ * window someone forgot to resize.
+ */
 function TopBar() {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-6">
-      <span className="font-display text-lg font-semibold tracking-tight">Kinvox</span>
-      <span className="text-xs text-muted-strong">the care line, at a glance</span>
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-6 xl:h-16 xl:gap-4 xl:px-8 2xl:h-20 2xl:px-10">
+      <span className="font-display text-lg font-semibold tracking-tight xl:text-xl 2xl:text-2xl">
+        Kinvox
+      </span>
+      <span className="text-xs text-muted-strong xl:text-sm">the care line, at a glance</span>
     </header>
   )
 }

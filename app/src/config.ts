@@ -31,3 +31,14 @@ export const LIVE_POLL_MS = 5000
 // Must match Tailwind's `lg:` (1024px). At 900 the shell switched to the desktop
 // sidebar while screens were still rendering their single-column mobile layout.
 export const DESKTOP_MIN_PX = 1024
+
+/**
+ * Origin of the voice agent bridge server (`agent/`), which hosts the
+ * `/playground` WebSocket the "meet the agent" step talks to.
+ *
+ * Not `API_BASE`: the Care API and the agent are two different servers on two
+ * different ports, and the playground socket never goes through the Care API.
+ * Empty means same-origin, which is what a reverse-proxied deployment wants;
+ * the default is the port `agent/src/server.js` listens on locally.
+ */
+export const AGENT_BASE = import.meta.env.VITE_AGENT_BASE ?? 'http://localhost:3001'
