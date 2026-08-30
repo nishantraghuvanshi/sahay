@@ -29,6 +29,19 @@ function makeTurn(overrides = {}) {
   return { tm, calls };
 }
 
+/**
+ * Drive one finished utterance the way the browser does: STT's final
+ * transcript, then the VAD reporting that the speaker has stopped.
+ *
+ * A final on its own is no longer an endpoint — STT emits one at every pause,
+ * and answering the first one talked over the second half of the sentence.
+ * See TurnManager.userTranscript.
+ */
+function saysAndStops(tm, text) {
+  tm.userTranscript(text, true);
+  tm.silenceDetected();
+}
+
 describe('TurnManager — basic flow', () => {
   test('start → speak first message, then listen after TTS', () => {
     const { tm, calls } = makeTurn();
@@ -63,13 +76,18 @@ describe('TurnManager — basic flow', () => {
 });
 
 describe('TurnManager — endpointing', () => {
-  test('final transcript triggers processing', () => {
+  test('a final transcript plus the VAD stopping triggers processing', () => {
     const { tm, calls } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
     calls.length = 0;
 
     tm.userTranscript('hello world', true);
+    // Still listening: STT emits a final at every pause, and the speaker may
+    // not be finished. The VAD is what says they are.
+    assert.strictEqual(tm.getState(), STATE.LISTENING);
+
+    tm.silenceDetected();
 
     assert.strictEqual(tm.getState(), STATE.PROCESSING);
     assert.deepStrictEqual(calls, [
@@ -77,6 +95,40 @@ describe('TurnManager — endpointing', () => {
       { cb: 'onStateChange', args: [STATE.LISTENING, STATE.PROCESSING] },
       { cb: 'onProcessUserSpeech', args: ['hello world'] },
     ]);
+  });
+
+  test('a sentence split across two finals is sent whole, not halved', () => {
+    const { tm, calls } = makeTurn();
+    tm.start('hi');
+    tm.ttsFinished();
+    calls.length = 0;
+
+    // "हाँ" … pause … "मैंने दवाई ले ली" — one answer, two finals.
+    tm.userTranscript('हाँ', true);
+    tm.userTranscript('मैंने दवाई ले ली', true);
+    tm.silenceDetected();
+
+    assert.strictEqual(tm.getState(), STATE.PROCESSING);
+    assert.deepStrictEqual(
+      calls.filter((c) => c.cb === 'onProcessUserSpeech'),
+      [{ cb: 'onProcessUserSpeech', args: ['हाँ मैंने दवाई ले ली'] }],
+    );
+  });
+
+  test('a final that arrives after the VAD already stopped is answered at once', () => {
+    const { tm, calls } = makeTurn();
+    tm.start('hi');
+    tm.ttsFinished();
+    calls.length = 0;
+
+    // STT lags the VAD: the silence signal lands first, then the transcript.
+    tm.userTranscript('हाँ', false);
+    tm.silenceDetected();
+    assert.strictEqual(tm.getState(), STATE.LISTENING);
+
+    tm.userTranscript('हाँ ले ली', true);
+    assert.strictEqual(tm.getState(), STATE.PROCESSING);
+    assert.ok(calls.some((c) => c.cb === 'onProcessUserSpeech' && c.args[0] === 'हाँ ले ली'));
   });
 
   test('empty final transcript is ignored', () => {
@@ -155,7 +207,7 @@ describe('TurnManager — barge-in', () => {
     const { tm } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
     assert.strictEqual(tm.getState(), STATE.PROCESSING);
 
     tm.bargeIn();
@@ -166,7 +218,7 @@ describe('TurnManager — barge-in', () => {
     const { tm, calls } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
     tm.bargeIn();
     calls.length = 0;
 
@@ -186,7 +238,7 @@ describe('TurnManager — LLM response', () => {
     const { tm, calls } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
     calls.length = 0;
 
     tm.llmResponse('answer', null);
@@ -202,7 +254,7 @@ describe('TurnManager — LLM response', () => {
     const { tm, calls } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
     calls.length = 0;
 
     tm.llmResponse(null, [{
@@ -218,7 +270,7 @@ describe('TurnManager — LLM response', () => {
     const { tm, calls } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
     calls.length = 0;
 
     tm.llmResponse('Goodbye!', [{
@@ -239,7 +291,7 @@ describe('TurnManager — LLM response', () => {
     const { tm } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
     tm.bargeIn();
 
     tm.llmResponse('Goodbye!', [{
@@ -255,7 +307,7 @@ describe('TurnManager — LLM response', () => {
     const { tm } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
 
     tm.llmResponse(null, null);
 
@@ -266,7 +318,7 @@ describe('TurnManager — LLM response', () => {
     const { tm } = makeTurn();
     tm.start('hi');
     tm.ttsFinished();
-    tm.userTranscript('question', true);
+    saysAndStops(tm, 'question');
 
     tm.llmResponse(null, [{
       function: { name: 'report_outcome', arguments: { outcome: 'DENIED', reason: 'said no' } },
@@ -387,7 +439,7 @@ describe('TurnManager — thread safety', () => {
 
     tm.ttsFinished();
     tm.bargeIn();
-    tm.userTranscript('text', true);
+    saysAndStops(tm, 'text');
     tm.llmResponse('text', null);
     tm.speechDetected();
     tm.silenceDetected();
@@ -407,7 +459,7 @@ describe('TurnManager — thread safety', () => {
   test('userTranscript in wrong state is ignored', () => {
     const { tm } = makeTurn();
     tm.start('hi'); // SPEAKING
-    tm.userTranscript('text', true);
+    saysAndStops(tm, 'text');
     assert.strictEqual(tm.getState(), STATE.SPEAKING);
   });
 

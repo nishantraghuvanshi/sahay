@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { SignInPage } from '@/components/ui/sign-in'
 import { AuthSteps } from '../../setup/AuthSteps'
+import { useHandoffState } from '../../auth/redirect'
 
 /**
  * Wireframe 1a — creating an account. "Get started" lands here.
@@ -28,6 +29,12 @@ import { AuthSteps } from '../../setup/AuthSteps'
 
 export default function Signup() {
   const navigate = useNavigate()
+  const { identifier, from } = useHandoffState()
+
+  // `/login` hands over one box that took either kind. The `@` is the only thing
+  // that tells them apart — the same test api/auth/otp.py normalise_identifier
+  // uses — and step 1 wants the phone, step 3 the email.
+  const prefillsPhone = identifier !== undefined && !identifier.includes('@')
 
   return (
     <SignInPage
@@ -36,12 +43,17 @@ export default function Signup() {
       heroImageSrc="https://images.unsplash.com/photo-1642615835477-d303d7dc9ee9?w=2160&q=80"
     >
       <div className="animate-element animate-delay-300 flex flex-col gap-3">
-        <AuthSteps variant="inset" reveal="active" />
+        <AuthSteps
+          variant="inset"
+          reveal="active"
+          initialPhone={prefillsPhone ? identifier : undefined}
+          initialEmail={prefillsPhone ? undefined : identifier}
+        />
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{' '}
           <button
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/login', { state: { identifier, from } })}
             className="font-semibold text-violet-400 hover:underline"
           >
             Sign in

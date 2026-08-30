@@ -7,6 +7,7 @@ import { isEmail, isOtp, normalizePhoneInput, toE164, useSetupDraft } from './st
 import { ApiError } from '../api/client'
 import { auth } from '../auth/api'
 import { SESSION_KEY, useSession } from '../auth/SessionProvider'
+import { useAuthRedirect } from '../auth/redirect'
 
 /**
  * The four gated auth steps (wireframe 1a / 2a):
@@ -45,6 +46,8 @@ export function AuthSteps({
   variant = 'page',
   reveal = 'all',
   onDone,
+  initialPhone,
+  initialEmail,
 }: {
   /** `page` = /login, own scroll and a footer pushed to the bottom.
    *  `inset` = the landing's auth column, sized by its container. */
@@ -58,16 +61,30 @@ export function AuthSteps({
   /** Overrides where a completed sign-in lands. Defaults to the deep-link-aware
    *  destination below, which is what /login wants. */
   onDone?: () => void
+  /** Prefill for someone bounced here from `/login` — they typed it once. */
+  initialPhone?: string
+  initialEmail?: string
 }) {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
   const session = useSession()
   const { draft, patch } = useSetupDraft()
+  const { redirect, arm } = useAuthRedirect()
 
-  const [phone, setPhone] = useState(draft.phone)
+  // The prefill wins over the draft: it is what this person typed seconds ago on
+  // the other page, and the draft may be a stale number from a signup they
+  // abandoned last week.
+  //
+  // Through `normalizePhoneInput` on the way in, because /login hands over E.164
+  // and this field holds bare digits. Dropped in raw it read "+919876543210"
+  // under a placeholder saying "98765 43210" — the same mismatch that field's
+  // own comment records producing "+91+91…" the moment anyone touched it.
+  const [phone, setPhone] = useState(
+    initialPhone ? normalizePhoneInput(initialPhone) : draft.phone,
+  )
   const [phoneOtp, setPhoneOtp] = useState('')
-  const [email, setEmail] = useState(draft.email)
+  const [email, setEmail] = useState(initialEmail || draft.email)
   const [emailOtp, setEmailOtp] = useState('')
 
   const [name, setName] = useState('')
@@ -145,10 +162,31 @@ export function AuthSteps({
   // ------------------------------------------------------------------ actions
 
   const sendPhone = async () => {
-    if (!e164) return
+    if (!e164 || redirect) return
     setBusy('phone')
     setPhoneErr(null)
     try {
+      // Before the carrier hop: does this number already belong to someone?
+      //
+      // A returning caregiver who lands on /signup would otherwise get a real
+      // SMS, type a real code, and only then discover at step 5 that they had
+      // an account all along — having been walked through a signup that was
+      // never going to create anything. Ask first, and the answer is a sentence
+      // and a hop to /login with the number still in the field.
+      //
+      // `exists` without `has_password` is a signup that stopped after step 2.
+      // That one belongs here: sending them to a login form they cannot satisfy
+      // is the loop this whole change exists to break.
+      const who = await auth.check(e164)
+      if (who.exists && who.has_password) {
+        arm({
+          to: '/login',
+          identifier: e164,
+          message: 'You already have an account with this number. Taking you to sign in…',
+        })
+        return
+      }
+
       const { resend_after_s } = await auth.start('sms', e164)
       patch({ phone: e164, phoneOtpSent: true, phoneOtpSentAt: Date.now() })
       setSentNow((n) => ({ ...n, phone: true }))
@@ -230,7 +268,7 @@ export function AuthSteps({
       title: 'Phone number',
       state: phoneStep,
       node: (
-      <Step n={1} title="Phone number" state={phoneStep} error={phoneErr}>
+      <Step n={1} title="Phone number" state={phoneStep} error={redirect ? redirect.message : phoneErr}>
         <input
           inputMode="tel"
           autoComplete="tel"
@@ -243,7 +281,10 @@ export function AuthSteps({
         />
         {!phoneVerified && (
           <Row>
-            <Button disabled={!e164 || busy !== null || phoneCooldown > 0} onClick={sendPhone}>
+            <Button
+              disabled={!e164 || busy !== null || phoneCooldown > 0 || redirect !== null}
+              onClick={sendPhone}
+            >
               {busy === 'phone' ? 'Sending…' : phoneOtpSent ? 'Resend OTP' : 'Send OTP'}
             </Button>
             {phone && !e164 && (

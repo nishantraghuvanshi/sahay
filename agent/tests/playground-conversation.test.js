@@ -136,6 +136,8 @@ describe('PlaygroundConversation — capture_field wiring', () => {
 
     conversation.turn.userTranscript('मुझे बुखार है', true);
 
+    conversation.turn.silenceDetected();
+
     await waitFor(async () => (await repo.getSessionFields(conversation.sessionId)).chief_complaint !== undefined);
     const fields = await repo.getSessionFields(conversation.sessionId);
     assert.strictEqual(fields.chief_complaint, 'बुखार है');
@@ -166,6 +168,8 @@ describe('PlaygroundConversation — session close on conversation end', () => {
     await waitFor(() => conversation.turn.getState() === 'listening');
 
     conversation.turn.userTranscript('हाँ ले ली दवाई', true);
+
+    conversation.turn.silenceDetected();
 
     // report_outcome's farewell is spoken via a fire-and-forget _speak()
     // call, which is what drives ttsFinished → the outcome → the close —
@@ -245,6 +249,7 @@ describe('PlaygroundConversation — session close on conversation end', () => {
     await first.conversation.start();
     await waitFor(() => first.conversation.turn.getState() === 'listening');
     first.conversation.turn.userTranscript('कल से है', true);
+    first.conversation.turn.silenceDetected();
     await waitFor(async () => (await repo.getSessionFields(first.conversation.sessionId)).onset !== undefined);
     await first.conversation.stop();
 
@@ -317,6 +322,7 @@ describe('PlaygroundConversation — TTS adapter identity (F7)', () => {
     // Drive one more turn (fetches the adapter again in _processUserSpeech),
     // then simulate a browser disconnect (fetches it again in stop()).
     conversation.turn.userTranscript('नमस्ते', true);
+    conversation.turn.silenceDetected();
     await waitFor(() => conversation.turn.getState() === 'listening');
     await conversation.stop();
 

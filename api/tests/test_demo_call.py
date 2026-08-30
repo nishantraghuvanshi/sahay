@@ -20,7 +20,13 @@ os.environ.setdefault("OTP_PEPPER", "a-long-enough-test-pepper-value")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from api import db  # noqa: E402
+from api.config import get_settings  # noqa: E402
 from api.main import app  # noqa: E402
+
+# The sign-in these tests need before they can test anything else. Pinned per
+# test in `_fresh_db` below rather than at import — see the note there.
+BYPASS_PHONE = "+919999900001"
+BYPASS_CODE = "123456"
 
 TRANSCRIPT = {
     "persona": "forgot",
@@ -36,16 +42,16 @@ TRANSCRIPT = {
 }
 
 
-def _signed_in(client: TestClient, phone: str = "+919999900001") -> None:
+def _signed_in(client: TestClient, phone: str = BYPASS_PHONE) -> None:
     client.post("/auth/otp/start", json={"channel": "sms", "destination": phone})
     r = client.post(
         "/auth/otp/verify",
-        json={"channel": "sms", "destination": phone, "code": "123456"},
+        json={"channel": "sms", "destination": phone, "code": BYPASS_CODE},
     )
     assert r.json()["ok"], r.json()
 
 
-def _give_patient(caregiver_phone: str = "+919999900001") -> None:
+def _give_patient(caregiver_phone: str = BYPASS_PHONE) -> None:
     """Onboarding done: a demo needs a name and a medicine to speak."""
     con = db.connect()
     cg = con.execute(
@@ -120,8 +126,28 @@ def _fresh_db(monkeypatch):
     path = tempfile.mktemp(suffix=".db")
     monkeypatch.setenv("VOXIKIN_DB", path)
     monkeypatch.setattr(db, "DB_PATH", __import__("pathlib").Path(path))
+
+    # The OTP bypass belongs to this file, not to whichever test module happened
+    # to import `api.main` first.
+    #
+    # api/main.py calls load_dotenv() at import, which copies the developer's own
+    # .env into os.environ — DEV_OTP_BYPASS_CODE among it. These two used to be
+    # `os.environ.setdefault` at module scope, which only won when this file was
+    # the first module pytest imported. Run anything alphabetically earlier and
+    # the .env's code was already in place, `123456` was simply a wrong code, and
+    # seven tests here failed inside `_signed_in` — on a sign-in that has nothing
+    # to do with what any of them are about.
+    #
+    # monkeypatch.setenv so the values are reverted afterwards, and the settings
+    # cache cleared on both sides so it is built from this env and not left
+    # behind for the next file.
+    monkeypatch.setenv("DEV_OTP_BYPASS_CODE", BYPASS_CODE)
+    monkeypatch.setenv("DEV_OTP_BYPASS_NUMBERS", BYPASS_PHONE)
+    get_settings.cache_clear()
+
     db.init()
     yield
+    get_settings.cache_clear()
 
 
 def test_demo_requires_a_signed_in_caregiver():

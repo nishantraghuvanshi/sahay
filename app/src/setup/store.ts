@@ -256,6 +256,19 @@ export function useSetupDraft() {
   return { draft, patch, reset }
 }
 
+/**
+ * Drop the in-memory auth half of the draft.
+ *
+ * `authState` is a module variable on purpose — the phone number and the
+ * sent-flags are deliberately not persisted (see AUTH_KEYS above) — which also
+ * means `localStorage.clear()` does not reach it. Anything that needs a truly
+ * blank auth draft has to say so.
+ */
+export function clearAuthDraft(): void {
+  authState = pickAuth(EMPTY_DRAFT)
+  window.dispatchEvent(new Event(CHANGED))
+}
+
 /* ------------------------------------------------------------- validation */
 
 /**

@@ -30,7 +30,7 @@ const { TurnLatency } = require('../utils/latency');
 const { TurnManager, STATE } = require('./turn-manager');
 const { SentenceBuffer } = require('../utils/sentence-buffer');
 const { buildInboundVariables } = require('../use-cases/medication-adherence/inbound-context');
-const { buildDoseTiming } = require('../use-cases/medication-adherence/dose-timing');
+const { buildDoseTiming, buildFoodVariables } = require('../use-cases/medication-adherence/dose-timing');
 
 class PlaygroundConversation {
   /**
@@ -193,6 +193,13 @@ class PlaygroundConversation {
           { mealRelation: this.mealRelation, meal: this.meal },
           this.language
         ),
+        // The prompt branches on these two for everything it is allowed to say
+        // about food — the "have you eaten?" step when a dose was missed, and
+        // the answer when someone asks whether to take it before or after.
+        // Left empty, the prompt says nothing of that kind BY DESIGN, which is
+        // what made a playground call ignore the before/after-meal choice it
+        // had just been given.
+        ...buildFoodVariables({ mealRelation: this.mealRelation }, this.language),
       };
       const systemPrompt = this.langStrategy.buildSystemPrompt(variables, this.mode);
       const firstMessage = this.langStrategy.buildFirstMessage(variables, this.mode);
@@ -372,9 +379,27 @@ class PlaygroundConversation {
       // turn manager below, via llmResponse's own tool-call extraction.
       await this._handleCaptureFieldCalls(tool_calls);
 
-      // 6. Notify turn manager
+      // 6. Notify turn manager.
+      //
+      // The reply has already been spoken — sentence by sentence, as it
+      // streamed — so the turn manager must not synthesize it a second time.
+      // It did, until this flag existed, and the caller heard every answer
+      // twice while the server sat in SPEAKING through the repeat, dropping
+      // every microphone frame that arrived during it.
+      //
+      // `ttsError` is the exception that keeps the fallback honest: if the
+      // sentence pipeline failed, nothing was spoken, and the turn manager
+      // should say the whole thing rather than leave silence.
+      const spoken =
+        Boolean(content && String(content).trim()) && !ttsError && !this._cancelTTS;
+
+      // The transcript line used to be emitted inside _speak(). With _speak
+      // skipped, it is emitted here, or the browser would show audio with no
+      // words beside it.
+      if (spoken) this.onAgentResponse(content);
+
       latency.turnComplete();
-      this.turn.llmResponse(content, tool_calls);
+      this.turn.llmResponse(content, tool_calls, { alreadySpoken: spoken });
     } catch (err) {
       latency.turnComplete();
       logger.error('playground_stream_llm_error', err);
