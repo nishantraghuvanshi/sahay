@@ -80,6 +80,30 @@ class TransportPort {
   requiredSecrets() {
     throw new Error('TransportPort.requiredSecrets() not implemented');
   }
+
+  /**
+   * Poll the status of a previously dispatched call.
+   *
+   * GET /api/call/:callId used to fetch api.vapi.ai directly, hardcoded to
+   * one orchestrator — the same class of bug getAssistantId() exists to
+   * prevent. A transport with no status-polling equivalent (or nothing yet
+   * implemented) must say so explicitly rather than fake a result: return
+   * `{ ok: false, error: '<reason>', httpStatus: <code> }` instead of a
+   * fabricated status. Following requiredSecrets()'s convention, the base
+   * class throws rather than defaulting to something silently wrong, so a
+   * new transport that forgets to implement this fails loud at call time
+   * instead of always reporting "unsupported" without meaning to.
+   *
+   * @param {string} callId
+   * @returns {Promise<Object>} `{ ok: true, callId, status, duration, cost,
+   *   outcome, transcript }` on success, or `{ ok: false, error, httpStatus }`
+   *   on failure/unsupported. `httpStatus` is the code the caller — a
+   *   caregiver-app-facing route, not a tool endpoint bound by the
+   *   always-200 contract — should mirror back.
+   */
+  async getCallStatus(callId) {
+    throw new Error('TransportPort.getCallStatus() not implemented');
+  }
 }
 
 module.exports = TransportPort;

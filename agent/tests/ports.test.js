@@ -61,6 +61,28 @@ describe('TransportPort', () => {
     assert.throws(() => port.requiredSecrets(), /not implemented/);
   });
 
+  test('getCallStatus throws not-implemented — no silent fake status', async () => {
+    const port = new TransportPort();
+    await assert.rejects(() => port.getCallStatus('call-1'), /not implemented/);
+  });
+
+  test('every registered transport adapter implements getCallStatus()', () => {
+    const { TRANSPORT_ADAPTERS } = require('../src/adapters/transport/registry');
+    for (const [name, AdapterClass] of Object.entries(TRANSPORT_ADAPTERS)) {
+      const adapter = new AdapterClass({}, {});
+      assert.strictEqual(
+        typeof adapter.getCallStatus,
+        'function',
+        `${name} transport must override getCallStatus()`
+      );
+      assert.notStrictEqual(
+        adapter.getCallStatus,
+        TransportPort.prototype.getCallStatus,
+        `${name} transport inherits the base not-implemented getCallStatus()`
+      );
+    }
+  });
+
   test('every registered transport adapter implements requiredSecrets()', () => {
     const { TRANSPORT_ADAPTERS } = require('../src/adapters/transport/registry');
     for (const [name, AdapterClass] of Object.entries(TRANSPORT_ADAPTERS)) {

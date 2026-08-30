@@ -197,6 +197,19 @@ class PlaygroundTransportAdapter extends TransportPort {
   }
 
   /**
+   * Not applicable — same story as getAssistantId()/createCall() above: the
+   * playground never dials out, so there is no callId a caller could ever
+   * legitimately hold. Throws rather than returning a structured
+   * `{ok:false}` "unsupported" result, matching this adapter's own
+   * convention for the other not-applicable methods above.
+   */
+  async getCallStatus() {
+    throw new Error(
+      'PlaygroundTransportAdapter.getCallStatus() is not applicable — the playground never dials out.'
+    );
+  }
+
+  /**
    * @see TransportPort#requiredSecrets
    *
    * The playground is a browser session, not a phone call — there is no

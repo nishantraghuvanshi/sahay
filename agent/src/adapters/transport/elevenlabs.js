@@ -894,6 +894,27 @@ class ElevenLabsTransportAdapter extends TransportPort {
   }
 
   /**
+   * @see TransportPort#getCallStatus
+   *
+   * ElevenLabs has a conversation-status endpoint, but it is keyed by their
+   * own conversation_id — not the callId this route is handed, which on the
+   * phone path is a Vapi call id and on this transport would need to be the
+   * voxikin_call_id minted in createCall() above, not looked up anywhere
+   * today. Rather than guess at a mapping, this says plainly that polling
+   * isn't wired up yet instead of faking a status.
+   *
+   * @returns {Promise<Object>}
+   */
+  async getCallStatus(callId) {
+    return {
+      ok: false,
+      error: 'unsupported',
+      httpStatus: 501,
+      detail: 'ElevenLabs transport has no callId-to-conversation lookup implemented.',
+    };
+  }
+
+  /**
    * @see TransportPort#requiredSecrets
    * @returns {Array<{name: string, why: string}>}
    */

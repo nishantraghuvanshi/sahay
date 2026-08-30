@@ -1105,6 +1105,42 @@ class VapiTransportAdapter extends TransportPort {
   }
 
   /**
+   * @see TransportPort#getCallStatus
+   * @param {string} callId - Vapi call id
+   * @returns {Promise<Object>}
+   */
+  async getCallStatus(callId) {
+    const apiKey = process.env.VAPI_PRIVATE_KEY;
+    if (!apiKey) {
+      return { ok: false, error: 'VAPI_PRIVATE_KEY not set', httpStatus: 500 };
+    }
+
+    try {
+      const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { ok: false, error: errorText, httpStatus: response.status };
+      }
+
+      const call = await response.json();
+      return {
+        ok: true,
+        callId: call.id,
+        status: call.status,
+        duration: call.durationSeconds,
+        cost: call.cost,
+        outcome: call.analysis?.structuredData?.outcome,
+        transcript: call.transcript,
+      };
+    } catch (err) {
+      return { ok: false, error: err.message, httpStatus: 500 };
+    }
+  }
+
+  /**
    * @see TransportPort#requiredSecrets
    * @returns {Array<{name: string, why: string}>}
    */

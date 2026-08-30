@@ -175,7 +175,10 @@ server.on('upgrade', (req, socket, head) => {
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
-// Start transport (sets up Vapi routes: /llm/chat/completions, /api/tts/:provider, /webhook)
+// Start transport — the active transport wires whatever routes/sockets it
+// needs. Vapi may add /llm/chat/completions, /api/tts/:provider, /webhook
+// and the /api/stt socket (only the bridged ones); ElevenLabs and the
+// playground wire their own, entirely different, routes.
 transport.start(server, engine, {
   wss: sttWss,
   app,
@@ -395,37 +398,28 @@ app.post('/api/call', asyncRoute(async (req, res) => {
   }
 }));
 
-// Get call status (polls Vapi API)
+// Get call status — delegates to the active transport (see
+// TransportPort#getCallStatus). Not every transport can answer this; one
+// that can't returns { ok: false, error, httpStatus } instead of faking a
+// status. This route is caregiver-app-facing, not a tool endpoint the voice
+// agent calls mid-call, so it keeps its own non-200-on-error contract —
+// NFR-6's always-200 rule is for tool endpoints and does not apply here.
 app.get('/api/call/:callId', asyncRoute(async (req, res) => {
   const { callId } = req.params;
-  const apiKey = process.env.VAPI_PRIVATE_KEY;
 
-  if (!apiKey) {
-    return res.status(500).json({ error: 'VAPI_PRIVATE_KEY not set' });
-  }
-
+  let result;
   try {
-    const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(response.status).json({ error: errorText });
-    }
-
-    const call = await response.json();
-    res.json({
-      callId: call.id,
-      status: call.status,
-      duration: call.durationSeconds,
-      cost: call.cost,
-      outcome: call.analysis?.structuredData?.outcome,
-      transcript: call.transcript,
-    });
+    result = await transport.getCallStatus(callId);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
+
+  if (!result.ok) {
+    return res.status(result.httpStatus || 500).json({ error: result.error });
+  }
+
+  const { ok, httpStatus, ...call } = result;
+  res.json(call);
 }));
 
 // --- Call history API (reads from local DB) ---
@@ -479,8 +473,12 @@ const SCHEDULER_INTERVAL_MS = Number(process.env.SCHEDULER_INTERVAL_MS || 60000)
  * layer keeps importing no vendor code.
  */
 async function dialPatient({ doseEvent, medication, patient }) {
-  const assistantId = process.env.VAPI_ASSISTANT_ID;
-  if (!assistantId) throw new Error('VAPI_ASSISTANT_ID not set — cannot dial a scheduled dose');
+  // Ask the ACTIVE transport for its own id — see the identical comment on
+  // POST /api/call above. This was the one caller still reading
+  // VAPI_ASSISTANT_ID directly: harmless-looking under Vapi, but under
+  // ElevenLabs it silently handed a Vapi assistant id to ElevenLabs as its
+  // agent_id instead of throwing on a missing var.
+  const assistantId = transport.getAssistantId();
 
   const call = await transport.createCall(assistantId, patient.phone_e164, {
     parent_name: patient.name,
