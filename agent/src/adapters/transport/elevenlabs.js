@@ -46,9 +46,21 @@ class ElevenLabsTransportAdapter extends TransportPort {
       config.app.post('/el/tools/:name', async (req, res) => {
         const name = req.params.name;
 
-        // Allow-list rather than pass-through. This endpoint is public through
-        // the tunnel, and forwarding an arbitrary name into the event bus would
-        // let anyone who finds the URL emit events the engine acts on.
+        // Shared-secret check first: this endpoint is public through the
+        // tunnel, and report_outcome can raise a real family alert, so it
+        // cannot be left open to anyone who finds the URL. Fails closed if
+        // the secret is not configured — an unset secret must never be
+        // treated as "no check required".
+        const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
+        if (!expected || req.get('X-Kinvox-Token') !== expected) {
+          // Deliberately says nothing about which part was wrong.
+          logger.log('el_tool_unauthorized', { name });
+          return res.status(401).json({ ok: false, error: 'unauthorized' });
+        }
+
+        // Allow-list rather than pass-through. Forwarding an arbitrary name
+        // into the event bus would let anyone who finds the URL emit events
+        // the engine acts on.
         if (!KNOWN_TOOLS.has(name)) {
           logger.log('el_tool_unknown', { name });
           return res.status(404).json({ ok: false, error: 'unknown tool' });
@@ -60,7 +72,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
           return res.json({ ok: true });
         } catch (err) {
           logger.log('el_tool_failed', { name, error: err.message });
-          return res.status(500).json({ ok: false, error: err.message });
+          // Fixed message only: err.message could leak internals to this
+          // public, unauthenticated-by-name caller.
+          return res.status(500).json({ ok: false, error: 'tool dispatch failed' });
         }
       });
     }
@@ -89,7 +103,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
         kind: 'webhook',
         url: `${webhookUrl}/el/tools/${fn.name}`,
         method: 'POST',
-        request_headers: {},
+        // Proves the call came from our agent and not from anyone who found the
+        // tunnel URL. report_outcome can raise a family medical alert, so the
+        // endpoint cannot be open.
+        request_headers: { 'X-Kinvox-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
         path_params_schema: {},
         query_params_schema: null,
         request_body_schema: {

@@ -85,4 +85,18 @@ describe('buildAssistantConfig', () => {
     assert.ok(props.outcome.enum.includes('ESCALATED_SYMPTOM'));
     assert.deepStrictEqual(outcome.api_schema.request_body_schema.required.sort(), ['outcome', 'reason']);
   });
+
+  test('sends the shared secret on every tool call, so the webhook route can verify it', () => {
+    const originalSecret = process.env.ELEVENLABS_WEBHOOK_SECRET;
+    process.env.ELEVENLABS_WEBHOOK_SECRET = 'test-secret';
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+      for (const t of tools) {
+        assert.strictEqual(t.api_schema.request_headers['X-Kinvox-Token'], 'test-secret');
+      }
+    } finally {
+      process.env.ELEVENLABS_WEBHOOK_SECRET = originalSecret;
+    }
+  });
 });
