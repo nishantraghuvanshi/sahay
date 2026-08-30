@@ -81,12 +81,97 @@ describe('redactCredentials', () => {
     assert.ok(redacted.startsWith('postgresql://'));
   });
 
-  test('a plain filesystem path passes through untouched', () => {
+  // Round 4: a malformed-scheme input class every one of the three prior
+  // rounds also missed, because redactCredentials fell through to
+  // `return str` whenever the text before "://" wasn't a well-formed
+  // scheme (empty, digit-led, or punctuation) instead of coarsening it —
+  // the exact conditional the "coarsen by construction" ruling forbids.
+  const LEAKING_INPUTS = [
+    ['no scheme at all before ://', '://user:SECRET@host'],
+    ['a digit-led scheme', '1abc://user:SECRET@host'],
+    ['a punctuation-led scheme', '$$$://user:SECRET@host'],
+    ['a scheme-shaped run after a real path prefix', '/mnt/1x://user:SECRET@host'],
+  ];
+  for (const [label, input] of LEAKING_INPUTS) {
+    test(`${label} is still coarsened, not returned raw`, () => {
+      const redacted = redactCredentials(input);
+      assert.ok(!redacted.includes('SECRET'), `leaked: ${redacted}`);
+      assert.ok(!redacted.includes('user:'), `leaked: ${redacted}`);
+      // Not merely "the secret is gone": nothing of the original survives,
+      // because a prefix that isn't a clean scheme may itself be a
+      // mis-split credential.
+      assert.strictEqual(redacted, '<redacted>://<redacted>');
+    });
+  }
+
+  test('postgresql://u:s@h collapses to postgresql://<redacted>', () => {
+    assert.strictEqual(redactCredentials('postgresql://u:s@h'), 'postgresql://<redacted>');
+  });
+
+  test('sqlite:///abs/path.db (no authority) is coarsened too', () => {
+    assert.strictEqual(redactCredentials('sqlite:///abs/path.db'), 'sqlite://<redacted>');
+  });
+
+  test('an embedded scheme:// after a real path prefix redacts the secret, never rewrites into a false path', () => {
+    const redacted = redactCredentials('/mnt/backups/scp://deploy:build@2024/release.db');
+    assert.ok(!redacted.includes('build'));
+    assert.ok(!redacted.includes('2024'));
+  });
+
+  test('a plain filesystem path passes through byte-identical', () => {
     assert.strictEqual(redactCredentials('/data/voiceagent.db'), '/data/voiceagent.db');
   });
 
-  test('a path with "@" but no scheme is untouched', () => {
+  test('a path with "@" but no "://" passes through byte-identical', () => {
     assert.strictEqual(redactCredentials('/tmp/a@b/x.db'), '/tmp/a@b/x.db');
+  });
+
+  test('a path with ":" but no "://" passes through byte-identical', () => {
+    assert.strictEqual(redactCredentials('/tmp/a:b/x.db'), '/tmp/a:b/x.db');
+  });
+
+  test('a relative path passes through byte-identical', () => {
+    assert.strictEqual(redactCredentials('./data/v.db'), './data/v.db');
+  });
+
+  describe('never throws', () => {
+    const EDGE_INPUTS = [
+      ['null', null],
+      ['undefined', undefined],
+      ['a number', 5],
+      ['an empty string', ''],
+      ['a lone "://"', '://'],
+      ['a null byte', '\u0000abc://x'],
+      ['whitespace-padded', '   \t ://x   '],
+      ['unicode', 'ünïcödé://x'],
+      ['multi-megabyte with no "://"', 'a'.repeat(4000000)],
+    ];
+    for (const [label, input] of EDGE_INPUTS) {
+      test(label, () => {
+        assert.doesNotThrow(() => redactCredentials(input));
+      });
+    }
+  });
+
+  test('no ReDoS: a long scheme-char run with no "://" stays fast', () => {
+    const huge = 'a'.repeat(4000000);
+    const start = Date.now();
+    redactCredentials(huge);
+    assert.ok(Date.now() - start < 1000, 'redactCredentials(4M chars, no ://) took too long');
+  });
+
+  test('no ReDoS: a long scheme-char run immediately before "://" stays fast', () => {
+    const huge = `${'a'.repeat(4000000)}://x`;
+    const start = Date.now();
+    redactCredentials(huge);
+    assert.ok(Date.now() - start < 1000, 'redactCredentials(4M scheme chars + ://) took too long');
+  });
+
+  test('no ReDoS: many repetitions of "a://" stays fast', () => {
+    const huge = 'a://'.repeat(1000000);
+    const start = Date.now();
+    redactCredentials(huge);
+    assert.ok(Date.now() - start < 1000, 'redactCredentials(1M reps of a://) took too long');
   });
 });
 

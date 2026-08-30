@@ -14,72 +14,53 @@
  */
 
 const URL_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
+// Anchored at both ends: the whole prefix, or nothing. Deterministic, so it
+// is linear in the prefix length however long that prefix is.
+const CLEAN_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*$/;
 
 class NotAFilesystemPathError extends Error {}
 
 /**
- * Redact everything past a `scheme://` out of a value before it reaches a
- * log line or an error message. db_path is meant to be a SQLite filesystem
- * path, but DB_PATH, DATABASE_URL and VOXIKIN_DB have all been seen set to
- * a Postgres connection string by mistake — logging or throwing it verbatim
- * would put the password in the log or the crash report.
+ * Redact a value before it reaches a log line or an error message. db_path is
+ * meant to be a SQLite filesystem path, but DB_PATH, DATABASE_URL and
+ * VOXIKIN_DB have all been seen set to a Postgres connection string by
+ * mistake — logging or throwing one verbatim would put the password in the
+ * log or in the crash report.
  *
- * This used to try to parse out just the userinfo and leave the rest of the
- * value intact. Three rounds of review found three different bypasses of
- * that (a password containing '@', one containing '/', one containing
- * both) — precisely extracting a credential out of an arbitrary string is
- * the wrong job for a log-safety helper to take on. So: no parsing.
+ * Exactly two rules, and there is no third:
  *
- * A value containing "://" is not a filesystem path — a real one never
- * contains that substring — so its details aren't worth the risk of getting
- * a corner case wrong a fourth time. Collapse it to the scheme and nothing
- * else; zero userinfo characters can survive because none of the original
- * string after the scheme is kept, by construction rather than by pattern.
- * A value with no "://" is an ordinary path and is returned completely
- * untouched — not even copied through a regex — so a real path can never be
- * corrupted into pointing at the wrong database (that mattered more than
- * the leak: assertFilesystemPath below already makes a value carrying a URL
- * scheme refuse to open outright, so this is defence-in-depth for a value
- * about to be rejected anyway, not the primary defense).
+ *   - the value contains "://" anywhere -> coarsen it. No character after
+ *     the "://" survives, and what precedes it survives only when it is
+ *     itself a clean scheme name — so "1abc://user:pw@host", whose prefix is
+ *     really a mis-split credential, comes out "<redacted>://<redacted>".
+ *   - it does not -> return it byte-identical, not even copied through a
+ *     regex, so a real path can never be corrupted into pointing at the
+ *     wrong database.
  *
- * Never throws: String(value) tolerates any input, and the only other
- * operation is a single non-backtracking regex match. Not new URL() for the
- * same reason as before — it throws on the exact strings this function must
- * still produce a safe answer for.
+ * Four earlier rounds each added a third rule — extract just the userinfo,
+ * scope to the authority, bail out when the prefix isn't a valid scheme —
+ * and every one of those decisions was a place a credential slipped through,
+ * the last returning the connection string verbatim. Any condition that can
+ * return the original while "://" is present is that bug again.
+ *
+ * Never throws on any input — null, undefined, a number, empty string, a
+ * lone "://", a null byte, unicode, whitespace padding, multi-megabyte:
+ * String() tolerates all of it, and indexOf, slice and test cannot throw.
+ *
+ * No ReDoS: indexOf is one linear scan, and the scheme test runs only once
+ * "://" has been found, anchored at both ends over the prefix alone. It
+ * cannot retry at every position the way `/([a-zA-Z][a-zA-Z0-9+.-]*):\/\//`
+ * does — that shape hung for minutes on 4M characters containing no "://".
  *
  * @param {*} value
  * @returns {string}
  */
-function isSchemeChar(ch) {
-  return (
-    (ch >= 'a' && ch <= 'z') ||
-    (ch >= 'A' && ch <= 'Z') ||
-    (ch >= '0' && ch <= '9') ||
-    ch === '+' ||
-    ch === '.' ||
-    ch === '-'
-  );
-}
-
 function redactCredentials(value) {
   const str = String(value);
-  // indexOf is a single linear scan; only once "://" is actually found does
-  // the (bounded) backward walk for the scheme name run. A regex trying to
-  // match a scheme at every position of a long string with no "://" at all
-  // backtracks quadratically — confirmed by hand: 4M 'a' characters hung
-  // for minutes under `/([a-zA-Z][a-zA-Z0-9+.-]*):\/\//`. This shape can't
-  // do that: worst case is one linear scan plus one bounded walk.
   const idx = str.indexOf('://');
   if (idx === -1) return str;
-
-  let start = idx;
-  while (start > 0 && isSchemeChar(str[start - 1])) start--;
-  const scheme = str.slice(start, idx);
-  const first = scheme.charCodeAt(0);
-  const startsWithLetter = (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
-  if (!scheme || !startsWithLetter) return str; // "://" with no real scheme before it isn't a URL
-
-  return `${scheme}://<redacted>`;
+  const prefix = str.slice(0, idx);
+  return `${CLEAN_SCHEME_RE.test(prefix) ? prefix : '<redacted>'}://<redacted>`;
 }
 
 /**
