@@ -61,7 +61,7 @@ describe('buildScheduleVariables', () => {
       phone: '+91',
       slot: '08:30',
     });
-    assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '' });
+    assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' });
   });
 
   test('a patient with no medications on file promises nothing', async () => {
@@ -70,7 +70,7 @@ describe('buildScheduleVariables', () => {
       phone: '+91',
       slot: '08:30',
     });
-    assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '' });
+    assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' });
   });
 
   test('a database failure loses the lines, never the call', async () => {
@@ -80,7 +80,7 @@ describe('buildScheduleVariables', () => {
         phone: '+91',
         slot: '08:30',
       });
-      assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '' }, `throws=${throws}`);
+      assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' }, `throws=${throws}`);
     }
   });
 
@@ -90,19 +90,19 @@ describe('buildScheduleVariables', () => {
       async findMedicationsForPatient() { return []; },
     };
     const v = await buildScheduleVariables({ repository: consoleRepo, phone: '+91', slot: '08:30' });
-    assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '' });
+    assert.deepStrictEqual(v, { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' });
   });
 
   test('missing slot or phone yields empty strings rather than guessing', async () => {
     assert.deepStrictEqual(
       await buildScheduleVariables({ repository: repo(), phone: '+91' }),
-      { next_call_line: '', food_question: '', food_line: '' }
+      { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' }
     );
     assert.deepStrictEqual(
       await buildScheduleVariables({ repository: repo(), slot: '08:30' }),
-      { next_call_line: '', food_question: '', food_line: '' }
+      { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' }
     );
-    assert.deepStrictEqual(await buildScheduleVariables({}), { next_call_line: '', food_question: '', food_line: '' });
+    assert.deepStrictEqual(await buildScheduleVariables({}), { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' });
   });
 
   test('never returns a value containing an unresolved placeholder', async () => {

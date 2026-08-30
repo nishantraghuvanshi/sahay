@@ -90,7 +90,13 @@ export default function Meet() {
   const [medicine, setMedicine] = useState('')
   const [relation, setRelation] = useState<MealRelation | null>(null)
   const [meal, setMeal] = useState<Meal | null>(null)
-  const [language, setLanguage] = useState<Language>('hi')
+  /**
+   * Hindi, and only Hindi. The agent refuses to load the English prompt at all
+   * — `medication-adherence-en.yaml` trails the Hindi one by a dozen versions
+   * and the strategy throws rather than serve stale guardrails — so an English
+   * option here was a button that could only produce an error.
+   */
+  const language: Language = 'hi'
 
   // --- right pane: the conversation -----------------------------------------
   const [state, setState] = useState<VoiceState>('idle')
@@ -191,8 +197,7 @@ export default function Meet() {
       </header>
       <p className="-mt-1 text-base text-muted-strong">
         This is the voice that will call your parent. Set up a dose, then talk to
-        her — she answers in {language === 'hi' ? 'Hindi' : 'English'}, the same
-        as on a real call.
+        her — she speaks Hindi, the same as on a real call.
       </p>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_1fr] lg:items-start">
@@ -238,15 +243,9 @@ export default function Meet() {
           </Group>
 
           <Group label="Language">
-            <Options
-              options={[
-                { value: 'hi' as Language, label: 'हिन्दी Hindi' },
-                { value: 'en' as Language, label: 'English' },
-              ]}
-              value={language}
-              disabled={live}
-              onChange={setLanguage}
-            />
+            <p className="text-sm text-muted-strong">
+              हिन्दी — the only language the agent is cleared to speak today.
+            </p>
           </Group>
 
           <div className="flex flex-col gap-2 border-t border-line-strong pt-3">

@@ -35,6 +35,25 @@ const FOOD_LINES = {
 };
 
 /**
+ * What to say when they answer that they have NOT eaten.
+ *
+ * Without these the call walked into a contradiction of its own making: it
+ * read out "यह दवाई खाने के बाद लेनी होती है", heard "मैंने खाना नहीं खाया",
+ * and still asked "क्या आप अभी ले लेंगे?" — telling someone to take an
+ * after-food medicine on an empty stomach. Asked how, it fell back on "मैं
+ * medical advice नहीं दे सकती" and asked again, in a loop.
+ *
+ * Each line is the same prescription relation the food line already stated,
+ * applied to what they just said. Nothing new is prescribed: an after-food
+ * medicine waits for the food, a before-food one can be taken now.
+ */
+const FOOD_WAIT_LINES = {
+  after: 'तो खाना खाने के बाद ले लीजियेगा।',
+  before: 'तो अभी ले लीजिये, खाने से पहले।',
+  with: 'तो खाने के साथ ले लीजियेगा।',
+};
+
+/**
  * @param {Object} params
  * @param {Object} params.repository - must implement findPatientByPhone and
  *   findMedicationsForPatient; a repository without a database returns nothing
@@ -44,10 +63,10 @@ const FOOD_LINES = {
  *   is derived from `nowHHMM`: a call placed by hand at 08:45 is about the
  *   08:30 dose, not the 21:00 one.
  * @param {string} [params.nowHHMM] - local "HH:MM" at the patient
- * @returns {Promise<{next_call_line: string, food_question: string, food_line: string}>}
+ * @returns {Promise<{next_call_line: string, food_question: string, food_line: string, food_wait_line: string}>}
  */
 async function buildScheduleVariables({ repository, phone, slot, nowHHMM } = {}) {
-  const empty = { next_call_line: '', food_question: '', food_line: '' };
+  const empty = { next_call_line: '', food_question: '', food_line: '', food_wait_line: '' };
   if (!repository || !phone || (!slot && !nowHHMM)) return empty;
 
   let patient;
@@ -81,7 +100,8 @@ async function buildScheduleVariables({ repository, phone, slot, nowHHMM } = {})
     // words to borrow.
     food_question: relation ? FOOD_QUESTION : '',
     food_line: (relation && FOOD_LINES[relation]) || '',
+    food_wait_line: (relation && FOOD_WAIT_LINES[relation]) || '',
   };
 }
 
-module.exports = { buildScheduleVariables, FOOD_LINES, FOOD_QUESTION };
+module.exports = { buildScheduleVariables, FOOD_LINES, FOOD_QUESTION, FOOD_WAIT_LINES };
