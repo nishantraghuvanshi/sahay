@@ -105,6 +105,32 @@ describe('buildAssistantConfig', () => {
       const prop = t.api_schema.request_body_schema.properties.kinvox_call_id;
       assert.strictEqual(prop.type, 'string');
       assert.strictEqual(prop.dynamic_variable, 'kinvox_call_id');
+      // A live PATCH 400'd when this property carried dynamic_variable
+      // alongside is_system_provided/constant_value/is_omitted — the API
+      // accepts only one of that mutually-exclusive set per property.
+      assert.strictEqual(prop.description, undefined);
+      assert.strictEqual(prop.is_system_provided, undefined);
+      assert.strictEqual(prop.constant_value, undefined);
+      assert.strictEqual(prop.is_omitted, undefined);
+    }
+  });
+
+  test('every tool property sets at most one of description/dynamic_variable/is_system_provided/constant_value/is_omitted', () => {
+    // The API rejects a property that sets more than one of these five keys.
+    // Pinned generically, not just for kinvox_call_id, so the next property
+    // anyone adds to any tool cannot silently reintroduce the same 400.
+    const MUTUALLY_EXCLUSIVE = ['description', 'dynamic_variable', 'is_system_provided', 'constant_value', 'is_omitted'];
+    const a = new ElevenLabsTransportAdapter({});
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    for (const t of tools) {
+      const properties = t.api_schema.request_body_schema.properties;
+      for (const [name, prop] of Object.entries(properties)) {
+        const present = MUTUALLY_EXCLUSIVE.filter((k) => prop[k] !== undefined);
+        assert.ok(
+          present.length <= 1,
+          `${t.name}.${name} sets more than one of ${MUTUALLY_EXCLUSIVE.join('/')}: ${present.join(', ')}`
+        );
+      }
     }
   });
 

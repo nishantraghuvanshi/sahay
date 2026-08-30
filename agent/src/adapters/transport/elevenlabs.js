@@ -297,16 +297,19 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // conversation id. `dynamic_variable` here tells ElevenLabs to
             // populate this property from the kinvox_call_id dynamic
             // variable createCall() sets, rather than asking the model to
-            // supply it. Field set (dynamic_variable/is_system_provided/
-            // constant_value/is_omitted) mirrors the live source agent's
-            // tool schema, not something invented for this property alone.
+            // supply it.
+            //
+            // Exactly one of description / dynamic_variable /
+            // is_system_provided / constant_value / is_omitted may be set on
+            // a property — a live PATCH 400'd with "Can only set one of: ..."
+            // when this carried dynamic_variable alongside the other three,
+            // which had been copied from a misreading of the live agent's
+            // schema. This one is bound to the dynamic variable createCall
+            // sends, so dynamic_variable is the one it gets, and it
+            // therefore carries no description.
             kinvox_call_id: {
               type: 'string',
-              description: 'Internal call correlation id — populated automatically, never asked of the caller.',
               dynamic_variable: 'kinvox_call_id',
-              is_system_provided: false,
-              constant_value: '',
-              is_omitted: false,
             },
           },
           required: params.required || [],
