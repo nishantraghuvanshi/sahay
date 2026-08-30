@@ -72,6 +72,22 @@ before(async () => {
       // every auth assertion below would 404 instead of 401. This file tests
       // the Vapi path's auth, so it must name the transport it needs.
       TRANSPORT: 'vapi',
+      // Forced empty, not merely absent — the same reason spelled out at the
+      // sibling spawn below, which this block was missing: agent/.env sets
+      // ALLOW_INSECURE_LOCAL=1 for local work, and dotenv (called inside
+      // server.js) does not override a key already present in its env. With
+      // it inherited, assertSafeToServe() short-circuits and this block boots
+      // through a path it never chose.
+      ALLOW_INSECURE_LOCAL: '',
+      // ...and once it no longer short-circuits, the real safety gate runs,
+      // which is where this block turned out to have been leaning on
+      // agent/.env for a value it never declared: without ALERT_OPERATOR_CONTACT
+      // the server refuses to start. A dummy contact, matching boot-log.test.js
+      // — this file tests auth, and never reaches escalation delivery.
+      ALERT_OPERATOR_CONTACT: '12345',
+      // agent/.env sets CAPTURE_WEBHOOKS=./data/webhooks.jsonl and cwd is
+      // agent/, so this spawn was appending to the repo's own working tree.
+      CAPTURE_WEBHOOKS: '',
     },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -318,6 +334,7 @@ describe('server boot — refuses to start without VAPI_SECRET', () => {
         // ALLOW_INSECURE_LOCAL=1 for local work) from silently bypassing
         // the very check this test exists to prove.
         ALLOW_INSECURE_LOCAL: '',
+        CAPTURE_WEBHOOKS: '',
       },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
