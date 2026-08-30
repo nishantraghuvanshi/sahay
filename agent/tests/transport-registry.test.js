@@ -76,3 +76,27 @@ describe('TransportRegistry', () => {
     }
   });
 });
+
+describe('adapters are usable without start() — the script path', () => {
+  // make-call.js resolves the active transport and dials immediately; it never
+  // calls start(), because it is not running a server. phone_number_id was read
+  // only inside start(), so the ElevenLabs adapter threw "Missing
+  // phone_number_id" on every scripted call — the same shape of bug as
+  // /api/call hardcoding VAPI_ASSISTANT_ID, one layer down.
+  test('the ElevenLabs adapter knows its phone number straight from the registry', () => {
+    const registry = new TransportRegistry({});
+    const transport = registry.getTransport('elevenlabs');
+    const expected = registry.config.transport.elevenlabs.phone_number_id;
+    assert.ok(expected, 'providers.yaml must define transport.elevenlabs.phone_number_id');
+    assert.strictEqual(transport.phoneNumberId, expected);
+  });
+
+  test('start() still wins, so a caller may override the configured number', async () => {
+    const registry = new TransportRegistry({});
+    const transport = registry.getTransport('elevenlabs');
+    await transport.start(null, null, {
+      providersConfig: { transport: { elevenlabs: { phone_number_id: 'phnum_override' } } },
+    });
+    assert.strictEqual(transport.phoneNumberId, 'phnum_override');
+  });
+});

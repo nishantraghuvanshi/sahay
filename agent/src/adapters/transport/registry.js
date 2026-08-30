@@ -73,7 +73,10 @@ class TransportRegistry {
         `Unknown transport: "${name}". Available: ${this.getAvailableTransports().join(', ')}`
       );
     }
-    return new AdapterClass(this.providerRegistry);
+    // The loaded config goes in too. Adapters that need it only inside
+    // start() were unusable from scripts, which resolve a transport and dial
+    // without ever starting a server.
+    return new AdapterClass(this.providerRegistry, this.config);
   }
 
   /** @returns {Object} The active transport adapter */
