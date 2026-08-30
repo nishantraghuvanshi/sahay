@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const TransportPort = require('../../core/ports/transport');
+const { verifyElevenLabsSignature } = require('./elevenlabs-signature');
 const { captureField } = require('../../core/call/lifecycle');
 const { INTAKE_FIELDS } = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
@@ -110,15 +111,43 @@ class ElevenLabsTransportAdapter extends TransportPort {
       // what the Vapi 'end-of-call-report' case does too; duplicating that
       // logic here would risk a second, out-of-sync write to the same row.
       config.app.post('/el/post-call', async (req, res) => {
-        // Same shared-secret gate as the tool route: this endpoint sits on
-        // the same public tunnel.
-        const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
-        if (!expected || req.get('X-Kinvox-Token') !== expected) {
-          logger.log('el_post_call_unauthorized', {});
+        // Two accepted proofs, because there are two senders in play.
+        //
+        // ElevenLabs signs every delivery itself — we do not choose those
+        // headers, so the X-Kinvox-Token gate the tool route uses cannot
+        // apply here. A webhook configured in the dashboard with a custom
+        // header is still honoured, so the token path stays.
+        //
+        // Fails closed either way: with neither secret set, nothing is
+        // accepted. An unset secret must never read as "no check required".
+        if (!this._authorizePostCall(req)) {
+          logger.log('el_post_call_unauthorized', {
+            // Header NAMES only, never values — enough to see at a glance
+            // whether a real delivery arrived shaped differently than
+            // expected, without writing a signature into the log.
+            signaturePresent: Boolean(req.get('ElevenLabs-Signature')),
+            tokenPresent: Boolean(req.get('X-Kinvox-Token')),
+            rawBodyCaptured: Boolean(req.rawBody),
+          });
           return res.status(401).json({ ok: false, error: 'unauthorized' });
         }
 
-        const body = req.body || {};
+        // The webhook wraps the conversation object in an envelope:
+        //   { type, event_timestamp, data: { conversation_id, ... } }
+        // The bare object is what GET /v1/convai/conversations/{id} returns.
+        // Reading conversation_id off the top level — which is what this
+        // route did — yields undefined on every real delivery, so each one
+        // was refused with 400 and nothing persisted.
+        const envelope = req.body || {};
+        const body = envelope.data && typeof envelope.data === 'object' ? envelope.data : envelope;
+
+        // post_call_audio carries no transcript. A 400 would put ElevenLabs
+        // into a retry loop over a delivery that can never succeed.
+        if (envelope.type && envelope.type !== 'post_call_transcription') {
+          logger.log('el_post_call_ignored', { type: envelope.type });
+          return res.json({ ok: true, ignored: envelope.type });
+        }
+
         const callId = body.conversation_id;
 
         // Refuse rather than emit an event with no call identity: nothing
@@ -198,6 +227,44 @@ class ElevenLabsTransportAdapter extends TransportPort {
       value,
       allowedFields: INTAKE_FIELDS.map((f) => f.key),
     });
+  }
+
+  /**
+   * Decide whether a POST /el/post-call request really came from ElevenLabs.
+   *
+   * Accepts either proof:
+   *   - a valid ElevenLabs-Signature HMAC over the raw body, which the service
+   *     always sends and which requires ELEVENLABS_POST_CALL_SECRET (the
+   *     wsec_… value shown once when the workspace webhook is created);
+   *   - the X-Kinvox-Token shared secret, for a webhook configured in the
+   *     dashboard with a custom header.
+   *
+   * Neither secret configured means no request is authorized. The endpoint is
+   * public through the tunnel and drives outcome persistence and escalation,
+   * so open-by-default is not an option.
+   *
+   * @param {import('express').Request} req
+   * @returns {boolean}
+   * @private
+   */
+  _authorizePostCall(req) {
+    const signingSecret = process.env.ELEVENLABS_POST_CALL_SECRET;
+    if (
+      signingSecret &&
+      verifyElevenLabsSignature({
+        header: req.get('ElevenLabs-Signature'),
+        rawBody: req.rawBody,
+        secret: signingSecret,
+      })
+    ) {
+      return true;
+    }
+
+    const token = process.env.ELEVENLABS_WEBHOOK_SECRET;
+    if (!token) return false;
+    const provided = req.get('X-Kinvox-Token');
+    if (typeof provided !== 'string' || provided.length !== token.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(token, 'utf8'));
   }
 
   /**

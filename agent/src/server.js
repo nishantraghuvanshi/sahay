@@ -24,6 +24,7 @@ const { createWebhookCapture } = require('./utils/webhook-capture');
 // Adapters
 const ProviderRegistry = require('./adapters/providers/registry');
 const TransportRegistry = require('./adapters/transport/registry');
+const { captureRawBody } = require('./adapters/transport/elevenlabs-signature');
 const ConsoleRepository = require('./adapters/persistence/console');
 const SqliteRepository = require('./adapters/persistence/sqlite');
 
@@ -95,7 +96,13 @@ const playgroundTransport = transportRegistry.getTransport('playground');
 // --- Server ---
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+// The `verify` hook keeps the untouched request bytes on req.rawBody.
+// ElevenLabs' post-call webhook signs `${timestamp}.${raw body}`, and
+// express.json otherwise discards the buffer the moment it parses it —
+// re-serialising the parsed object would reorder keys and change the digest.
+// It has to sit on the parser: a route-level middleware runs after the global
+// parser has already drained the stream.
+app.use(express.json({ limit: '10mb', verify: captureRawBody }));
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
 
 // Serve static files (playground UI, call form, browser JS)
