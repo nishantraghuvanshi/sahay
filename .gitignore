@@ -41,3 +41,10 @@ agent/data/
 
 # build artifacts
 *.tsbuildinfo
+
+# graphify knowledge graph — local tooling, rebuilt on demand
+.graphify/
+.gstack/
+*.env
+credentials.json
+.credentials

@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Chip, Divider, Label, Row, Tag } from '../../ui'
-import { useSetupDraft } from '../../setup/store'
-import { postOnboarding } from '../../api/hooks'
-import { clearFiles } from '../../setup/files'
+import { toE164, useSetupDraft } from '../../setup/store'
+import { ApiError, authApi } from '../../api/client'
 
 /**
  * Wireframe 1E.2 / 2D.2 — the last gate before anything dials.
@@ -39,15 +37,67 @@ const CONSENTS = [
 
 export default function Consent() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { draft, patch } = useSetupDraft()
+  const { draft, patch, reset } = useSetupDraft()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  /** Set the instant the write succeeds, so the FR-4 gate below stops applying.
+   *  reset() empties the draft, which would otherwise make `scheduleConfirmed`
+   *  false and bounce the caregiver back to the schedule they just signed off. */
+  const [submitted, setSubmitted] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  /**
+   * The moment the draft stops being a draft.
+   *
+   * Until now everything the caregiver typed has lived in localStorage — three
+   * minutes of it — and nothing had ever posted it. A failure here must leave
+   * all of that intact and offer another go; wiping the draft on a network blip
+   * would cost them the whole of onboarding.
+   */
+  const finish = async () => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await authApi.post('/app/onboarding', {
+        // Signup step 5 already set the caregiver's name, so this is sent empty
+        // on purpose — the API COALESCEs it and leaves the stored name alone.
+        // Sending '' here rather than dropping the field keeps the shape stable
+        // for a future edit-profile screen that will want to change it.
+        caregiver_name: '',
+        relation: draft.relation,
+        parent_name: draft.parentName,
+        honorific: draft.honorific || null,
+        parent_phone: toE164(draft.parentPhone) ?? draft.parentPhone,
+        language: draft.language || 'hi-IN',
+        age: draft.age ? Number(draft.age) : null,
+        conditions: draft.conditions,
+        allergies: draft.allergies,
+        doctor_name: draft.doctorName || null,
+        doctor_phone: draft.doctorPhone || null,
+        address: draft.address || null,
+        meal_times: draft.mealTimes,
+        medicines: draft.medicines.map((m) => ({
+          name: m.name,
+          dose: m.dose,
+          slots: m.slots,
+          with_food: m.with_food,
+          is_priority: m.is_priority,
+        })),
+        consents: draft.consents,
+      })
+      setSubmitted(true)
+      reset()
+      navigate('/home', { replace: true })
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : 'Could not save. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // FR-4: this screen must be unreachable without a signed-off schedule — including by
   // browser Forward or a typed URL, not only by the disabled button on 1e.
-  if (!draft.scheduleConfirmed) return <Navigate to="/setup/schedule" replace />
+  if (!draft.scheduleConfirmed && !submitted) return <Navigate to="/setup/schedule" replace />
 
   const name = draft.parentName.trim() || 'your parent'
   const address = `${name}${draft.honorific ? `-${draft.honorific}` : ''}`
@@ -58,35 +108,6 @@ export default function Consent() {
   const optionChosen = draft.introCall === 'now' || (draft.introCall === 'later' && Boolean(scheduled))
   const ready = optionChosen && remaining === 0
 
-  /**
-   * This is where the onboarding stops being a draft.
-   *
-   * Everything up to here lives in localStorage. The POST is what creates the
-   * patient, writes the signed-off schedule with `confirmed_by`/`confirmed_at`,
-   * and records the intro call — and until it succeeds nothing has been saved, so
-   * a failure must keep the caregiver on this screen rather than dropping them on
-   * a home screen showing somebody else's record.
-   */
-  async function finish() {
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await postOnboarding(draft)
-      // Saved. Release the prescription photographs — the schedule is the record
-      // we keep, not the image it was read from.
-      clearFiles()
-      // The care record has changed underneath every screen that caches it.
-      await queryClient.invalidateQueries()
-      navigate('/home')
-    } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : 'Could not save the setup. Nothing has been lost.',
-      )
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <main className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-3 p-4">
       <header className="flex items-center gap-2">
@@ -94,21 +115,21 @@ export default function Consent() {
           type="button"
           aria-label="Back"
           onClick={() => navigate('/setup/schedule')}
-          className="-ml-1 px-1 text-[16px] text-muted"
+          className="-ml-1 grid size-11 place-items-center text-lg text-muted-strong"
         >
           &larr;
         </button>
-        <h1 className="text-[18px] font-bold">Before we call {name}</h1>
-        <Label className="ml-auto">last step</Label>
+        <h1 className="min-w-0 flex-1 text-lg font-bold sm:text-xl">Before we call {name}</h1>
+        <Label className="shrink-0">4 / 4</Label>
       </header>
 
       <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr] lg:items-start">
         <div className="flex flex-col gap-3">
           <Card emphasis="none" className="gap-1.5">
-            <div className="text-[15px] leading-snug font-bold">
+            <div className="text-lg leading-snug font-bold">
               First we ring {address} once, just to introduce ourselves
             </div>
-            <p className="text-[12px] leading-relaxed text-muted-strong">
+            <p className="text-base leading-relaxed text-muted-strong">
               No medicines on this call. We say who we are, that you set this up, and ask whether
               they are happy to be called. Dose calls begin only if they say yes.
             </p>
@@ -143,7 +164,7 @@ export default function Consent() {
           <Card className="gap-1.5">
             <Row>
               <Tag outline>note</Tag>
-              <span className="flex-1 text-[12px] leading-relaxed text-muted-strong">
+              <span className="flex-1 text-base leading-relaxed text-muted-strong">
                 We call {name} from our end — nothing dials from your phone.
               </span>
             </Row>
@@ -166,11 +187,11 @@ export default function Consent() {
                   }
                   className="mt-0.5 size-4 shrink-0 accent-[#1a1a1a]"
                 />
-                <span className="text-[12px] leading-relaxed">{c.text(name)}</span>
+                <span className="text-base leading-relaxed">{c.text(name)}</span>
               </label>
             ))}
             <Divider />
-            <p className="text-[11px] text-muted-strong">
+            <p className="text-sm text-muted-strong">
               All three are required. {address} can ask us to stop on any call, and we stop.
             </p>
           </Card>
@@ -182,20 +203,12 @@ export default function Consent() {
             <StepLine text="Dose calls begin from the next slot" />
           </Card>
 
-          <p className="text-[11px] leading-relaxed text-muted-strong">
+          <p className="text-sm leading-relaxed text-muted-strong">
             All calling functionality begins only after this intro call and a final approval from
             {' '}{name}.
           </p>
 
-          <div className="sticky bottom-0 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-            {saveError && (
-              <Card emphasis="rule">
-                <Label>Not saved</Label>
-                <span className="text-[11px] leading-relaxed text-muted-strong">
-                  {saveError} Nothing has been sent and no call is scheduled. Try again.
-                </span>
-              </Card>
-            )}
+          <div className="sticky bottom-0 z-10 flex flex-col gap-2 bg-canvas pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-14px_18px_-14px_rgb(26_23_18/0.18)]">
             <Button
               disabled={!ready || saving}
               onClick={() => void finish()}
@@ -203,8 +216,13 @@ export default function Consent() {
             >
               {saving ? 'Saving…' : 'Continue on the app'}
             </Button>
+            {saveError && (
+              <p role="alert" aria-live="polite" className="text-center text-sm font-semibold">
+                {saveError}
+              </p>
+            )}
             {!ready && (
-              <span className="text-center text-[11px] text-muted">
+              <span className="text-center text-sm text-muted-strong">
                 {!optionChosen
                   ? 'Choose when we should call first'
                   : `${remaining} consent${remaining === 1 ? '' : 's'} left`}
@@ -254,8 +272,8 @@ function Option({
           className="mt-0.5 size-4 shrink-0 accent-[#1a1a1a]"
         />
         <span className="flex-1">
-          <span className="block text-[13px] font-semibold">{title}</span>
-          <span className="block text-[11px] leading-relaxed text-muted-strong">{body}</span>
+          <span className="block text-md font-semibold">{title}</span>
+          <span className="block text-sm leading-relaxed text-muted-strong">{body}</span>
         </span>
       </label>
       {children}
@@ -272,7 +290,7 @@ function StepLine({ text, done }: { text: string; done?: boolean }) {
           done ? 'bg-ink' : 'border-[1.5px] border-line-strong bg-paper',
         )}
       />
-      <span className="flex-1 text-[11px] text-muted-strong">{text}</span>
+      <span className="flex-1 text-sm text-muted-strong">{text}</span>
     </Row>
   )
 }
@@ -336,12 +354,12 @@ function TimeSheet({
         role="dialog"
         aria-modal="true"
         aria-label="Pick a time for the intro call"
-        className="relative flex max-h-[80vh] w-full max-w-md flex-col gap-3 overflow-auto rounded-t-2xl border border-line-strong bg-paper p-4 sm:rounded-2xl"
+        className="relative flex max-h-[80dvh] w-full max-w-md flex-col gap-3 overflow-auto rounded-t-2xl border border-line-strong bg-paper p-4 sm:rounded-2xl"
       >
         <div className="mx-auto h-1 w-8 rounded bg-line-strong sm:hidden" />
         <Row>
-          <span className="flex-1 text-[14px] font-bold">When are they usually free?</span>
-          <button type="button" aria-label="Close" onClick={onClose} className="px-1 text-muted">
+          <span className="flex-1 text-md font-bold">When are they usually free?</span>
+          <button type="button" aria-label="Close" onClick={onClose} className="px-1 text-muted-strong">
             ✕
           </button>
         </Row>
@@ -358,11 +376,11 @@ function TimeSheet({
 
         <Label>Time</Label>
         {slots.length === 0 ? (
-          <p className="text-[12px] text-muted-strong">
+          <p className="text-base text-muted-strong">
             No slots left inside the call window today — try tomorrow.
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {slots.map((s) => {
               const iso = s.toISOString()
               return (
@@ -377,11 +395,11 @@ function TimeSheet({
         <Card className="gap-1">
           <Row>
             <Label className="flex-1">Their call window</Label>
-            <span className="text-[11px] text-muted-strong">
+            <span className="text-sm text-muted-strong">
               {from} – {to}
             </span>
           </Row>
-          <p className="text-[10px] text-muted">Times outside the window are not offered.</p>
+          <p className="text-2xs text-muted-strong">Times outside the window are not offered.</p>
         </Card>
 
         <Button disabled={!picked} onClick={() => picked && onPick(picked)} className="w-full">

@@ -1,30 +1,43 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
+import { Link } from 'react-router-dom'
 import type { DoseStatus, Severity } from '../api/types'
 
 /**
- * Primitives ported 1:1 from the wireframe CSS atoms (wireframe/*.dc.html):
- * .c Card · .r Row · .chip · .tag · .dot · .btn/.ob Button · .in Field · .lbl Label · .g Bar
+ * Shared primitives. Status is never colour-only: every Dot / Chip / Tag that carries a
+ * state renders a shape AND a word, and colour is layered on top of a mark that already
+ * works in greyscale (verify: DevTools → Rendering → Achromatopsia).
  *
- * Rule carried over from the wireframes: status is never colour-only. Every Dot renders
- * a text label beside it, so the screen survives a greyscale screen recording and a
- * colour-blind viewer (LANE-C demo readiness).
+ * Three marks, no more: filled = taken / done / confirmed · outlined = missed / needs
+ * action · muted = upcoming / pending / locked.
  */
 
 type Div = { className?: string; children?: ReactNode }
+
+export type CardEmphasis = 'none' | 'border' | 'rule' | 'danger'
 
 export function Card({
   className,
   children,
   emphasis,
-}: Div & { emphasis?: 'none' | 'border' | 'rule' }) {
+}: Div & { emphasis?: CardEmphasis }) {
+  /**
+   * Anything that is not one of the three emphases falls back to the default card.
+   * Without this the fallback was `!emphasis || emphasis === 'none'`, so an unrecognised
+   * value matched no branch at all and the card rendered with no ground, no border and
+   * no shadow — which is exactly what happened to the P1 alert card on /alerts.
+   */
+  const marked = emphasis === 'border' || emphasis === 'rule' || emphasis === 'danger'
   return (
     <div
       className={clsx(
-        'flex flex-col gap-2 rounded-lg border bg-surface p-3',
-        emphasis === 'border' && 'border-[1.5px] border-ink bg-paper',
-        emphasis === 'rule' && 'border-line-strong border-l-[3px] border-l-ink',
-        (!emphasis || emphasis === 'none') && 'border-line-strong',
+        'flex flex-col gap-2.5 rounded-2xl border p-4 transition-shadow duration-200',
+        emphasis === 'border' && 'border-[1.5px] border-ink bg-paper shadow-[var(--shadow-lift)]',
+        emphasis === 'rule' &&
+          'border-line-strong border-l-[4px] border-l-accent bg-surface shadow-[var(--shadow-card)]',
+        emphasis === 'danger' &&
+          'border-danger/35 border-l-[4px] border-l-danger bg-danger-soft shadow-[var(--shadow-card)]',
+        !marked && 'border-line-strong bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
     >
@@ -39,7 +52,12 @@ export function Row({ className, children }: Div) {
 
 export function Label({ className, children }: Div) {
   return (
-    <div className={clsx('text-[9px] font-bold tracking-[0.09em] text-muted uppercase', className)}>
+    <div
+      className={clsx(
+        'text-2xs font-bold tracking-[0.08em] text-muted-strong uppercase',
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -58,8 +76,14 @@ export function Chip({
       {...(onClick && on !== undefined ? { 'aria-pressed': on } : {})}
       onClick={onClick}
       className={clsx(
-        'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap',
-        on ? 'border-ink bg-ink text-white' : 'border-line-strong bg-paper text-ink',
+        'inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 ease-[var(--ease-out)]',
+        on
+          ? 'border-ink bg-ink text-paper'
+          : 'border-line-strong bg-paper text-ink hover:border-ink',
+        onClick && 'active:scale-[0.97]',
+        // A chip you can press is a control and takes the 44px floor; a chip that only
+        // reads a value is text and stays compact, so rows of them do not sprawl.
+        onClick ? 'min-h-[44px]' : 'min-h-[34px]',
         className,
       )}
     >
@@ -68,12 +92,30 @@ export function Chip({
   )
 }
 
-export function Tag({ children, outline, className }: Div & { outline?: boolean }) {
+/** A metadata / status pill. `tone` layers colour onto the shape + word (never colour alone). */
+export function Tag({
+  children,
+  outline,
+  tone = 'ink',
+  className,
+}: Div & { outline?: boolean; tone?: 'ink' | 'danger' | 'warn' | 'accent' }) {
+  const solid: Record<string, string> = {
+    ink: 'bg-ink text-paper',
+    danger: 'bg-danger text-paper',
+    warn: 'bg-warn text-paper',
+    accent: 'bg-accent text-paper',
+  }
+  const outlined: Record<string, string> = {
+    ink: 'border border-ink bg-paper text-ink',
+    danger: 'border border-danger bg-danger-soft text-danger',
+    warn: 'border border-warn bg-warn-soft text-warn',
+    accent: 'border border-accent bg-accent-soft text-accent',
+  }
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide',
-        outline ? 'border border-ink bg-paper text-ink' : 'bg-ink text-white',
+        'inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-extrabold tracking-wide',
+        outline ? outlined[tone] : solid[tone],
         className,
       )}
     >
@@ -90,22 +132,44 @@ export function Button({
   href,
   className,
 }: Div & {
-  variant?: 'primary' | 'outline'
+  variant?: 'primary' | 'outline' | 'accent'
   disabled?: boolean
   onClick?: () => void
   href?: string
 }) {
+  /**
+   * Warm Inert: a gated button keeps its place on a warm `fill` ground with readable
+   * `muted-strong` text, never a 40%-opacity ghost. The reason it is gated is not this
+   * component's job — it belongs beside the button, in plain text, on the screen.
+   * The transparent border lives in the base so every variant and state is the same size.
+   */
   const cls = clsx(
-    'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-[12px] font-semibold',
-    variant === 'primary' ? 'bg-ink text-white' : 'border border-ink bg-transparent text-ink',
-    disabled && 'pointer-events-none opacity-40',
+    // The base carries the border WIDTH only. Every branch below sets its own
+    // border-COLOR, so exactly one border-color utility is ever in play — putting a
+    // default colour here instead loses to nothing and silently erases the outline
+    // variant's ink hairline, since Tailwind resolves the conflict by stylesheet
+    // order, not by the order of these arguments.
+    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-[1.5px] px-4 py-2.5 text-center text-sm font-semibold sm:px-5 transition-[transform,background-color,box-shadow,border-color] duration-150 ease-[var(--ease-out)]',
+    !disabled && 'active:scale-[0.98]',
+    !disabled && variant === 'primary' && 'border-transparent bg-ink text-paper hover:bg-ink-soft',
+    !disabled && variant === 'accent' && 'border-transparent bg-accent text-white hover:bg-accent-2',
+    !disabled &&
+      variant === 'outline' &&
+      'border-ink bg-transparent text-ink hover:bg-ink/[0.05]',
+    disabled && 'cursor-not-allowed border-transparent bg-fill text-muted-strong',
     className,
   )
   if (href && !disabled) {
-    return (
+    // In-app paths go through the router; tel:/mailto:/external stay plain anchors.
+    const external = /^(https?:|tel:|mailto:)/.test(href)
+    return external ? (
       <a href={href} className={cls}>
         {children}
       </a>
+    ) : (
+      <Link to={href} className={cls}>
+        {children}
+      </Link>
     )
   }
   return (
@@ -127,8 +191,10 @@ export function Field({
   return (
     <div
       className={clsx(
-        'rounded-md border border-line-strong bg-paper px-2.5 py-2 text-[12px]',
-        value ? 'text-ink' : 'text-muted',
+        'rounded-lg border border-line-strong bg-paper px-3 py-2.5 text-sm',
+        // An empty field still has to be read. `muted` measures 3.9:1 on paper and
+        // fails AA; `muted-strong` is the floor for anything with words in it.
+        value ? 'text-ink' : 'text-muted-strong',
         className,
       )}
     >
@@ -137,28 +203,44 @@ export function Field({
   )
 }
 
-/** Skeleton bar (.g) — also used as a meter when `fill` is set. */
-export function Bar({ width = '100%', fill, className }: { width?: string; fill?: number; className?: string }) {
+/** Skeleton bar — also a meter when `fill` is set. */
+export function Bar({
+  width = '100%',
+  fill,
+  className,
+}: {
+  width?: string
+  fill?: number
+  className?: string
+}) {
   return (
-    <div className={clsx('h-2 rounded bg-fill', className)} style={{ width }}>
+    <div
+      className={clsx('h-2.5 overflow-hidden rounded-full', fill === undefined && 'kv-shimmer', className)}
+      style={{ width, ...(fill !== undefined ? { background: 'var(--color-fill)' } : {}) }}
+    >
       {fill !== undefined && (
-        <div className="h-2 rounded bg-ink" style={{ width: `${Math.round(fill * 100)}%` }} />
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-500 ease-[var(--ease-out)]"
+          style={{ width: `${Math.round(fill * 100)}%` }}
+        />
       )}
     </div>
   )
 }
 
-/** Hatched placeholder (.im) — images, scans, logos. */
+/** Hatched placeholder — images, scans, logos. */
 export function Placeholder({ className, children }: Div) {
   return (
     <div
       className={clsx(
-        'flex items-center justify-center rounded-md border border-line-strong text-center text-[11px] text-muted',
+        'flex items-center justify-center rounded-lg border border-line-strong text-center text-xs text-muted-strong',
         className,
       )}
+      // The hatch is the only place in the app that drew its own colours. Both stripes
+      // are ramp steps now, so it follows the palette instead of shadowing it.
       style={{
         backgroundImage:
-          'repeating-linear-gradient(45deg,#f1f1ef,#f1f1ef 6px,#e6e6e2 6px,#e6e6e2 12px)',
+          'repeating-linear-gradient(45deg,var(--color-canvas),var(--color-canvas) 6px,var(--color-fill) 6px,var(--color-fill) 12px)',
       }}
     >
       {children}
@@ -172,6 +254,13 @@ export function Divider({ className }: { className?: string }) {
 
 /* ---------------------------------------------------------------- status */
 
+// All six DoseStatus members. `unknown` and `pending` are ours and are not
+// optional: DOSE_LABEL is a Record over the whole union, so omitting them does
+// not merely lose a label, it fails to typecheck. `unknown` is a real outcome
+// the agent records when a caller answered but their intent could not be
+// established, and `pending` is the scheduler's bookkeeping state — see
+// answered() in api/types.ts, which is what keeps `pending` from reading as
+// an outcome anywhere in the app.
 const DOSE_LABEL: Record<DoseStatus, string> = {
   confirmed: 'taken',
   deferred: 'deferred',
@@ -187,26 +276,48 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   red: 'red',
 }
 
-function dotClass(kind: 'filled' | 'hollow' | 'empty') {
+type DotTone = 'ink' | 'accent' | 'danger' | 'warn'
+
+function dotClass(kind: 'filled' | 'hollow' | 'empty', tone: DotTone = 'ink') {
+  const solid: Record<DotTone, string> = {
+    ink: 'bg-ink',
+    accent: 'bg-accent',
+    danger: 'bg-danger',
+    warn: 'bg-warn',
+  }
+  const ring: Record<DotTone, string> = {
+    ink: 'border-ink',
+    accent: 'border-accent',
+    danger: 'border-danger',
+    warn: 'border-warn',
+  }
   return clsx(
-    'inline-block size-2 shrink-0 rounded-full',
-    kind === 'filled' && 'bg-ink',
-    kind === 'hollow' && 'border-[1.5px] border-ink bg-paper',
-    kind === 'empty' && 'bg-[#c9c9c3]',
+    'inline-block size-2.5 shrink-0 rounded-full',
+    kind === 'filled' && solid[tone],
+    kind === 'hollow' && clsx('border-2 bg-paper', ring[tone]),
+    kind === 'empty' && 'bg-fill-empty',
   )
 }
 
-/** Five dose states, never colour alone — the label always renders. */
+/** Four dose states, never colour alone — the word always renders. */
 export function DoseStatusChip({ status }: { status: DoseStatus }) {
   const kind = status === 'confirmed' ? 'filled' : status === 'deferred' ? 'empty' : 'hollow'
+  const tone: DotTone =
+    status === 'confirmed' ? 'accent' : status === 'missed' ? 'danger' : status === 'no_answer' ? 'warn' : 'ink'
+  // `unknown` is emphasised alongside missed and no_answer: all three mean the
+  // dose was not established, which is what a caregiver needs to notice. It
+  // carries no tone colour of its own — it is an absence of information, not a
+  // severity, and colouring it would overstate what is known.
+  const emphatic = status === 'missed' || status === 'no_answer' || status === 'unknown'
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px]">
-      <span className={dotClass(kind)} />
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <span className={dotClass(kind, tone)} />
       <span
         className={clsx(
-          status === 'missed' || status === 'no_answer' || status === 'unknown'
-            ? 'font-semibold'
-            : 'text-muted-strong',
+          emphatic && status === 'missed' && 'font-semibold text-danger',
+          emphatic && status === 'no_answer' && 'font-semibold text-warn',
+          emphatic && status === 'unknown' && 'font-semibold',
+          !emphatic && 'text-muted-strong',
         )}
       >
         {DOSE_LABEL[status]}
@@ -216,23 +327,23 @@ export function DoseStatusChip({ status }: { status: DoseStatus }) {
 }
 
 export function SeverityChip({ severity }: { severity: Severity }) {
-  if (severity === 'red') return <Tag>red</Tag>
-  if (severity === 'watch') return <Tag outline>watch</Tag>
+  if (severity === 'red') return <Tag tone="danger">red</Tag>
+  if (severity === 'watch') return <Tag tone="warn" outline>watch</Tag>
   return <Label>{SEVERITY_LABEL.none}</Label>
 }
 
 /** Upcoming / neutral dot for timeline rows. */
-export function Dot({ kind }: { kind: 'filled' | 'hollow' | 'empty' }) {
-  return <span className={dotClass(kind)} />
+export function Dot({ kind, tone = 'ink', className }: { kind: 'filled' | 'hollow' | 'empty'; tone?: DotTone; className?: string }) {
+  return <span className={clsx(dotClass(kind, tone), className)} />
 }
 
 /* ------------------------------------------------------------ page states */
 
 export function LoadingBlock({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-2" aria-busy="true" aria-live="polite">
+    <div className="flex flex-col gap-3" aria-busy="true" aria-live="polite">
       {Array.from({ length: rows }).map((_, i) => (
-        <Bar key={i} width={`${90 - i * 18}%`} />
+        <Bar key={i} width={`${90 - i * 14}%`} />
       ))}
       <span className="sr-only">Loading</span>
     </div>
@@ -241,11 +352,18 @@ export function LoadingBlock({ rows = 3 }: { rows?: number }) {
 
 export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const message = error instanceof Error ? error.message : 'Something went wrong at our end.'
+  /**
+   * `rule`, not `danger`. The rose ground and rose left mark are the P1 language — they
+   * mean the parent said something about her chest. A screen that could not reach the
+   * API is not that, and spending the alarm colour on a failed fetch is how the one
+   * signal this product cannot afford to dilute gets diluted. An error here is a
+   * bookkeeping problem: mark it with the ink rule and say so calmly.
+   */
   return (
     <Card emphasis="rule">
       <Label>Not loaded</Label>
-      <div className="text-[12px] font-semibold">{message}</div>
-      <div className="text-[11px] text-muted-strong">
+      <div className="text-sm font-semibold">{message}</div>
+      <div className="text-xs text-muted-strong">
         Nothing has been lost — the record is on our servers. This screen just could not read it.
       </div>
       {onRetry && (
@@ -261,10 +379,14 @@ export function ErrorBlock({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 export function EmptyBlock({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
-    <Card className="items-center gap-2 border-dashed py-8 text-center">
-      <div className="text-[13px] font-bold">{title}</div>
-      <div className="max-w-xs text-[11px] text-muted-strong">{body}</div>
+    <Card className="items-center gap-2.5 border-dashed py-10 text-center">
+      <div className="font-display text-lg font-semibold">{title}</div>
+      <div className="max-w-xs text-xs leading-relaxed text-muted-strong">{body}</div>
       {action}
     </Card>
   )
 }
+
+/* Signature components live in their own file; re-exported so screens keep one import. */
+export * from './signature'
+export * from './useParentLanguage'

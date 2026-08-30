@@ -20,12 +20,27 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS caregivers (
   id                TEXT PRIMARY KEY,
-  name              TEXT NOT NULL,
+  -- Nullable, unlike the Postgres original. Phone-OTP signup creates the row
+  -- from a verified number alone and the name is collected on the next screen;
+  -- NOT NULL would make the first successful OTP fail on insert.
+  name              TEXT,
   phone_e164        TEXT NOT NULL UNIQUE,
   email             TEXT,
   relationship      TEXT,
   phone_verified_at TEXT,                 -- [GAP-1] signup verifies by OTP
   email_verified_at TEXT,                 -- [GAP-1]
+  -- Password login for returning caregivers, from the app lane. scrypt, not a
+  -- bare hash: a password is low-entropy, so the defence is that guessing is
+  -- slow. BYTEA there, hex TEXT here — sqlite3 stores a bytes value in a TEXT
+  -- column as a decoded string, and compare_digest then never matches.
+  password_hash     TEXT,
+  password_salt     TEXT,
+  password_set_at   TEXT,
+  -- Online guessing is throttled per account; without it a password is one
+  -- long-lived secret with unlimited attempts, strictly weaker than the OTP
+  -- beside it, which dies after five.
+  failed_logins     INTEGER NOT NULL DEFAULT 0,
+  locked_until      TEXT,
   created_at        TEXT NOT NULL
 );
 
@@ -346,4 +361,47 @@ CREATE TABLE IF NOT EXISTS messages (
   content    TEXT,
   tool_calls TEXT,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Caregiver authentication. Arrived with the app lane, written for Postgres,
+-- translated here to the same substitutions the header records:
+--   UUID        -> TEXT (uuid4 strings, generated in Python)
+--   BYTEA       -> TEXT (lowercase hex digest — sqlite3 has no bytea, and hex
+--                        compares and indexes exactly as well for a fixed-width
+--                        hash)
+--   TIMESTAMPTZ -> TEXT (ISO-8601 UTC, matching every other timestamp here)
+--   SMALLINT    -> INTEGER
+--   INET        -> TEXT
+--   CHECK (...) is kept: SQLite enforces CHECK constraints.
+-- Defaults that were server-side in Postgres (gen_random_uuid(), now()) are
+-- supplied by the caller instead, because SQLite has no gen_random_uuid() and
+-- mixing generated and supplied ids is how rows end up with NULL primary keys.
+
+CREATE TABLE IF NOT EXISTS auth_otp (
+  id           TEXT PRIMARY KEY,
+  channel      TEXT NOT NULL CHECK (channel IN ('sms','email')),
+  destination  TEXT NOT NULL,          -- E.164, or lowercased email
+  code_hash    TEXT NOT NULL,          -- HMAC-SHA256(code, OTP_PEPPER) hex. never the code
+  expires_at   TEXT NOT NULL,
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  consumed_at  TEXT,                   -- set on success AND on the last failed try
+  request_ip   TEXT,
+  created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_otp_recent ON auth_otp(destination, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id           TEXT PRIMARY KEY,
+  caregiver_id TEXT NOT NULL REFERENCES caregivers(id) ON DELETE CASCADE,
+  -- sha256 of the cookie value. handoffs.token is stored raw (TRD §3) because it
+  -- lives 24h and grants one read-only screen; a session lives 30 days and grants
+  -- the whole account, so a dump of this table must not hand over live logins.
+  token_hash   TEXT NOT NULL UNIQUE,
+  expires_at   TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  revoked_at   TEXT,
+  user_agent   TEXT,
+  created_at   TEXT NOT NULL
 );

@@ -51,6 +51,125 @@ def connect() -> sqlite3.Connection:
     return con
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# asyncpg-shaped adapter.
+#
+# The caregiver-auth modules (api/auth, api/caregiver) arrived from the app lane
+# written against an asyncpg pool: `async with db.connection() as conn`, then
+# `await conn.fetchrow("... WHERE id = $1", x)`. This API runs on SQLite.
+#
+# Rewriting all 68 of their placeholders by hand would work once and then fight
+# every future merge from that lane. Adapting the small surface they actually
+# use is less code, and it keeps their files close enough to upstream that the
+# next merge is a merge rather than a re-port.
+#
+# What this does NOT paper over: Postgres-only SQL. `now()` and
+# `::interval` arithmetic have no SQLite equivalent that compares correctly
+# against our ISO-8601 text timestamps, so those statements were ported to bind
+# Python-computed values instead. sqlite3's `datetime('now')` renders
+# "YYYY-MM-DD HH:MM:SS" while everything else here is
+# "YYYY-MM-DDTHH:MM:SS+00:00" — string comparison between the two silently
+# yields the wrong answer, which is the kind of bug that only shows up when a
+# session refuses to expire.
+
+
+class _Conn:
+    """The slice of asyncpg's connection API the auth modules use."""
+
+    def __init__(self, con: sqlite3.Connection):
+        self._con = con
+
+    @staticmethod
+    def _q(sql: str, args: tuple) -> tuple[str, list]:
+        """`$1, $2 …` -> `?`, with the arguments reordered to match.
+
+        Not a plain substitution. asyncpg lets one placeholder appear twice —
+        `WHERE phone_e164 = $1 OR lower(email) = lower($1)` is real code in the
+        login route — and SQLite's `?` is strictly positional, so a naive
+        replace produces two placeholders for one argument and sqlite3 raises
+        "Incorrect number of bindings supplied". Walking the occurrences in
+        order and emitting args[n-1] each time keeps repeats working.
+        """
+        import re
+
+        params: list = []
+
+        def sub(m: "re.Match[str]") -> str:
+            idx = int(m.group(0)[1:]) - 1
+            params.append(args[idx] if idx < len(args) else None)
+            return "?"
+
+        return re.sub(r"\$\d+", sub, sql), params
+
+    async def fetchrow(self, sql: str, *args):
+        q, p = self._q(sql, args)
+        return self._con.execute(q, p).fetchone()
+
+    async def fetch(self, sql: str, *args):
+        q, p = self._q(sql, args)
+        return self._con.execute(q, p).fetchall()
+
+    async def fetchval(self, sql: str, *args):
+        q, p = self._q(sql, args)
+        row = self._con.execute(q, p).fetchone()
+        return row[0] if row else None
+
+    async def execute(self, sql: str, *args):
+        q, p = self._q(sql, args)
+        self._con.execute(q, p)
+        self._con.commit()
+
+
+class _ConnCtx:
+    """`async with db.connection() as conn:` over a sqlite3 connection.
+
+    One connection per request rather than a pool: sqlite3 connections are
+    cheap, and sharing one across async handlers would need a lock to be safe.
+    """
+
+    async def __aenter__(self) -> _Conn:
+        self._con = connect()
+        return _Conn(self._con)
+
+    async def __aexit__(self, *exc):
+        self._con.close()
+        return False
+
+
+class _TxCtx(_ConnCtx):
+    """`async with db.transaction() as conn:` — commits on clean exit, rolls
+    back on exception. sqlite3 opens a transaction implicitly on the first
+    write, so this only has to decide how it ends."""
+
+    async def __aexit__(self, exc_type, *rest):
+        try:
+            if exc_type is None:
+                self._con.commit()
+            else:
+                self._con.rollback()
+        finally:
+            self._con.close()
+        return False
+
+
+def connection() -> _ConnCtx:
+    return _ConnCtx()
+
+
+def transaction() -> _TxCtx:
+    return _TxCtx()
+
+
+async def open_pool() -> None:
+    """No-op. Kept so the lifespan wiring that came with the auth lane still
+    reads the same; SQLite has nothing to open ahead of time."""
+    return None
+
+
+async def close_pool() -> None:
+    return None
+
+
 def _day_shift() -> int:
     """Whole days between the fixture's anchor date and today, in LOCAL time.
 
@@ -136,6 +255,19 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "updated_at": "TEXT",
     },
 }
+# Caregiver auth, from the app lane. Added here as well as in schema.sql so a
+# database created before this merge gains the columns instead of erroring the
+# first time somebody signs in.
+_ADDED_COLUMNS["caregivers"] = {
+    "phone_verified_at": "TEXT",
+    "email_verified_at": "TEXT",
+    "password_hash": "TEXT",
+    "password_salt": "TEXT",
+    "password_set_at": "TEXT",
+    "failed_logins": "INTEGER NOT NULL DEFAULT 0",
+    "locked_until": "TEXT",
+}
+
 _ADDED_COLUMNS["calls"] = {"alert_sent_at": "TEXT", "alert_channel": "TEXT"}
 _ADDED_COLUMNS["medications"].update({"created_at": "TEXT", "updated_at": "TEXT"})
 _ADDED_COLUMNS["dose_events"]["call_id"] = "TEXT"

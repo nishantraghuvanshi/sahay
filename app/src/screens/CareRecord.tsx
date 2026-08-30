@@ -85,8 +85,8 @@ export default function CareRecord() {
       {/* ------------------------------------------------------------- identity */}
       <Card className="gap-2">
         <Label>Care record</Label>
-        <h1 className="text-[19px] leading-tight font-bold break-words">{spokenName}</h1>
-        <div className="text-[12px] text-muted-strong">
+        <h1 className="text-xl leading-tight font-bold break-words">{spokenName}</h1>
+        <div className="text-base text-muted-strong">
           This is how the agent addresses {patient.name} on every call.
         </div>
         <Row className="flex-wrap gap-2 pt-1">
@@ -107,7 +107,7 @@ export default function CareRecord() {
             ))}
           </Row>
         ) : (
-          <div className="text-[12px] text-muted-strong">None recorded.</div>
+          <div className="text-base text-muted-strong">None recorded.</div>
         )}
       </Card>
 
@@ -125,19 +125,19 @@ export default function CareRecord() {
               {patient.allergies.map((a) => (
                 <Row key={a} className="gap-1.5 rounded-md border-[1.5px] border-ink bg-paper px-2 py-1">
                   <Tag>allergy</Tag>
-                  <span className="text-[14px] font-bold break-words">{a}</span>
+                  <span className="text-md font-bold break-words">{a}</span>
                 </Row>
               ))}
             </Row>
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-sm text-muted-strong">
               {patient.allergies.length === 1 ? 'One allergy is' : `${patient.allergies.length} allergies are`}{' '}
               on file. The agent is never allowed to mention a medicine that is not in this record.
             </div>
           </>
         ) : (
           <>
-            <div className="text-[15px] font-bold">None recorded.</div>
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-lg font-bold">None recorded.</div>
+            <div className="text-sm text-muted-strong">
               No allergy has been entered for {spokenName}. That is not the same as “no allergies”
               — add any you know before the next call.
             </div>
@@ -150,22 +150,22 @@ export default function CareRecord() {
         <Label>Doctor</Label>
         {patient.doctor_name || patient.doctor_phone ? (
           <Row className="flex-wrap gap-2">
-            <span className="flex-1 text-[13px] font-semibold break-words">
+            <span className="flex-1 text-md font-semibold break-words">
               {patient.doctor_name ?? 'Name not recorded'}
             </span>
             {patient.doctor_phone ? (
               <a
                 href={`tel:${patient.doctor_phone}`}
-                className="inline-flex items-center rounded-lg border border-ink px-3 py-2 text-[12px] font-semibold"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-ink px-3 py-2 text-base font-semibold sm:w-auto"
               >
                 Call {patient.doctor_phone}
               </a>
             ) : (
-              <span className="text-[12px] text-muted-strong">No phone recorded</span>
+              <span className="text-base text-muted-strong">No phone recorded</span>
             )}
           </Row>
         ) : (
-          <div className="text-[12px] text-muted-strong">No doctor recorded.</div>
+          <div className="text-base text-muted-strong">No doctor recorded.</div>
         )}
       </Card>
 
@@ -203,7 +203,7 @@ export default function CareRecord() {
               </div>
             ))}
 
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-sm text-muted-strong">
               Priority is the one dose the agent chases hardest.
             </div>
           </>
@@ -222,7 +222,7 @@ export default function CareRecord() {
             ))}
           </Row>
         ) : (
-          <div className="text-[12px] text-muted-strong">
+          <div className="text-base text-muted-strong">
             None recorded. Before-food and after-food doses are timed from the slot alone.
           </div>
         )}
@@ -235,18 +235,18 @@ export default function CareRecord() {
         <Label>Calls</Label>
 
         {patient.schedule_signed_off_at ? (
-          <div className="text-[13px] font-semibold">
+          <div className="text-md font-semibold">
             Calls active since {formatDateTime(patient.schedule_signed_off_at)}
           </div>
         ) : (
           <>
             <Row className="flex-wrap gap-2">
               <Tag>not signed off</Tag>
-              <span className="text-[15px] leading-snug font-bold">
+              <span className="text-lg leading-snug font-bold">
                 Not signed off — no call will be placed.
               </span>
             </Row>
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-sm text-muted-strong">
               Nothing is called about until the schedule is approved. Until then this record is read
               only.
             </div>
@@ -263,9 +263,9 @@ export default function CareRecord() {
             <Divider />
             <Row className="flex-wrap gap-2">
               <Tag>paused</Tag>
-              <span className="text-[13px] font-bold">Calls paused at their request.</span>
+              <span className="text-md font-bold">Calls paused at their request.</span>
             </Row>
-            <div className="text-[11px] text-muted-strong">
+            <div className="text-sm text-muted-strong">
               {spokenName} asked us to stop calling. We do not call again until that is lifted.
             </div>
           </>
@@ -277,8 +277,8 @@ export default function CareRecord() {
         <Label>Contact</Label>
 
         <Row className="flex-wrap gap-2">
-          <span className="flex-1 text-[11px] text-muted-strong">Patient phone</span>
-          <a href={`tel:${patient.phone_e164}`} className="text-[13px] font-semibold underline">
+          <span className="flex-1 text-sm text-muted-strong">Patient phone</span>
+          <a href={`tel:${patient.phone_e164}`} className="text-md font-semibold break-all underline">
             {patient.phone_e164}
           </a>
         </Row>
@@ -286,8 +286,8 @@ export default function CareRecord() {
         <Divider />
 
         <div className="flex flex-col gap-1">
-          <span className="text-[11px] text-muted-strong">Address</span>
-          <span className="text-[13px] leading-snug break-words">
+          <span className="text-sm text-muted-strong">Address</span>
+          <span className="text-md leading-snug break-words">
             {patient.address_text ?? 'No address recorded.'}
           </span>
         </div>
@@ -295,17 +295,17 @@ export default function CareRecord() {
         <Divider />
 
         <Row className="flex-wrap gap-2">
-          <span className="flex-1 text-[11px] text-muted-strong">
+          <span className="flex-1 text-sm text-muted-strong">
             Caregiver{caregiver.relationship ? ` · ${caregiver.relationship}` : ''}
           </span>
-          <span className="text-[13px] font-semibold break-words">{caregiver.name}</span>
-          <a href={`tel:${caregiver.phone_e164}`} className="text-[13px] font-semibold underline">
+          <span className="text-md font-semibold break-words">{caregiver.name}</span>
+          <a href={`tel:${caregiver.phone_e164}`} className="text-md font-semibold break-all underline">
             {caregiver.phone_e164}
           </a>
         </Row>
       </Card>
 
-      <p className="px-1 pb-1 text-[11px] text-muted-strong">
+      <p className="px-1 pb-1 text-sm text-muted-strong">
         Every field on this screen is a stored column of the care record. Nothing here is
         estimated, smoothed or inferred.
       </p>
@@ -321,13 +321,13 @@ function MedicineRow({ med }: { med: Medication }) {
       {/* name */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <Label className="sm:hidden">Medicine</Label>
-        <span className="text-[13px] font-bold break-words">{med.name}</span>
+        <span className="text-md font-bold break-words">{med.name}</span>
       </div>
 
       {/* dose */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <Label className="sm:hidden">Dose</Label>
-        <span className="text-[12px] break-words">{med.dose}</span>
+        <span className="text-base break-words">{med.dose}</span>
       </div>
 
       {/* slots */}
@@ -340,14 +340,14 @@ function MedicineRow({ med }: { med: Medication }) {
             ))}
           </Row>
         ) : (
-          <span className="text-[12px] text-muted-strong">No times recorded</span>
+          <span className="text-base text-muted-strong">No times recorded</span>
         )}
       </div>
 
       {/* food rule */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <Label className="sm:hidden">Food rule</Label>
-        <span className="text-[12px]">
+        <span className="text-base">
           {med.with_food ? FOOD_LABEL[med.with_food] : 'Not recorded'}
         </span>
       </div>
@@ -355,7 +355,7 @@ function MedicineRow({ med }: { med: Medication }) {
       {/* priority — a word, never a colour */}
       <div className="flex min-w-0 flex-col gap-0.5">
         <Label className="sm:hidden">Priority</Label>
-        {med.is_priority ? <Tag>priority</Tag> : <span className="text-[12px] text-muted">—</span>}
+        {med.is_priority ? <Tag>priority</Tag> : <span className="text-base text-muted-strong">—</span>}
       </div>
     </div>
   )

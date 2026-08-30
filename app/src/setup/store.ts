@@ -73,9 +73,14 @@ export interface SetupDraft {
   phone: string
   phoneVerified: boolean
   phoneOtpSent: boolean
+  /** When the code was sent, epoch ms. The flag survives a reload on purpose, but
+   *  the code behind it dies in `otp_ttl_min` (api/config.py), so a flag with no
+   *  timestamp — or an old one — means "no code is in flight", not "resume". */
+  phoneOtpSentAt: number | null
   email: string
   emailVerified: boolean
   emailOtpSent: boolean
+  emailOtpSentAt: number | null
 
   /* 1b — parent */
   parentName: string
@@ -117,9 +122,11 @@ export const EMPTY_DRAFT: SetupDraft = {
   phone: '',
   phoneVerified: false,
   phoneOtpSent: false,
+  phoneOtpSentAt: null,
   email: '',
   emailVerified: false,
   emailOtpSent: false,
+  emailOtpSentAt: null,
 
   parentName: '',
   honorific: '',
@@ -200,13 +207,17 @@ export function useSetupDraft() {
 
 /* ------------------------------------------------------------- validation */
 
-/** E.164 (FR-1 acceptance: the record stores E.164). */
-export function toE164(input: string, cc = '+91'): string | null {
-  const digits = input.replace(/[^\d+]/g, '')
-  if (digits.startsWith('+')) return /^\+[1-9]\d{7,14}$/.test(digits) ? digits : null
-  const local = digits.replace(/^0+/, '')
-  if (local.length !== 10) return null
-  return `${cc}${local}`
+/**
+ * E.164 (FR-1 acceptance: the record stores E.164). India only: the user types the
+ * 10-digit mobile number and we prefix +91 ourselves. A pasted "+91 …", "91 …" or
+ * "0 …" is tolerated so a number copied from contacts still works.
+ */
+export function toE164(input: string): string | null {
+  let digits = input.replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2)
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
+  // Indian mobiles are 10 digits and start with 6–9.
+  return /^[6-9]\d{9}$/.test(digits) ? `+91${digits}` : null
 }
 
 export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())

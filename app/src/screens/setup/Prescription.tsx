@@ -1,35 +1,39 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Label, Placeholder, Row, Tag } from '../../ui'
+import { seedDevDraftOnce } from '../../setup/devSeed'
+import { Bar, Button, Card, Label, Placeholder, Row, Tag } from '../../ui'
 import { useSetupDraft } from '../../setup/store'
 import type { DraftFile } from '../../setup/store'
-import { dropFile, previewUrl, putFile } from '../../setup/files'
 
 /**
  * Wireframe 1c (mobile) / 2c left column (web) — "Add prescription", step 2 of 3.
  *
  * The three entry points open real pickers — camera, gallery, files — and the drop zone
  * takes real drops, so the names, sizes and thumbnails in the queue are the caregiver's
- * own.
- *
- * Nothing is transferred from this screen. The photograph is staged in memory and sent
- * once, on 1d, as part of the extraction request — so there is no progress bar here,
- * because there is no transfer to report. An animated one would have been describing a
- * network call that never happened.
- *
- * The accepted types are narrower than a picker would allow: the extractor reads JPEG
- * and PNG, and its mime sniffer silently falls back to JPEG for anything else, so a PDF
- * would be handed to the model as a broken image. Better to say no here than to let a
- * confident misreading of garbage reach a schedule.
+ * own. What is still fake is the *transfer*: there is no upload endpoint in this build,
+ * so the progress bar is a timer rather than bytes on a wire.
  */
 
 const MAX_BYTES = 10 * 1_048_576
-const ACCEPT = 'image/jpeg,image/png'
+const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf'
+
+const UPLOAD_MS = 1200
+const TICK_MS = 80
+
+/**
+ * Object URLs for the picked images, keyed by draft-file id. Blobs cannot live in
+ * localStorage, so this map — not the draft — is what a thumbnail reads. It is module
+ * scope rather than a ref so stepping forward to 1d and back keeps the previews; a full
+ * reload empties it and the tiles fall back to the page number, same as before.
+ */
+const previews = new Map<string, string>()
 
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`
 
 const isAccepted = (file: File) =>
-  file.type === 'image/jpeg' || file.type === 'image/png' || /\.(jpe?g|png)$/i.test(file.name)
+  file.type.startsWith('image/') ||
+  file.type === 'application/pdf' ||
+  /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(file.name)
 
 export default function Prescription() {
   const navigate = useNavigate()
@@ -43,6 +47,7 @@ export default function Prescription() {
   const filesRef = useRef<DraftFile[]>(draft.files)
   filesRef.current = draft.files
 
+  const timers = useRef<number[]>([])
   const seq = useRef(0)
 
   /** Files the picker handed back that we will not take — shown, not swallowed. */
@@ -52,6 +57,14 @@ export default function Prescription() {
   const cameraInput = useRef<HTMLInputElement | null>(null)
   const galleryInput = useRef<HTMLInputElement | null>(null)
   const filesInput = useRef<HTMLInputElement | null>(null)
+
+  // Dev mode: fill the parent step so the flow past this screen has data to post.
+  useEffect(() => seedDevDraftOnce(patch), [patch])
+
+  useEffect(() => {
+    const pending = timers.current
+    return () => pending.forEach(window.clearInterval)
+  }, [])
 
   const writeFiles = useCallback(
     (next: DraftFile[]) => {
@@ -71,7 +84,7 @@ export default function Prescription() {
 
       for (const file of list) {
         if (!isAccepted(file)) {
-          bad.push(`${file.name} — JPG or PNG photo only`)
+          bad.push(`${file.name} — JPG, PNG or PDF only`)
           continue
         }
         if (file.size > MAX_BYTES) {
@@ -79,30 +92,34 @@ export default function Prescription() {
           continue
         }
         const id = `f${Date.now()}-${(seq.current += 1)}`
-        // The bytes go to the session store; only metadata goes in the draft, which
-        // is localStorage-backed and must never hold a prescription image.
-        putFile(id, file)
-        // `progress` stays in DraftFile for schema compatibility. Staging is
-        // instantaneous, so it is complete the moment the file is accepted.
-        accepted.push({
-          id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          progress: 100,
-        })
+        if (file.type.startsWith('image/')) previews.set(id, URL.createObjectURL(file))
+        accepted.push({ id, name: file.name, size: file.size, type: file.type, progress: 0 })
       }
 
       setRejected(bad)
       if (accepted.length === 0) return
       writeFiles([...filesRef.current, ...accepted])
+
+      // One ticker drives every file added in this batch to done together.
+      const ids = new Set(accepted.map((f) => f.id))
+      const startedAt = Date.now()
+      const timer = window.setInterval(() => {
+        const pct = Math.min(100, Math.round(((Date.now() - startedAt) / UPLOAD_MS) * 100))
+        writeFiles(filesRef.current.map((f) => (ids.has(f.id) ? { ...f, progress: pct } : f)))
+        if (pct >= 100) window.clearInterval(timer)
+      }, TICK_MS)
+      timers.current.push(timer)
     },
     [writeFiles],
   )
 
   const removeFile = useCallback(
     (id: string) => {
-      dropFile(id)
+      const url = previews.get(id)
+      if (url) {
+        URL.revokeObjectURL(url)
+        previews.delete(id)
+      }
       writeFiles(filesRef.current.filter((f) => f.id !== id))
     },
     [writeFiles],
@@ -117,18 +134,18 @@ export default function Prescription() {
   const files = draft.files
 
   return (
-    <section className="mx-auto flex max-w-5xl flex-col gap-3 p-3 sm:p-5">
+    <section className="mx-auto flex min-h-full max-w-5xl flex-col gap-3 p-4 sm:p-5">
       <Row>
         <button
           type="button"
           onClick={() => navigate('/setup/parent')}
           aria-label="Back"
-          className="-ml-1 grid size-8 shrink-0 place-items-center rounded-md text-[15px] text-muted"
+          className="-ml-1 grid size-11 shrink-0 place-items-center rounded-md text-lg text-muted-strong"
         >
           ←
         </button>
-        <h1 className="flex-1 text-[15px] font-bold">Add prescription</h1>
-        <Label>2/3</Label>
+        <h1 className="flex-1 text-lg font-bold">Add prescription</h1>
+        <Label>2 / 4</Label>
       </Row>
 
       {/* Hidden inputs — the visible controls are the buttons below. `capture` asks a phone
@@ -136,7 +153,7 @@ export default function Prescription() {
       <input
         ref={cameraInput}
         type="file"
-        accept={ACCEPT}
+        accept="image/*"
         capture="environment"
         onChange={onPick}
         className="hidden"
@@ -146,7 +163,7 @@ export default function Prescription() {
       <input
         ref={galleryInput}
         type="file"
-        accept={ACCEPT}
+        accept="image/*"
         multiple
         onChange={onPick}
         className="hidden"
@@ -185,11 +202,11 @@ export default function Prescription() {
             <Placeholder
               className={`h-[180px] flex-col gap-2 border-dashed ${dragging ? 'border-ink' : ''}`}
             >
-              <span className="text-[22px] leading-none">▢</span>
-              <span className="text-[12px] font-semibold text-muted-strong">
+              <span className="text-2xl leading-none">▢</span>
+              <span className="text-base font-semibold text-muted-strong">
                 {dragging ? 'Drop to add' : 'Tap to scan, or drop a file'}
               </span>
-              <span className="text-[9px]">JPG · PNG · up to 10 MB</span>
+              <span className="text-2xs">JPG · PNG · PDF · up to 10 MB</span>
             </Placeholder>
             <button
               type="button"
@@ -200,7 +217,7 @@ export default function Prescription() {
           </div>
 
           {/* The three ways in the client asked for. Same queue behind each. */}
-          <Row className="gap-2">
+          <Row className="flex-wrap gap-2">
             <Button
               variant="outline"
               className="flex-1"
@@ -215,11 +232,7 @@ export default function Prescription() {
             >
               Gallery
             </Button>
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => filesInput.current?.click()}
-            >
+            <Button variant="outline" className="flex-1" onClick={() => filesInput.current?.click()}>
               Files
             </Button>
           </Row>
@@ -228,7 +241,7 @@ export default function Prescription() {
             <Card emphasis="rule" aria-live="polite">
               <Label>Not added</Label>
               {rejected.map((r) => (
-                <span key={r} className="text-[11px] text-muted-strong">
+                <span key={r} className="text-sm text-muted-strong">
                   {r}
                 </span>
               ))}
@@ -241,14 +254,15 @@ export default function Prescription() {
 
           {files.length === 0 && (
             <Card className="border-dashed">
-              <div className="text-[11px] text-muted-strong">
+              <div className="text-sm text-muted-strong">
                 Nothing added yet. A photo of the paper is enough — we read it on the next screen.
               </div>
             </Card>
           )}
 
           {files.map((f, i) => {
-            const preview = previewUrl(f.id)
+            const done = f.progress >= 100
+            const preview = previews.get(f.id)
             return (
               <Card key={f.id}>
                 <Row>
@@ -259,19 +273,22 @@ export default function Prescription() {
                       className="h-[42px] w-[34px] shrink-0 rounded-md border border-line-strong object-cover"
                     />
                   ) : (
-                    <Placeholder className="h-[42px] w-[34px] shrink-0 text-[9px]">
-                      {`pg ${i + 1}`}
+                    <Placeholder className="h-[42px] w-[34px] shrink-0 text-2xs">
+                      {f.type === 'application/pdf' ? 'pdf' : `pg ${i + 1}`}
                     </Placeholder>
                   )}
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <span className="truncate text-[12px] font-semibold">{f.name}</span>
-                    <span className="text-[9.5px] text-muted">{mb(f.size)} · ready to read</span>
+                    <span className="truncate text-base font-semibold">{f.name}</span>
+                    <Bar fill={f.progress / 100} />
+                    <span className="text-2xs text-muted-strong">
+                      {done ? `${mb(f.size)} · read ✓` : `uploading · ${f.progress}%`}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeFile(f.id)}
                     aria-label={`Remove ${f.name}`}
-                    className="grid size-7 shrink-0 place-items-center rounded-md text-[12px] text-muted"
+                    className="grid size-11 shrink-0 place-items-center rounded-md text-base text-muted-strong"
                   >
                     ✕
                   </button>
@@ -283,7 +300,7 @@ export default function Prescription() {
           <Card>
             <Row>
               <Tag outline>tip</Tag>
-              <span className="flex-1 text-[11px] text-muted-strong">
+              <span className="flex-1 text-sm text-muted-strong">
                 Flatten the page and keep dosage lines in frame.
               </span>
             </Row>
@@ -293,14 +310,17 @@ export default function Prescription() {
 
       <Button
         className="w-full"
-        disabled={files.length === 0}
+        disabled={files.length === 0 || files.some((f) => f.progress < 100)}
         onClick={() => navigate('/setup/analysing')}
       >
         Analyse prescription
       </Button>
-      <p className="text-[10px] text-muted">
-        Three ways in — camera, gallery, files. The photo is sent when you tap analyse, and it is
-        not stored after the schedule has been read from it.
+      {files.some((f) => f.progress < 100) && (
+        <p className="text-center text-sm text-muted-strong">Waiting for the upload to finish…</p>
+      )}
+      <p className="text-2xs text-muted-strong">
+        Three ways in — camera, gallery, files. The same uploader is reused whenever a new
+        prescription arrives.
       </p>
     </section>
   )

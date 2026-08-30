@@ -1,9 +1,18 @@
-fastapi
-uvicorn[standard]
-pydantic
-python-dotenv
-httpx
-pytest
+# Pinned. An unpinned build that works tonight and breaks tomorrow morning is
+# the one failure mode a 19h event cannot absorb (NFR-7 rotates keys, not versions).
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+httpx==0.28.1
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# asyncpg is deliberately absent. The API runs on SQLite via the stdlib sqlite3
+# module so it works from a fresh clone with nothing to provision, and the agent
+# reads the same file through KINVOX_DB. The caregiver-auth modules that arrived
+# with this merge were written against a Postgres pool and are ported here.
 
 # Prescription reading (api/rx_extract).
 # requests is the pipeline's HTTP client; python-multipart backs the /extract

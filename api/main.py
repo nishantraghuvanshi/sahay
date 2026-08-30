@@ -90,6 +90,20 @@ app = FastAPI(title="Kinvox Care API", lifespan=lifespan)
 # Caregiver-app reads and the onboarding write.
 app.include_router(app_router)
 
+# Caregiver auth and onboarding, from the app lane. Their modules were written
+# against an asyncpg pool and are ported to this API's SQLite layer; db.py
+# provides the connection()/transaction() shape they expect.
+try:
+    from api.auth.routes import router as auth_router
+    from api.caregiver.routes import router as caregiver_router
+
+    app.include_router(auth_router)
+    app.include_router(caregiver_router)
+except Exception as exc:  # pragma: no cover - surfaced at boot, not hidden
+    # Loud rather than silent: without this the app's login screen 404s and the
+    # only clue is an absent route.
+    log.error("caregiver auth routes not mounted: %s", exc)
+
 # The caregiver app runs on a different origin in development (Vite on :5173).
 app.add_middleware(
     CORSMiddleware,

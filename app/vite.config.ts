@@ -8,5 +8,18 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    host: true,
+    allowedHosts: true,
+    /**
+     * Same-origin in dev. Without this the app calls the API cross-site and the
+     * session cookie needs SameSite=None + Secure, which localhost cannot have.
+     * `/app` is safe to forward: every SPA route is /home, /login, /setup, /h.
+     */
+    proxy: {
+      '/auth': { target: 'http://localhost:8000', changeOrigin: true },
+      '/app': { target: 'http://localhost:8000', changeOrigin: true },
+    },
+  },
 })

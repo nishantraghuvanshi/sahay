@@ -1,0 +1,365 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-30T12:00:00+05:30",
+  "title": "Design System: Kinvox",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Cornflower",
+        "canonical": "#3674b5",
+        "tonalRamp": ["#0e2137", "#16345a", "#23507f", "#2d629b", "#3674b5", "#578fca", "#9dbfe2", "#e2ecf6"]
+      },
+      "accent-2": {
+        "role": "primary",
+        "displayName": "Cornflower Light (accent button hover)",
+        "canonical": "#578fca",
+        "tonalRamp": ["#0e2137", "#16345a", "#23507f", "#2d629b", "#3674b5", "#578fca", "#9dbfe2", "#e2ecf6"]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Cornflower Wash (outlined accent Tag fill)",
+        "canonical": "#e2ecf6",
+        "tonalRamp": ["#0e2137", "#16345a", "#23507f", "#2d629b", "#3674b5", "#578fca", "#9dbfe2", "#e2ecf6"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink (warm cream ramp, project-defined scale)",
+        "canonical": "#1a1712",
+        "tonalRamp": ["#1a1712", "#3a342c", "#5e564a", "#8a8070", "#cfc3a8", "#e9dfcb", "#f9f0e0", "#ffffff"]
+      },
+      "muted-strong": {
+        "role": "neutral",
+        "displayName": "Strong Mut (the legibility floor — 7.06:1 on surface)",
+        "canonical": "#5e564a",
+        "tonalRamp": ["#1a1712", "#3a342c", "#5e564a", "#8a8070", "#cfc3a8", "#e9dfcb", "#f9f0e0", "#ffffff"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Mut (decoration and non-essential metadata only — 3.4–3.9:1 on this ramp)",
+        "canonical": "#8a8070",
+        "tonalRamp": ["#1a1712", "#3a342c", "#5e564a", "#8a8070", "#cfc3a8", "#e9dfcb", "#f9f0e0", "#ffffff"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas (the app ground, set on body and theme-color)",
+        "canonical": "#f9f0e0",
+        "tonalRamp": ["#1a1712", "#3a342c", "#5e564a", "#8a8070", "#cfc3a8", "#e9dfcb", "#f9f0e0", "#ffffff"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface (cards, sidebar, top bar, tab bar, sticky footers)",
+        "canonical": "#fffcf6",
+        "tonalRamp": ["#1a1712", "#3a342c", "#5e564a", "#8a8070", "#cfc3a8", "#e9dfcb", "#f9f0e0", "#fffcf6"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper (inputs, chips, the leading card, hollow marks)",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#1a1712", "#3a342c", "#5e564a", "#8a8070", "#cfc3a8", "#e9dfcb", "#f9f0e0", "#ffffff"]
+      },
+      "ok": {
+        "role": "status",
+        "displayName": "Taken Blue (deliberately identical to the accent; no green in the system)",
+        "canonical": "#3674b5",
+        "tonalRamp": ["#0e2137", "#16345a", "#23507f", "#2d629b", "#3674b5", "#578fca", "#9dbfe2", "#e2ecf6"]
+      },
+      "warn": {
+        "role": "status",
+        "displayName": "Amber (watch severity, no-answer doses, P2)",
+        "canonical": "#8a6100",
+        "tonalRamp": ["#241900", "#453100", "#674900", "#8a6100", "#a87f1e", "#c7a34d", "#e5cf8f", "#fdf0ce"]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "Rose Red (red severity, missed doses, P1, the alert card)",
+        "canonical": "#cc3a63",
+        "tonalRamp": ["#330e19", "#5c1a2e", "#8a2745", "#cc3a63", "#db6486", "#e995ac", "#f4c4d2", "#fbe8ed"]
+      },
+      "highlight": {
+        "role": "status",
+        "displayName": "Marker Yellow (the app-wide ::selection ground, and the transcript highlighter)",
+        "canonical": "#fada7a",
+        "tonalRamp": ["#3d2f00", "#5c4700", "#8a6a00", "#b88e00", "#e0b32e", "#fada7a", "#fce9b3", "#fef6e0"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The one hero line per screen, in Newsreader — the next medicine's name on Home. The largest thing on the screen it appears on."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Newsreader at 30px: the reassurance line when every dose is accounted for, and hero quotes in QuoteBlock."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The lead line of a card — the alert reason, an empty-state title."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default, set on body. Secondary body drops to 14px in muted-strong; metadata to 13px."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase tracked 11px in muted-strong: section labels, card-header timestamps, tab captions. 11px exists only for these."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 2px rgba(58, 44, 20, 0.05), 0 2px 10px rgba(58, 44, 20, 0.05)",
+        "purpose": "Every Card at rest, plus the sidebar's patient card. Warm-tinted so it never goes blue-grey on cream."
+      },
+      {
+        "name": "lift",
+        "value": "0 6px 16px rgba(58, 44, 20, 0.1), 0 14px 40px rgba(58, 44, 20, 0.1)",
+        "purpose": "The single card that leads a screen — carried by Card emphasis=\"border\". Two lifted cards on one screen means neither leads."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 0.61, 0.36, 1)",
+        "purpose": "Default settling easing. State changes 150ms; card shadow cross-fade 200ms; the .kv-rise entrance 340ms."
+      },
+      {
+        "name": "ease-soft",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "The 1.4s .kv-shimmer skeleton sweep."
+      },
+      {
+        "name": "kv-rise",
+        "value": "340ms translateY(10px) + fade, --ease-out",
+        "purpose": "Card entrance on Home, so the screen settles rather than snaps. Collapsed by prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      { "name": "lg (DESKTOP_MIN_PX)", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The default action. A fully round ink capsule, at least 44px tall.",
+      "html": "<button class=\"ds-btn-primary\">Mark taken</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 20px; border: none; border-radius: 9999px; background: var(--color-ink); color: var(--color-paper); font-family: var(--font-sans); font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,0.61,0.36,1), transform 150ms cubic-bezier(0.22,0.61,0.36,1); } .ds-btn-primary:hover { background: var(--color-ink-soft); } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The secondary action beside a primary one. A 1.5px ink hairline capsule on the card's own ground.",
+      "html": "<button class=\"ds-btn-outline\">Open alert</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 20px; border: 1.5px solid var(--color-ink); border-radius: 9999px; background: transparent; color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,0.61,0.36,1), transform 150ms cubic-bezier(0.22,0.61,0.36,1); } .ds-btn-outline:hover { background: rgba(26,23,18,0.05); } .ds-btn-outline:active { transform: scale(0.98); } .ds-btn-outline:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Call Handoff Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The app never dials. A call action is a real tel: link styled as a button, naming who it will dial — a handoff to the OS dialler.",
+      "html": "<a class=\"ds-btn-call\" href=\"tel:+919876543210\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z\"/></svg>Call Amma</a>",
+      "css": ".ds-btn-call { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px; border-radius: 9999px; background: var(--color-ink); color: var(--color-paper); font-family: var(--font-sans); font-size: 14px; font-weight: 600; text-decoration: none; transition: background-color 150ms cubic-bezier(0.22,0.61,0.36,1), transform 150ms cubic-bezier(0.22,0.61,0.36,1); } .ds-btn-call:hover { background: var(--color-ink-soft); } .ds-btn-call:active { transform: scale(0.98); } .ds-btn-call:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Gated Button (Warm Inert)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The intended disabled treatment: a gated button keeps its place on a warm fill ground with readable muted-strong text, and the reason sits adjacent in plain text. NOTE: the build currently uses opacity-40 instead; prefer this in new work.",
+      "html": "<span class=\"ds-gate\"><button class=\"ds-btn-inert\" disabled>Save and Continue</button><span class=\"ds-gate-reason\">2 rows need a name, a dose and at least one time</span></span>",
+      "css": ".ds-gate { display: inline-flex; flex-direction: column; gap: 8px; align-items: flex-start; } .ds-btn-inert { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 20px; border: none; border-radius: 9999px; background: var(--color-fill); color: var(--color-muted-strong); font-family: var(--font-sans); font-size: 14px; font-weight: 600; cursor: not-allowed; } .ds-gate-reason { font-family: var(--font-sans); font-size: 13px; color: var(--color-muted-strong); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Paper ground, hairline border, 6px radius. Focus adds an ink border under the app-wide accent ring.",
+      "html": "<input class=\"ds-input\" type=\"tel\" placeholder=\"98765 43210\" aria-label=\"Your phone number\" />",
+      "css": ".ds-input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--color-line-strong); border-radius: 6px; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 17px; } .ds-input::placeholder { color: var(--color-muted-strong); } .ds-input:focus { border-color: var(--color-ink); } .ds-input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "OTP Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Six equal boxes sharing one role=\"group\"; each digit carries its own aria-label. Used on both verification steps of the login flow.",
+      "html": "<div class=\"ds-otp\" role=\"group\" aria-label=\"Code sent to your phone\"><input class=\"ds-otp-box\" inputmode=\"numeric\" maxlength=\"1\" value=\"4\" aria-label=\"Code sent to your phone, digit 1\" /><input class=\"ds-otp-box\" inputmode=\"numeric\" maxlength=\"1\" value=\"9\" aria-label=\"Code sent to your phone, digit 2\" /><input class=\"ds-otp-box\" inputmode=\"numeric\" maxlength=\"1\" value=\"1\" aria-label=\"Code sent to your phone, digit 3\" /><input class=\"ds-otp-box\" inputmode=\"numeric\" maxlength=\"1\" aria-label=\"Code sent to your phone, digit 4\" /><input class=\"ds-otp-box\" inputmode=\"numeric\" maxlength=\"1\" aria-label=\"Code sent to your phone, digit 5\" /><input class=\"ds-otp-box\" inputmode=\"numeric\" maxlength=\"1\" aria-label=\"Code sent to your phone, digit 6\" /></div>",
+      "css": ".ds-otp { display: flex; gap: 6px; } .ds-otp-box { min-width: 0; flex: 1; padding: 8px 0; border: 1px solid var(--color-line-strong); border-radius: 6px; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 20px; font-weight: 600; text-align: center; } .ds-otp-box:focus { border-color: var(--color-ink); } .ds-otp-box:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-otp-box:disabled { background: var(--color-surface); }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A fully round pill, 34px tall. Selected inverts to ink. Also used non-interactively as a read-only pill.",
+      "html": "<span class=\"ds-chip-row\"><button class=\"ds-chip ds-chip-on\" aria-pressed=\"true\">Morning</button><button class=\"ds-chip\" aria-pressed=\"false\">Night</button></span>",
+      "css": ".ds-chip-row { display: inline-flex; gap: 8px; } .ds-chip { display: inline-flex; align-items: center; min-height: 34px; padding: 4px 14px; border: 1px solid var(--color-line-strong); border-radius: 9999px; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,0.61,0.36,1), border-color 150ms cubic-bezier(0.22,0.61,0.36,1), color 150ms cubic-bezier(0.22,0.61,0.36,1), transform 150ms cubic-bezier(0.22,0.61,0.36,1); } .ds-chip:hover { border-color: var(--color-ink); } .ds-chip:active { transform: scale(0.97); } .ds-chip:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-chip-on { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-paper); }"
+    },
+    {
+      "name": "Tag (P1 / watch badges)",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "6px-radius badges at 11px extrabold. P1 is filled danger, P2 filled warn, watch outlined warn, priority filled accent.",
+      "html": "<span class=\"ds-tag-row\"><span class=\"ds-tag ds-tag-danger\">P1</span><span class=\"ds-tag ds-tag-warn-outline\">watch</span><span class=\"ds-tag ds-tag-accent\">priority</span></span>",
+      "css": ".ds-tag-row { display: inline-flex; gap: 6px; align-items: center; } .ds-tag { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 6px; font-family: var(--font-sans); font-size: 11px; font-weight: 800; letter-spacing: 0.025em; } .ds-tag-danger { background: var(--color-danger); color: #fff; } .ds-tag-accent { background: var(--color-accent); color: #fff; } .ds-tag-warn-outline { border: 1px solid var(--color-warn); background: var(--color-warn-soft); color: var(--color-warn); }"
+    },
+    {
+      "name": "Alert Card (danger emphasis)",
+      "kind": "card",
+      "refersTo": "card-emphasis-danger",
+      "description": "The loud bad-day card: a 4px danger left mark on the rose wash, carrying the literal rule string under a P1 badge. Leads the Home screen and outranks the next dose.",
+      "html": "<div class=\"ds-card-danger\"><div class=\"ds-card-head\"><span class=\"ds-tag ds-tag-danger\">P1</span><span class=\"ds-label ds-label-danger\">Needs you now</span><span class=\"ds-label ds-label-right\">12 min ago</span></div><div class=\"ds-card-lead\">rule: chest complaint with age over 40</div><div class=\"ds-card-meta\">No interpretation, no diagnosis.</div></div>",
+      "css": ".ds-card-danger { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid rgba(204,58,99,0.35); border-left: 4px solid var(--color-danger); border-radius: 16px; background: var(--color-danger-soft); box-shadow: 0 1px 2px rgba(58,44,20,0.05), 0 2px 10px rgba(58,44,20,0.05); font-family: var(--font-sans); } .ds-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .ds-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted-strong); } .ds-label-danger { color: var(--color-danger); } .ds-label-right { margin-left: auto; } .ds-card-lead { font-size: 17px; font-weight: 700; line-height: 1.45; color: var(--color-ink); } .ds-card-meta { font-size: 13px; line-height: 1.45; color: var(--color-muted-strong); } .ds-tag { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.025em; } .ds-tag-danger { background: var(--color-danger); color: #fff; }"
+    },
+    {
+      "name": "Leading Card (border emphasis)",
+      "kind": "card",
+      "refersTo": "card-emphasis-border",
+      "description": "The one card that leads a calm screen: a 1.5px ink border on paper with the lift shadow, carrying the hero line in Newsreader.",
+      "html": "<div class=\"ds-card-lead-wrap\"><div class=\"ds-card-head\"><span class=\"ds-label ds-label-accent\">Next dose · in 40 minutes</span></div><div class=\"ds-hero\">Metformin <span class=\"ds-hero-dose\">500 mg</span></div><div class=\"ds-card-sub\">After food</div></div>",
+      "css": ".ds-card-lead-wrap { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1.5px solid var(--color-ink); border-radius: 16px; background: var(--color-paper); box-shadow: 0 6px 16px rgba(58,44,20,0.1), 0 14px 40px rgba(58,44,20,0.1); font-family: var(--font-sans); } .ds-card-head { display: flex; align-items: center; gap: 8px; } .ds-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted-strong); } .ds-label-accent { color: var(--color-accent); } .ds-hero { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1.08; color: var(--color-ink); } .ds-hero-dose { color: var(--color-muted-strong); } .ds-card-sub { font-size: 14px; color: var(--color-muted-strong); }"
+    },
+    {
+      "name": "Dose Status Marks",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "The three marks — filled, outlined, muted — always beside a word. Colour is layered onto a shape that already works in greyscale.",
+      "html": "<div class=\"ds-marks\"><span class=\"ds-mark\"><span class=\"ds-dot ds-dot-filled-accent\"></span>taken</span><span class=\"ds-mark\"><span class=\"ds-dot ds-dot-hollow-danger\"></span><b class=\"ds-mark-danger\">missed</b></span><span class=\"ds-mark\"><span class=\"ds-dot ds-dot-hollow-warn\"></span><b class=\"ds-mark-warn\">no answer</b></span><span class=\"ds-mark\"><span class=\"ds-dot ds-dot-empty\"></span>deferred</span></div>",
+      "css": ".ds-marks { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--font-sans); font-size: 13px; color: var(--color-muted-strong); } .ds-mark { display: inline-flex; align-items: center; gap: 6px; } .ds-mark-danger { color: var(--color-danger); font-weight: 600; } .ds-mark-warn { color: var(--color-warn); font-weight: 600; } .ds-dot { display: inline-block; width: 10px; height: 10px; flex-shrink: 0; border-radius: 9999px; } .ds-dot-filled-accent { background: var(--color-accent); } .ds-dot-hollow-danger { background: var(--color-paper); border: 2px solid var(--color-danger); } .ds-dot-hollow-warn { background: var(--color-paper); border: 2px solid var(--color-warn); } .ds-dot-empty { background: var(--color-fill-empty); }"
+    },
+    {
+      "name": "QuoteBlock",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Her words as the largest thing on the screen: a 3px severity spine, an oversized ghost quotation glyph behind the text, Newsreader light, and an attribution row carrying the severity chip so the hue is never the only signal. Built and correct; currently rendered on zero screens.",
+      "html": "<figure class=\"ds-quote\"><span class=\"ds-quote-spine\" aria-hidden=\"true\"></span><span class=\"ds-quote-ghost\" aria-hidden=\"true\">&ldquo;</span><blockquote class=\"ds-quote-text\">&ldquo;Chest thoda bhaari lag raha hai subah se.&rdquo;</blockquote><figcaption class=\"ds-quote-cap\"><span class=\"ds-tag ds-tag-danger\">red</span>Amma · 08:31 AM call</figcaption></figure>",
+      "css": ".ds-quote { position: relative; margin: 0; padding: 4px 0 0 20px; font-family: var(--font-sans); } .ds-quote-spine { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; border-radius: 9999px; background: var(--color-danger); } .ds-quote-ghost { position: absolute; top: -16px; left: 12px; z-index: 0; font-family: var(--font-display); font-size: 76px; line-height: 1; color: var(--color-line-strong); user-select: none; pointer-events: none; } .ds-quote-text { position: relative; z-index: 1; margin: 0; font-family: var(--font-display); font-size: 30px; font-weight: 300; line-height: 1.28; color: var(--color-ink); } .ds-quote-cap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--color-muted-strong); } .ds-tag { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.025em; } .ds-tag-danger { background: var(--color-danger); color: #fff; }"
+    },
+    {
+      "name": "Tab Bar (mobile)",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Exactly four tabs, never a fifth. Active carries the accent, a bold caption, a heavier stroke and a 3px bar hanging from the top edge — four signals, not one hue.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"ds-tab ds-tab-on\" href=\"#\" aria-current=\"page\"><span class=\"ds-tab-bar\"></span><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z\"/></svg><span class=\"ds-tab-cap ds-tab-cap-on\">Home</span></a><a class=\"ds-tab\" href=\"#\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18\"/></svg><span class=\"ds-tab-cap\">Calendar</span></a><a class=\"ds-tab\" href=\"#\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01\"/></svg><span class=\"ds-tab-cap\">Alerts</span></a><a class=\"ds-tab\" href=\"#\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z\"/></svg><span class=\"ds-tab-cap\">Calls</span></a></nav>",
+      "css": ".ds-tabs { display: flex; border-top: 1px solid var(--color-line); background: var(--color-surface); font-family: var(--font-sans); } .ds-tab { position: relative; display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; color: var(--color-muted-strong); text-decoration: none; transition: color 150ms cubic-bezier(0.22,0.61,0.36,1); } .ds-tab-on { color: var(--color-accent); } .ds-tab-bar { position: absolute; top: 0; width: 36px; height: 3px; border-radius: 0 0 9999px 9999px; background: var(--color-accent); } .ds-tab-cap { font-size: 11px; font-weight: 500; } .ds-tab-cap-on { font-weight: 700; } .ds-tab:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }"
+    },
+    {
+      "name": "Sidebar Nav Row (desktop)",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "12px-radius rows at 14px. Active fills with ink; hover washes with fill/60. Log out is the same row pinned to the bottom with mt-auto.",
+      "html": "<nav class=\"ds-side\" aria-label=\"Main\"><a class=\"ds-side-row ds-side-on\" href=\"#\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z\"/></svg>Home</a><a class=\"ds-side-row\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M16 13H8M16 17H8\"/></svg>Care record</a><button class=\"ds-side-row ds-side-out\" type=\"button\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9\"/></svg>Log out</button></nav>",
+      "css": ".ds-side { display: flex; flex-direction: column; gap: 4px; width: 208px; padding: 16px; border-right: 1px solid var(--color-line); background: var(--color-surface); font-family: var(--font-sans); } .ds-side-row { display: flex; width: 100%; align-items: center; gap: 10px; padding: 10px 12px; border: none; border-radius: 12px; background: transparent; color: var(--color-muted-strong); font-family: var(--font-sans); font-size: 14px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: background-color 150ms cubic-bezier(0.22,0.61,0.36,1), color 150ms cubic-bezier(0.22,0.61,0.36,1); } .ds-side-row:hover { background: rgba(233,223,203,0.6); color: var(--color-ink); } .ds-side-on { background: var(--color-ink); color: var(--color-paper); font-weight: 600; } .ds-side-on:hover { background: var(--color-ink); color: var(--color-paper); } .ds-side-out { margin-top: 12px; } .ds-side-row:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Wordmark",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "\"Kinvox\" in Newsreader with a hairline running under the full word and a 3px accent dot sitting on the line where the i's dot belongs — the call, drawn.",
+      "html": "<span class=\"ds-wordmark\"><span class=\"ds-wordmark-text\">Kinvox</span><span class=\"ds-wordmark-line\"></span><span class=\"ds-wordmark-dot\"></span></span>",
+      "css": ".ds-wordmark { position: relative; display: inline-block; padding-bottom: 5px; font-family: var(--font-display); font-size: 26px; line-height: 1; color: var(--color-ink); } .ds-wordmark-text { letter-spacing: -0.01em; } .ds-wordmark-line { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: currentColor; } .ds-wordmark-dot { position: absolute; bottom: -1.5px; left: 9.88px; width: 3px; height: 3px; border-radius: 9999px; background: var(--color-accent); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Record",
+    "overview": "Kinvox is a paper record of a parent's day, kept warm. The whole app sits on a cream ground (Palette F, \"Cornflower & Cream\" — the name is in index.css) with exactly one blue accent, and everything on it reads like entries in a ledger the adult child can trust: doses confirmed, calls made, and — above everything — the parent's own words, verbatim, in quotation marks. The user opens this app anxious; the design's job is that a calm day looks calm (whitespace and one reassuring sentence) and a bad day is loud and unmistakable (the alert card leads the Home screen and owns the full width), on the same layouts.\n\nThe recurring motif is the line: one hairline is the call connecting a child in one city to a parent in another. It is the wordmark's underline, the spine of the day thread, the severity spine on a quote, and the rule between sections. Depth comes from stepped cream tones and hairline borders far more than from shadow; the two shadows that exist are warm-tinted (rgba(58, 44, 20, …)) so they never go blue-grey on cream.\n\nThe form language is softer than a ledger usually is. Cards are generously rounded (16px) and buttons and chips are fully round — the record is warm stationery, not a spreadsheet. Radius carries hierarchy: the further a surface is from the content, the softer it gets.\n\nThis is a medical-adjacent product with a safety posture: the system never decorates meaning into colour alone, never invents a score, and never pretends the app itself can dial a phone.",
+    "keyCharacteristics": [
+      "Warm cream neutral ramp (11 steps, ink → paper), one blue accent, status colours only ever layered on marks that already have shape and a text label.",
+      "IBM Plex Sans everywhere; Newsreader serif reserved for care content (verbatim quotes, medicine names, hero lines, the wordmark); IBM Plex Sans Devanagari bound via :lang(hi) / :lang(mr) / :lang(pa).",
+      "Exactly three status marks — filled, outlined, muted — reused for doses, delivery, steps, radios and checkboxes.",
+      "Fully round buttons and chips; 16px cards; 6px inputs. Rounder than a form, softer than a dashboard.",
+      "Two warm shadows; borders and tone-steps do most of the depth work.",
+      "Settling motion, 150ms for state and 340ms for entrances, never springy; prefers-reduced-motion collapses everything.",
+      "Density that matches the moment: same screen, calm and loud renderings."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "One blue. Emphasis comes from weight, border thickness and whitespace, not from new hues. If a surface feels flat, add space or a border — never a colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Shape-First Status Rule",
+        "body": "Colour is layered onto a mark that already carries shape and a text label. Every screen must survive DevTools → Rendering → Emulate vision deficiency → Achromatopsia, and a greyscale screen recording.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Green Rule",
+        "body": "\"Taken\" is the accent blue (ok ≡ accent), never green. Good news in this system is calm, not celebratory.",
+        "section": "colors"
+      },
+      {
+        "name": "The Traceable Severity Rule",
+        "body": "Severity is red / watch / none, each traceable to a sentence the parent said. No score, gauge, index, ring or sentiment bar exists or may be added.",
+        "section": "colors"
+      },
+      {
+        "name": "The Legible Grey Rule",
+        "body": "muted-strong is the floor for anything a user has to read — body copy, secondary lines, placeholders, disabled labels. muted is for decoration and non-essential metadata only. On this cream ramp muted never clears 3.9:1; the caregiver reading it is often presbyopic and always in a hurry.",
+        "section": "colors"
+      },
+      {
+        "name": "The Earned Serif Rule",
+        "body": "Newsreader appears only on care content: verbatim quotes, medicine names, the one hero line per screen, and the wordmark. It is never decoration, never a routine screen title, never sprinkled.",
+        "section": "typography"
+      },
+      {
+        "name": "The Verbatim Rule",
+        "body": "What the parent said renders exactly, wrapped in real quotation marks, never summarised, paraphrased, or restyled into a log line. Hindi/Marathi quotes carry a real lang attribute so they set in Plex Devanagari — and only when the text actually is in that language, since lang also changes the screen reader's voice.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Time Rule",
+        "body": "Times, durations and counts take .tnum (font-variant-numeric: tabular-nums) so they never jitter as they tick.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Thing Leads Rule",
+        "body": "Each screen has exactly one element that leads — the next dose on Home, the P1 alert when one is open (it outranks the dose), the quote on an observation. A stranger should know where to look in under a second.",
+        "section": "layout"
+      },
+      {
+        "name": "The Two Warm Shadows Rule",
+        "body": "No new shadow values. If a surface needs more presence, step its tone (surface → paper), thicken its border, or give it a left mark — do not invent a third drop shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Lift Is Singular Rule",
+        "body": "--shadow-lift marks the one card that leads. Two lifted cards on one screen means neither leads.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Left Mark Rule",
+        "body": "A card carries at most one left mark. Nested content that has its own spine (a QuoteBlock) sits in a card without one.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Handoff Rule",
+        "body": "The app never dials. A call action is a real <a href=\"tel:…\"> styled as a Button, naming who it will dial. It is a handoff to the OS dialler, not an in-app call.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do give every status a shape and a text label first, then layer colour on top — and verify under achromatopsia emulation and in greyscale.",
+      "Do render parent quotes verbatim, in real quotation marks, sized as the most important text on the screen, with lang set only when the text really is Hindi or Marathi.",
+      "Do use muted-strong for anything the user must read; reserve muted for decoration and non-essential metadata.",
+      "Do show the literal rule string on alerts (rule: chest complaint with age over 40) under a P1/P2 badge, and keep the sentence \"No interpretation, no diagnosis\" on screen.",
+      "Do keep gated buttons visible with the reason adjacent (\"2 left\", \"All three are mandatory\"), and prefer the Warm Inert treatment over an opacity ghost.",
+      "Do style call actions as OS handoffs: real tel: links naming who they dial. Route in-app navigation through react-router Link, never a bare href.",
+      "Do load with skeletons in the final layout's shape; nothing may shift when data lands.",
+      "Do keep entrances at 340ms and state changes at 150ms on --ease-out / --ease-soft, and let prefers-reduced-motion collapse them.",
+      "Do keep touch targets ≥44px and times/counts in .tnum.",
+      "Do keep the sticky-footer bleed in step with <main>'s padding — 16px on a phone, 24px at lg:."
+    ],
+    "donts": [
+      "Don't add a hue. One accent; emphasis is weight, border and whitespace. No green — \"taken\" is blue.",
+      "Don't invent a score, gauge, mood percentage, sentiment bar, wellbeing ring or index. Severity is red/watch/none, each traceable to a sentence. Feel the urge to add a gauge → add whitespace.",
+      "Don't add a fourth status mark, a fifth mobile tab, a third shadow, or a second left mark on one card.",
+      "Don't pass a Card emphasis outside none / border / rule / danger — an unrecognised value silently strips the card of all styling.",
+      "Don't use Newsreader outside care content (quotes, medicine names, the one hero line, the wordmark), or 11px for anything but labels and tab captions.",
+      "Don't use spinners, in-app dialling affordances, springy easings, or placeholder text of any kind (no lorem ipsum, no TODO).",
+      "Don't hardcode a hex. Every colour goes through a @theme token class.",
+      "Don't rename or delete @theme tokens; extend, don't replace."
+    ]
+  }
+}

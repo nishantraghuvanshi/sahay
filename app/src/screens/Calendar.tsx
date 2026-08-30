@@ -14,18 +14,10 @@ import {
   Row,
   Tag,
 } from '../ui'
-import { useQueryClient } from '@tanstack/react-query'
-import {
-  postDoseMove,
-  postMedications,
-  useCareRecord,
-  useDoseHistory,
-  useEscalations,
-} from '../api/hooks'
+import { useCareRecord, useDoseHistory } from '../api/hooks'
 import { slotsForDay } from '../lib/schedule'
 import type { UpcomingDose } from '../lib/schedule'
-import { answered } from '../api/types'
-import type { DoseStatus, Escalation } from '../api/types'
+import type { DoseStatus } from '../api/types'
 
 /**
  * FR-25 · wireframe `1g` (phone: day timeline under a week strip) / `2f` (desktop: week grid,
@@ -41,99 +33,22 @@ import type { DoseStatus, Escalation } from '../api/types'
  * Slot expansion is `slotsForDay()` from lib/schedule — one implementation of "which medicines
  * are due when", shared with Home's next-dose card, so the two can never drift apart.
  *
- * Drag-to-reschedule (`2f`) is two different writes wearing one gesture. A plain drag moves a
- * single occurrence, which `medications.slots` cannot express — those are recurring times — so
- * it becomes a `dose_events` row keyed on the slot it came from. A shift-drag changes the
- * medicine's slot itself and moves every future day with it. Picking the wrong one is
- * destructive in a way a caregiver would not notice, so the cell says which it will be before
- * the drop and an answered dose refuses to move at all: that is history, not schedule.
- *
- * ⚠️ KNOWN GAP, flagged and deferred: the drag is HTML5 drag-and-drop, so it is mouse-only.
- * It does not respond to a keyboard and does not fire on a touchscreen — on a phone the
- * gesture does nothing at all. No capability is exclusive to it (the medicine editor changes
- * every time, accessibly), but the accessible equivalent *on this screen* is a per-dose Move
- * control calling the same two writes the drop already calls. See docs/checklists/LANE-C-APP.md
- * under Mobile.
+ * The `2f` annotation asks for drag-to-reschedule. Deliberately not built: there is no mutation
+ * endpoint behind it, and a control that appears to move a dose but silently does not is worse
+ * for a caregiver than no control. Times are changed in the medicine editor, which the two
+ * buttons at the foot go to.
  */
-
-/**
- * How close a slot has to be before it counts as happening *now*.
- *
- * 45 minutes, the same window the design doc (§5.2) uses to collapse nearby doses
- * into one call — if two doses would be called about together they are the same
- * moment as far as the patient is concerned. Bounded on both sides deliberately:
- * without an upper bound the chip lands on the next unanswered slot whenever it is,
- * so a dose six hours away would be labelled "now".
- */
-const NOW_WINDOW_MS = 45 * 60_000
-
-/**
- * A series move rewrites the prescription's own times, so it goes through the same
- * endpoint as the medicine editor and carries the same kind of attestation. The
- * wording is specific about what was done — the audit row should read back as the
- * action taken, not as a generic edit.
- */
-const SERIES_MOVE_ATTESTATION =
-  'I moved this dose time for every day on the calendar, and this change has been advised by our doctor.'
-
-/**
- * The four views frame `2f` puts in the header.
- *
- * All four read the same expansion — `slotsForDay` — so they cannot disagree about
- * which medicines are due when. They differ only in how much time is on screen at
- * once: a day to act on, a week to check, a month to see a pattern, an agenda to
- * read straight through or hand to a doctor.
- */
-type View = 'day' | 'week' | 'month' | 'agenda'
-
-const VIEWS: { key: View; label: string }[] = [
-  { key: 'day', label: 'Day' },
-  { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'agenda', label: 'Agenda' },
-]
-
-const STEP_LABEL: Record<View, string> = {
-  day: 'Day',
-  week: 'Week',
-  month: 'Month',
-  agenda: 'Week',
-}
-
-/** Move by one screenful of whatever is on screen, not by a fixed week. */
-function step(from: Date, view: View, direction: 1 | -1): Date {
-  if (view === 'day') return addDays(from, direction)
-  if (view === 'month') {
-    const d = new Date(from)
-    d.setMonth(d.getMonth() + direction, 1)
-    return startOfDay(d)
-  }
-  return addDays(from, 7 * direction)
-}
-
-/** Every day of the month `d` falls in, padded to whole Monday-start weeks. */
-function monthGrid(d: Date): Date[] {
-  const first = new Date(d.getFullYear(), d.getMonth(), 1)
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-  const start = startOfWeek(first)
-  const days: Date[] = []
-  for (let cur = start; cur <= last || days.length % 7 !== 0; cur = addDays(cur, 1)) {
-    days.push(cur)
-    if (days.length > 41) break
-  }
-  return days
-}
 
 const STATUSES: DoseStatus[] = ['confirmed', 'deferred', 'missed', 'no_answer', 'unknown']
 
-/** Said in words, because the four are exactly what a caregiver must not have to guess at. */
+/** Said in words, because these are exactly what a caregiver must not have to guess at. */
 const MEANING: Record<DoseStatus, string> = {
   confirmed: 'Taken — confirmed on a check-in call.',
   deferred: 'Put off to a later time, and still expected.',
   missed: 'The dose was not taken.',
   no_answer: 'Nobody picked up. Whether the dose was taken is not known either way.',
-  unknown: 'We could not reach them at all. This is not a missed dose — nothing is known about it.',
-  pending: 'We have started trying for this dose. Nothing has been established yet.',
+  unknown: 'They answered, but what they said could not be read either way.',
+  pending: 'Not due yet — nothing has been established.',
 }
 
 /* ------------------------------------------------------------------ dates */
@@ -205,16 +120,9 @@ interface DayTally {
 function tally(doses: UpcomingDose[]): DayTally {
   return {
     confirmed: doses.filter((d) => d.event?.status === 'confirmed').length,
-    attention: doses.filter(
-      (d) =>
-        d.event?.status === 'missed' ||
-        d.event?.status === 'no_answer' ||
-        d.event?.status === 'unknown',
-    )
+    attention: doses.filter((d) => d.event?.status === 'missed' || d.event?.status === 'no_answer')
       .length,
-    // A `pending` row is the scheduler's bookkeeping, not a record of anything.
-    // Counting it would make "2 of 3 confirmed" out of doses nobody has answered.
-    recorded: doses.filter((d) => answered(d.event?.status)).length,
+    recorded: doses.filter((d) => d.event !== null).length,
     total: doses.length,
   }
 }
@@ -224,17 +132,7 @@ function tally(doses: UpcomingDose[]): DayTally {
 export default function Calendar() {
   const record = useCareRecord()
   const doses = useDoseHistory()
-  // Only used to name the alert beside a dose that could not be established.
-  // A failure here must not blank the calendar, so it is read without an error gate.
-  const escalations = useEscalations()
   const [selected, setSelected] = useState<Date>(() => startOfDay(new Date()))
-  const [view, setView] = useState<View>('week')
-  const queryClient = useQueryClient()
-
-  /** The dose picked up, and whether the whole series is being moved with it. */
-  const [dragging, setDragging] = useState<{ dose: UpcomingDose; series: boolean } | null>(null)
-  const [dragTarget, setDragTarget] = useState<{ slot: string; day: string } | null>(null)
-  const [moveError, setMoveError] = useState<string | null>(null)
 
   if (record.isLoading || doses.isLoading) return <LoadingBlock rows={6} />
   if (record.error) return <ErrorBlock error={record.error} onRetry={() => record.refetch()} />
@@ -247,76 +145,7 @@ export default function Calendar() {
 
   const medications = record.data?.medications ?? []
   const events = doses.data ?? []
-  const patient = record.data?.patient
-  const name = patient?.name ?? 'your parent'
-
-  /**
-   * The intro call (FR-5) — a one-off consent call, not a dose. It belongs on this
-   * screen because it is the first thing that will actually ring, and because until
-   * it is done no dose call may be placed at all: a schedule can be signed off and
-   * still be entirely dormant, which is invisible if the calendar only draws doses.
-   */
-  /**
-   * Reschedule, in the two forms frame `2f` asks for.
-   *
-   * A plain drag moves one occurrence: `medications.slots` are recurring and cannot
-   * say "just this Tuesday", so it becomes a `dose_events` row keyed on the slot it
-   * came from. A shift-drag changes the medicine's slot itself, which moves every
-   * future day with it.
-   *
-   * The two are genuinely different writes and the wrong one is destructive in a way
-   * a caregiver would not notice, so the drop always says which it did.
-   */
-  async function moveDose(dose: UpcomingDose, series: boolean, toDay: Date, toSlot: string) {
-    const to = new Date(toDay)
-    const [h, m] = toSlot.split(':').map(Number)
-    to.setHours(h, m ?? 0, 0, 0)
-    if (to.getTime() === dose.at.getTime()) return
-
-    setMoveError(null)
-    try {
-      if (series) {
-        const meds = (record.data?.medications ?? []).map((m) => ({
-          id: m.id,
-          name: m.name,
-          dose: m.dose,
-          slots:
-            m.id === dose.medication.id
-              ? [...new Set(m.slots.map((sl) => (sl === dose.slot ? toSlot : sl)))].sort()
-              : m.slots,
-          with_food: m.with_food ?? 'any',
-          is_priority: m.is_priority,
-          stopped: false,
-          isNew: false,
-        }))
-        await postMedications({
-          medications: meds,
-          diff: [`${dose.medication.name} moved from ${dose.slot} to ${toSlot}, every day`],
-          consent_text: SERIES_MOVE_ATTESTATION,
-          consent_ack: true,
-        })
-      } else {
-        await postDoseMove({
-          medication_id: dose.medication.id,
-          from_slot_time: dose.at.toISOString(),
-          to_slot_time: to.toISOString(),
-        })
-      }
-      await queryClient.invalidateQueries()
-    } catch (err) {
-      setMoveError(err instanceof Error ? err.message : 'Could not move that dose.')
-    }
-  }
-
-  const escalationForDose = new Map<string, Escalation>(
-    (escalations.data ?? [])
-      .filter((e): e is Escalation & { dose_event_id: string } => Boolean(e.dose_event_id))
-      .map((e) => [e.dose_event_id, e]),
-  )
-
-  const introAt = patient?.intro_call_at ? new Date(patient.intro_call_at) : null
-  const introPending = patient?.intro_call_status === 'pending'
-  const introOnSelected = introAt && dayKey(introAt) === dayKey(selected) ? introAt : null
+  const name = record.data?.patient.name ?? 'your parent'
 
   const now = new Date()
   const today = startOfDay(now)
@@ -333,7 +162,7 @@ export default function Calendar() {
           title="Nothing is scheduled yet"
           body="The calendar is built from the prescription. Add one and every dose appears here, at the times it is due."
           action={
-            <Link to="/medicines/edit" className={BTN_PRIMARY}>
+            <Link to="/medicines/edit?tab=upload" className={BTN_PRIMARY}>
               Upload a prescription
             </Link>
           }
@@ -370,19 +199,11 @@ export default function Calendar() {
   const weekConfirmed = weekDue.filter((d) => d.event?.status === 'confirmed').length
 
   // The next slot still waiting on an answer today — drawn emphasised, as in both frames.
-  /**
-   * The slot happening right now — frame `1g` gives it a `now` chip and a heavier
-   * border. "Now" rather than "next" is the distinction the frame draws: it is the
-   * dose currently due and still unanswered, not simply the one that comes after
-   * this. Only ever set on today.
-   */
-  const nowSlot =
+  const nextPendingSlot =
     dayKey(selected) === dayKey(today)
       ? (timeline.find(
           (g) =>
-            g.at.getTime() >= now.getTime() - 60_000 &&
-            g.at.getTime() <= now.getTime() + NOW_WINDOW_MS &&
-            g.doses.some((d) => d.event === null),
+            g.at.getTime() >= now.getTime() - 60_000 && g.doses.some((d) => d.event === null),
         )?.slot ?? null)
       : null
 
@@ -399,58 +220,25 @@ export default function Calendar() {
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-3">
       <Header monthTitle={monthTitle} week={week} name={name} />
 
-      {/* ------------------------------------------------- view + range (2f) */}
-      <Row className="flex-wrap gap-1.5 print:hidden">
-        {VIEWS.map((v) => (
-          <Chip key={v.key} on={view === v.key} onClick={() => setView(v.key)}>
-            {v.label}
-          </Chip>
-        ))}
-        <span className="ml-auto text-[11px] text-muted-strong">
+      {/* --------------------------------------------------------- week nav */}
+      <Row className="flex-wrap gap-1.5">
+        <Chip onClick={() => setSelected(addDays(selected, -7))}>
+          ‹ <span className="hidden sm:inline">Previous week</span><span className="sm:hidden">Prev</span>
+        </Chip>
+        <Chip on={dayKey(selected) === dayKey(today)} onClick={() => setSelected(today)}>
+          Today
+        </Chip>
+        <Chip onClick={() => setSelected(addDays(selected, 7))}>
+          <span className="hidden sm:inline">Next week</span><span className="sm:hidden">Next</span> ›
+        </Chip>
+        <span className="ml-auto text-sm text-muted-strong">
           {weekDue.length === 0
             ? 'nothing due yet this week'
             : `${weekConfirmed} of ${weekDue.length} confirmed so far this week`}
         </span>
       </Row>
 
-      {/* The step is whatever the current view shows, so a press always moves the
-          page by exactly one screenful rather than by a fixed week. */}
-      <Row className="flex-wrap gap-1.5 print:hidden">
-        <Chip onClick={() => setSelected(step(selected, view, -1))}>‹ {STEP_LABEL[view]}</Chip>
-        <Chip on={dayKey(selected) === dayKey(today)} onClick={() => setSelected(today)}>
-          Today
-        </Chip>
-        <Chip onClick={() => setSelected(step(selected, view, 1))}>{STEP_LABEL[view]} ›</Chip>
-        <Link to="/medicines/edit" className="ml-auto">
-          <Chip>+ Add dose</Chip>
-        </Link>
-      </Row>
-
-      {/* The gate, said plainly. A caregiver looking at a full week of doses has no
-          other way to tell that none of them will be dialled yet. */}
-      {introPending && (
-        <Card emphasis="rule">
-          <Row className="flex-wrap items-baseline gap-x-2">
-            <Tag outline>intro call</Tag>
-            <span className="text-[12px] font-semibold">
-              {introAt
-                ? `We call ${name} on ${introAt.toLocaleDateString([], {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'short',
-                  })} at ${introAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                : `We still need to call ${name} to introduce ourselves`}
-            </span>
-          </Row>
-          <span className="text-[11px] leading-relaxed text-muted-strong">
-            Dose reminders do not begin until that call has happened and {name} has agreed on it.
-            The doses below are scheduled, not yet being called about.
-          </span>
-        </Card>
-      )}
-
       {/* ------------------------------------------------- week strip (1g) */}
-      {(view === 'day' || view === 'week') && (
       <Card className="gap-2 p-2">
         <div className="flex gap-1">
           {week.map((day, i) => (
@@ -465,119 +253,23 @@ export default function Calendar() {
             />
           ))}
         </div>
-        <p className="px-1 text-[10px] text-muted">
+        <p className="px-1 text-2xs text-muted-strong">
           Tap a day to see it below. The figure under each day counts confirmed doses out of the
           doses due that day.
         </p>
       </Card>
-      )}
-
-      {/* ----------------------------------------------------- month (2f) */}
-      {view === 'month' && (
-        <Card className="gap-2 p-2">
-          <div className="grid grid-cols-7 gap-1">
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-              <span key={i} className="px-1 text-center text-[9.5px] text-muted">
-                {d}
-              </span>
-            ))}
-            {monthGrid(selected).map((day) => {
-              const dayTally2 = tally(slotsForDay(medications, events, day))
-              const outside = day.getMonth() !== selected.getMonth()
-              return (
-                <button
-                  key={dayKey(day)}
-                  type="button"
-                  onClick={() => setSelected(day)}
-                  aria-label={day.toDateString()}
-                  className={clsx(
-                    'flex min-h-[3.1rem] flex-col items-start gap-0.5 rounded-md border px-1.5 py-1 text-left',
-                    dayKey(day) === dayKey(selected)
-                      ? 'border-ink bg-paper'
-                      : 'border-line bg-transparent',
-                    outside && 'opacity-35',
-                  )}
-                >
-                  <span
-                    className={clsx(
-                      'text-[11px]',
-                      dayKey(day) === dayKey(today) ? 'font-bold' : 'text-muted-strong',
-                    )}
-                  >
-                    {day.getDate()}
-                  </span>
-                  {dayTally2.total > 0 && (
-                    <span className="text-[9.5px] text-muted">
-                      {dayTally2.recorded === 0
-                        ? `${dayTally2.total} due`
-                        : `${dayTally2.confirmed}/${dayTally2.total}`}
-                    </span>
-                  )}
-                  {dayTally2.attention > 0 && (
-                    <span className="text-[9.5px] font-semibold">
-                      {dayTally2.attention} to check
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-          <p className="px-1 text-[10px] text-muted">
-            Each day shows confirmed out of due. Tap one to read it below.
-          </p>
-        </Card>
-      )}
-
-      {/* ---------------------------------------------------- agenda (2f)
-          The whole week read straight through, which is the form that prints and the
-          form you hand to a doctor. */}
-      {view === 'agenda' && (
-        <Card className="gap-2">
-          <Label>The week, in order</Label>
-          {week.map((day, i) => {
-            const list = byDay[i] ?? []
-            return (
-              <div key={dayKey(day)} className="flex flex-col gap-1">
-                <Divider />
-                <Row className="flex-wrap items-baseline gap-x-2">
-                  <span className="text-[12px] font-bold">
-                    {day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })}
-                  </span>
-                  {dayKey(day) === dayKey(today) && <Tag outline>today</Tag>}
-                  <span className="ml-auto text-[10.5px] text-muted">
-                    {list.length === 0 ? 'nothing scheduled' : `${list.length} doses`}
-                  </span>
-                </Row>
-                {list.map((dose) => (
-                  <Row key={dose.medication.id + dose.slot} className="items-baseline gap-2">
-                    <span className="w-[3.25rem] shrink-0 text-[10px] font-bold text-muted">
-                      {slotLabel(dose.slot)}
-                    </span>
-                    <span className="min-w-0 flex-1 text-[12px]">
-                      {dose.medication.name}{' '}
-                      <span className="text-muted-strong">{dose.medication.dose}</span>
-                    </span>
-                    <SlotStatus dose={dose} now={now} />
-                  </Row>
-                ))}
-              </div>
-            )
-          })}
-        </Card>
-      )}
 
       {/* ------------------------------------------- day timeline (1g) — phone
           Shown on every width: on desktop it stays as the detail for the day picked
           out of the grid above it. */}
-      {view !== 'agenda' && (
       <Card className="gap-2">
         <Row className="flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-[13px] font-bold">{selectedHeading}</span>
-          <span className="text-[11px] text-muted-strong">
+          <span className="text-md font-bold">{selectedHeading}</span>
+          <span className="text-sm text-muted-strong">
             {selected.toLocaleDateString([], { day: 'numeric', month: 'short' })}
           </span>
           {dayKey(selected) === dayKey(today) && <Tag outline>today</Tag>}
-          <span className="ml-auto text-[11px] font-semibold">
+          <span className="ml-auto text-sm font-semibold">
             {dayTally.total === 0
               ? 'nothing scheduled'
               : dayTally.recorded === 0
@@ -588,41 +280,16 @@ export default function Calendar() {
 
         <Divider />
 
-        {introOnSelected && (
-          <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 py-2">
-            <span className="pt-2 text-[10px] font-bold tracking-wide text-muted">
-              {introOnSelected.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-            {/* Deliberately not styled as a dose card: this is a different kind of
-                event and reading it as a medicine would be worse than not showing it. */}
-            <Card className="gap-1 border-dashed px-2.5 py-2">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="text-[13px] font-semibold">Introduction call</span>
-                <Tag outline>not a dose</Tag>
-                <span className="ml-auto shrink-0 text-[11px] text-muted-strong">
-                  {patient?.intro_call_status === 'done' ? 'done' : 'scheduled'}
-                </span>
-              </div>
-              <div className="text-[11px] text-muted-strong">
-                We introduce ourselves to {name} and ask if these calls are welcome. No medicines
-                are discussed.
-              </div>
-            </Card>
-          </div>
-        )}
-
         {timeline.length === 0 ? (
-          <p className="py-2 text-[12px] text-muted-strong">
-            {introOnSelected
-              ? 'No doses are scheduled on this day — only the introduction call above.'
-              : 'No doses are scheduled on this day.'}
+          <p className="py-2 text-base text-muted-strong">
+            No doses are scheduled on this day.
           </p>
         ) : (
           timeline.map((group, i) => (
             <div key={group.slot}>
               {i > 0 && <Divider />}
               <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 py-2">
-                <span className="pt-2 text-[10px] font-bold tracking-wide text-muted">
+                <span className="pt-2 text-2xs font-bold tracking-wide text-muted-strong">
                   {slotLabel(group.slot)}
                 </span>
                 <div className="flex min-w-0 flex-col gap-1.5">
@@ -630,35 +297,21 @@ export default function Calendar() {
                     <Card
                       key={dose.medication.id + dose.slot}
                       className="gap-1 px-2.5 py-2"
-                      emphasis={
-                        dose.event?.status === 'unknown'
-                          ? 'rule'
-                          : group.slot === nowSlot
-                            ? 'border'
-                            : 'none'
-                      }
+                      emphasis={group.slot === nextPendingSlot ? 'border' : 'none'}
                     >
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="text-[13px] font-semibold">{dose.medication.name}</span>
-                        <span className="text-[12px] text-muted-strong">{dose.medication.dose}</span>
+                        <span className="text-md font-semibold">{dose.medication.name}</span>
+                        <span className="text-base text-muted-strong">{dose.medication.dose}</span>
                         {dose.medication.is_priority && <Tag>priority</Tag>}
-                        {group.slot === nowSlot && <Tag outline>now</Tag>}
+                        {group.slot === nextPendingSlot && <Tag outline>next</Tag>}
                         <span className="ml-auto shrink-0">
                           <SlotStatus dose={dose} now={now} />
                         </span>
                       </div>
                       {dose.medication.with_food && dose.medication.with_food !== 'any' && (
-                        <div className="text-[11px] text-muted-strong">
+                        <div className="text-sm text-muted-strong">
                           {dose.medication.with_food === 'after' ? 'After food' : 'Before food'}
                         </div>
-                      )}
-                      {dose.event?.status === 'unknown' && (
-                        <Unreachable
-                          note={dose.event.note}
-                          escalation={escalationForDose.get(dose.event.id) ?? null}
-                          name={name}
-                          phone={patient?.phone_e164 ?? null}
-                        />
                       )}
                     </Card>
                   ))}
@@ -668,7 +321,7 @@ export default function Calendar() {
           ))
         )}
 
-        <div className="text-[10px] text-muted">
+        <div className="text-2xs text-muted-strong">
           What was said on the call, and any note against a dose, is on the{' '}
           <Link to="/doses" className="font-semibold underline">
             dose history
@@ -676,16 +329,14 @@ export default function Calendar() {
           .
         </div>
       </Card>
-      )}
 
       {/* --------------------------------------------- week grid (2f) — sm+
           Held back below `sm` and scrolled inside its own box above it, so the page
           itself never scrolls sideways on a 390px phone. */}
-      {view === 'week' && (
       <Card className="hidden gap-2 sm:flex">
         <Row className="items-baseline gap-2">
           <Label className="flex-1">The week · every dose at every time</Label>
-          <span className="text-[10px] text-muted">days already past are dimmed</span>
+          <span className="text-2xs text-muted-strong">days already past are shaded</span>
         </Row>
 
         <div className="-mx-1 overflow-x-auto px-1">
@@ -705,19 +356,19 @@ export default function Calendar() {
                     className={clsx(
                       'rounded-lg px-1 py-1 text-center',
                       isToday && 'bg-ink text-white',
-                      !isToday && isPast && 'text-muted-strong opacity-70',
+                      !isToday && isPast && 'text-muted-strong',
                       !isToday && dayKey(day) === dayKey(selected) && 'border border-ink',
                     )}
                   >
                     <div
                       className={clsx(
-                        'text-[9px] font-bold tracking-[0.09em] uppercase',
-                        isToday ? 'text-white/70' : 'text-muted',
+                        'text-2xs font-bold tracking-[0.09em] uppercase',
+                        isToday ? 'text-white/70' : 'text-muted-strong',
                       )}
                     >
                       {day.toLocaleDateString([], { weekday: 'short' })}
                     </div>
-                    <div className={clsx('text-[13px]', isToday ? 'font-bold' : 'font-semibold')}>
+                    <div className={clsx('text-md', isToday ? 'font-bold' : 'font-semibold')}>
                       {day.getDate()}
                     </div>
                   </button>
@@ -731,73 +382,32 @@ export default function Calendar() {
                 key={slot}
                 className="grid grid-cols-[3.75rem_repeat(7,minmax(0,1fr))] items-stretch gap-x-1.5 border-b border-line py-1.5"
               >
-                <span className="pt-2 text-[10px] font-bold tracking-wide text-muted">{slot}</span>
+                <span className="pt-2 text-2xs font-bold tracking-wide text-muted-strong">{slot}</span>
                 {week.map((day, i) => {
                   const cell = bySlot[i]?.get(slot) ?? []
                   const isToday = dayKey(day) === dayKey(today)
                   const isPast = day.getTime() < today.getTime()
-                  const isTarget =
-                    dragTarget?.slot === slot && dragTarget?.day === dayKey(day)
                   return (
                     <div
                       key={dayKey(day)}
-                      onDragOver={(e) => {
-                        if (!dragging) return
-                        e.preventDefault()
-                        setDragTarget({ slot, day: dayKey(day) })
-                      }}
-                      onDragLeave={() => setDragTarget(null)}
-                      onDrop={(e) => {
-                        e.preventDefault()
-                        setDragTarget(null)
-                        if (!dragging) return
-                        // The modifier is read at the drop, not the pick-up: a
-                        // caregiver can change their mind mid-drag, and the badge on
-                        // the cell has been telling them which one it will be.
-                        void moveDose(dragging.dose, e.shiftKey, day, slot)
-                        setDragging(null)
-                      }}
                       className={clsx(
                         'rounded-md border p-1.5',
                         isToday ? 'border-[1.5px] border-ink bg-paper' : 'border-line-strong',
-                        isPast && !isToday && 'opacity-70',
-                        isTarget && 'border-[1.5px] border-ink bg-line/30',
+                        isPast && !isToday && 'bg-canvas',
                       )}
                     >
                       {cell.length === 0 ? (
-                        <span className="text-[10px] text-muted">
-                          {isTarget ? (dragging?.series ? 'every day' : 'just this one') : '—'}
-                        </span>
+                        <span className="text-2xs text-muted-strong">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {cell.map((dose) => {
-                            // An answered dose is history. Moving it would rewrite
-                            // what happened rather than what is going to.
-                            const movable = !dose.event || dose.event.status === 'deferred'
-                            return (
-                              <div
-                                key={dose.medication.id}
-                                draggable={movable}
-                                onDragStart={(e) => {
-                                  setDragging({ dose, series: e.shiftKey })
-                                  e.dataTransfer.effectAllowed = 'move'
-                                }}
-                                onDragEnd={() => {
-                                  setDragging(null)
-                                  setDragTarget(null)
-                                }}
-                                className={clsx(
-                                  'flex flex-col gap-0.5',
-                                  movable && 'cursor-grab active:cursor-grabbing',
-                                )}
-                              >
-                                <span className="truncate text-[11px] font-semibold">
-                                  {dose.medication.name}
-                                </span>
-                                <SlotStatus dose={dose} now={now} />
-                              </div>
-                            )
-                          })}
+                          {cell.map((dose) => (
+                            <div key={dose.medication.id} className="flex flex-col gap-0.5">
+                              <span className="truncate text-sm font-semibold">
+                                {dose.medication.name}
+                              </span>
+                              <SlotStatus dose={dose} now={now} />
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -808,18 +418,11 @@ export default function Calendar() {
           </div>
         </div>
 
-        <p className="text-[10px] text-muted">
-          Drag a dose to another cell to move just that one. Hold <b>shift</b> as you drop to move
-          it every day instead. A dose that has already been answered cannot be moved — that is
-          history, not schedule.
+        <p className="text-2xs text-muted-strong">
+          Doses are shown where the prescription puts them. To move a time, change the medicine —
+          nothing on this grid can be dragged, because nothing here would save.
         </p>
-        {moveError && (
-          <span className="text-[11px] font-semibold text-muted-strong">
-            {moveError} Nothing was moved.
-          </span>
-        )}
       </Card>
-      )}
 
       {/* ------------------------------------------------------------ legend */}
       <Card className="gap-2">
@@ -829,19 +432,19 @@ export default function Calendar() {
             <span className="w-[6.75rem] shrink-0 pt-px">
               <DoseStatusChip status={status} />
             </span>
-            <span className="min-w-0 flex-1 text-[11px] break-words text-muted-strong">
+            <span className="min-w-0 flex-1 text-sm break-words text-muted-strong">
               {MEANING[status]}
             </span>
           </Row>
         ))}
         <Row className="items-start gap-2">
           <span className="w-[6.75rem] shrink-0 pt-px">
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-strong">
+            <span className="inline-flex items-center gap-1.5 text-sm text-muted-strong">
               <Dot kind="empty" />
               upcoming
             </span>
           </span>
-          <span className="min-w-0 flex-1 text-[11px] break-words text-muted-strong">
+          <span className="min-w-0 flex-1 text-sm break-words text-muted-strong">
             Due, and nothing written against it yet. A slot in the past with no record reads “no
             record yet” — not missed, because nobody has said either way.
           </span>
@@ -851,29 +454,13 @@ export default function Calendar() {
       {/* --------------------------------------------------------- CTAs (1g)
           Both land on the same editor — one opens on the medicine list, the other on the
           uploader — exactly as the client redrew them. */}
-      <div className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row print:hidden">
+      <div className="flex flex-col gap-2 border-t border-line pt-3 sm:flex-row">
         <Link to="/medicines/edit" className={clsx(BTN_PRIMARY, 'flex-1')}>
           Edit these medicines
         </Link>
-        <Link to="/medicines/edit" className={clsx(BTN_OUTLINE, 'flex-1')}>
+        <Link to="/medicines/edit?tab=upload" className={clsx(BTN_OUTLINE, 'flex-1')}>
           Upload new prescription
         </Link>
-        {/* Frame `2f`. The browser's own print dialog is also the share sheet and the
-            save-as-PDF on every platform this runs on, so there is nothing to build
-            behind it — and a schedule a caregiver can hand to a doctor on paper is
-            the most useful thing this screen produces. Agenda prints best, so the
-            button switches to it first rather than printing whatever happens to be
-            on screen. */}
-        <button
-          type="button"
-          onClick={() => {
-            setView('agenda')
-            requestAnimationFrame(() => window.print())
-          }}
-          className={clsx(BTN_OUTLINE, 'flex-1')}
-        >
-          Print / share PDF
-        </button>
       </div>
     </section>
   )
@@ -883,10 +470,8 @@ export default function Calendar() {
 
 /** Same shape as the `Button` primitive, as a router link so the tab bar state survives. */
 const BTN_BASE =
-  'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-[12px] font-semibold'
+  'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-center text-base font-semibold'
 const BTN_PRIMARY = `${BTN_BASE} bg-ink text-white`
-const BTN_SMALL =
-  'inline-flex items-center rounded-md border border-ink px-2 py-1 text-[10.5px] font-semibold'
 const BTN_OUTLINE = `${BTN_BASE} border border-ink bg-transparent text-ink`
 
 function Header({
@@ -907,10 +492,10 @@ function Header({
   return (
     <div className="flex flex-col gap-1">
       <Row className="items-baseline gap-2">
-        <h1 className="flex-1 text-[17px] font-bold">{monthTitle}</h1>
+        <h1 className="flex-1 text-lg font-bold">{monthTitle}</h1>
         <Label>{range}</Label>
       </Row>
-      <p className="text-[11px] text-muted-strong">
+      <p className="text-sm text-muted-strong">
         Every dose {name} is due to take, and how each one went. The times come from the
         prescription — change them in the medicine editor.
       </p>
@@ -924,103 +509,13 @@ function Header({
  * differently. Anything that has been answered renders through `DoseStatusChip`, so the four
  * recorded states look the same here as everywhere else in the app.
  */
-/**
- * What a caregiver is shown when a dose could not be established.
- *
- * The point of this block is that it never says the dose was missed. It says we
- * could not reach the parent, names the alert that fired if one did, and hands over
- * the three things a person can actually do about it.
- *
- * Two of those three are disabled, and visibly so. `medications`/`escalation_contacts`
- * hold no second number and no neighbour (SCHEMA-GAPS §5), and a button that looks
- * dialable but silently does nothing is worse than one that says why it cannot.
- */
-function Unreachable({
-  note,
-  escalation,
-  name,
-  phone,
-}: {
-  note: string | null
-  escalation: Escalation | null
-  name: string
-  phone: string | null
-}) {
-  return (
-    <div className="mt-1 flex flex-col gap-1.5 border-t border-line pt-1.5">
-      <span className="text-[11px] leading-relaxed text-muted-strong">
-        We could not reach {name} for this dose, so whether it was taken is not known. It is
-        not recorded as missed.
-      </span>
-      {note && <span className="text-[10.5px] text-muted">{note}</span>}
-      {escalation && (
-        <Row className="flex-wrap gap-1.5">
-          <Tag outline>{escalation.level}</Tag>
-          <span className="flex-1 text-[10.5px] text-muted-strong">
-            Alert sent to {escalation.sent_to} — {escalation.reason}
-          </span>
-        </Row>
-      )}
-      <Row className="flex-wrap gap-1.5">
-        {phone ? (
-          <a href={`tel:${phone}`} className={BTN_SMALL}>
-            Call {name} yourself
-          </a>
-        ) : (
-          <span className={clsx(BTN_SMALL, 'opacity-40')}>No number on file</span>
-        )}
-        <span className={clsx(BTN_SMALL, 'opacity-40')} title="No second number is stored yet">
-          Try another number
-        </span>
-        <span className={clsx(BTN_SMALL, 'opacity-40')} title="No neighbour contact is stored yet">
-          Ask a neighbour
-        </span>
-      </Row>
-      <span className="text-[10px] text-muted">
-        The other two need a second contact number, which onboarding does not collect yet.
-      </span>
-    </div>
-  )
-}
-
-/** Same short clock the dose history uses, so the two screens read alike. */
-const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-
 function SlotStatus({ dose, now }: { dose: UpcomingDose; now: Date }) {
-  if (dose.event && answered(dose.event.status)) {
-    /**
-     * Frame `1g`: a taken dose shows when it was confirmed, not just that it was.
-     * The time is `created_at` — the moment it was logged — which is deliberately
-     * not the slot: a dose due at 08:30 and confirmed at 09:10 was still late, and
-     * printing the slot time back would hide that.
-     */
-    const at = dose.event.status === 'confirmed' ? clock(dose.event.created_at) : null
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <DoseStatusChip status={dose.event.status} />
-        {at && <span className="text-[10.5px] text-muted">{at}</span>}
-      </span>
-    )
-  }
-  /**
-   * Nothing established: either no row at all, or a `pending` row the scheduler
-   * created to hold its retry counters. Those are the same fact to a caregiver.
-   *
-   * The attempt count is the one thing worth surfacing — "we are trying right now"
-   * is materially different from "this has not come round yet", and it is the only
-   * honest thing to say while a call is in flight.
-   */
-  const attempts = dose.event?.attempt_count ?? 0
+  if (dose.event) return <DoseStatusChip status={dose.event.status} />
   const due = dose.at.getTime() <= now.getTime()
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-strong">
-      <Dot kind={attempts > 0 ? 'hollow' : 'empty'} />
-      {attempts > 0
-        ? `trying · ${attempts} ${attempts === 1 ? 'attempt' : 'attempts'}`
-        : due
-          ? 'no record yet'
-          : 'upcoming'}
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-strong">
+      <Dot kind="empty" />
+      {due ? 'no record yet' : 'upcoming'}
     </span>
   )
 }
@@ -1078,13 +573,13 @@ function DayChip({
     >
       <span
         className={clsx(
-          'text-[9px] font-bold tracking-[0.09em] uppercase',
-          selected ? 'text-white/70' : 'text-muted',
+          'text-2xs font-bold tracking-[0.09em] uppercase',
+          selected ? 'text-white/70' : 'text-muted-strong',
         )}
       >
         {day.toLocaleDateString([], { weekday: 'narrow' })}
       </span>
-      <span className={clsx('text-[13px]', isToday ? 'font-bold' : 'font-semibold')}>
+      <span className={clsx('text-md', isToday ? 'font-bold' : 'font-semibold')}>
         {day.getDate()}
       </span>
       <span className="flex h-3 items-center gap-1">
@@ -1093,6 +588,7 @@ function DayChip({
             {/* the dot is dropped on the selected day: an ink dot on ink is invisible */}
             {!selected && (
               <Dot
+                className="hidden sm:block"
                 kind={
                   t.attention > 0
                     ? 'hollow'
@@ -1102,7 +598,7 @@ function DayChip({
                 }
               />
             )}
-            <span className="text-[9px] tabular-nums">
+            <span className="text-2xs tabular-nums">
               {t.confirmed}/{t.total}
             </span>
           </>

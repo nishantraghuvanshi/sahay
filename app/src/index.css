@@ -1,19 +1,71 @@
+/* Fonts load from the single <link> in index.html. An @import here made a second
+   request for the same families and put it behind index.css on the critical path. */
 @import 'tailwindcss';
 
-/* Tokens lifted from the wireframes (wireframe/*.dc.html) so the built app and the
-   grey-box frames stay the same visual language. */
+/* ------------------------------------------------------------------ tokens
+   The Kinvox design language, declared once and inherited everywhere.
+   Warm cream ramp · exactly one accent · status colours layered onto marks
+   that already carry a shape and a word. Names are stable — extend, never rename. */
 @theme {
-  --color-ink: #1a1a1a;
-  --color-canvas: #f0eee9;
-  --color-surface: #fafaf8;
+  /* neutrals — warm cream */
+  --color-ink: #1a1712;
+  --color-ink-soft: #3a342c;
+  --color-muted-strong: #5e564a;
+  --color-muted: #8a8070;
+  --color-fill: #e9dfcb;
+  --color-fill-empty: #cfc3a8;
+  --color-line: #eadfc9;
+  --color-line-strong: #dcceb2;
+  --color-canvas: #f9f0e0;
+  --color-surface: #fffcf6;
   --color-paper: #ffffff;
-  --color-line: #e4e4e0;
-  --color-line-strong: #d8d8d4;
-  --color-muted: #8d8d8d;
-  --color-muted-strong: #6d6d6d;
-  --color-fill: #dedede;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* accent — exactly one */
+  --color-accent: #3674b5;
+  --color-accent-2: #578fca;
+  --color-accent-soft: #e2ecf6;
+
+  /* status — never colour alone */
+  --color-ok: #3674b5;
+  --color-warn: #8a6100;
+  --color-warn-soft: #fdf0ce;
+  --color-danger: #cc3a63;
+  --color-danger-soft: #fbe8ed;
+  --color-highlight: #fada7a;
+
+  /* type */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-deva: 'IBM Plex Sans Devanagari', 'IBM Plex Sans', system-ui, sans-serif;
+
+  --text-2xs: 0.6875rem;   /* 11 */
+  --text-2xs--line-height: 1.35;
+  --text-xs: 0.8125rem;    /* 13 */
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.875rem;     /* 14 */
+  --text-sm--line-height: 1.5;
+  --text-base: 0.9375rem;  /* 15 */
+  --text-base--line-height: 1.55;
+  --text-md: 1.0625rem;    /* 17 */
+  --text-md--line-height: 1.45;
+  --text-lg: 1.25rem;      /* 20 */
+  --text-lg--line-height: 1.3;
+  --text-xl: 1.5rem;       /* 24 */
+  --text-xl--line-height: 1.25;
+  --text-2xl: 1.875rem;    /* 30 */
+  --text-2xl--line-height: 1.15;
+  --text-3xl: 2.5rem;      /* 40 */
+  --text-3xl--line-height: 1.08;
+  --text-4xl: 3.5rem;      /* 56 */
+  --text-4xl--line-height: 1.03;
+
+  /* elevation — two warm-tinted steps */
+  --shadow-card: 0 1px 2px rgba(58, 44, 20, 0.05), 0 2px 10px rgba(58, 44, 20, 0.05);
+  --shadow-lift: 0 6px 16px rgba(58, 44, 20, 0.1), 0 14px 40px rgba(58, 44, 20, 0.1);
+
+  /* motion — settling, never springy */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html,
@@ -22,16 +74,303 @@ body,
   height: 100%;
 }
 
+/* One overflowing child must never scroll the whole page sideways. */
+#root {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Tap targets on a phone stay thumb-sized (LANE-C mobile checklist). */
+/* Hindi / Marathi / Punjabi render in the Devanagari face wherever lang() is set. */
+:lang(hi),
+:lang(mr),
+:lang(pa) {
+  font-family: var(--font-deva);
+}
+
+/* Tabular figures for times, counts and durations. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tap targets on a phone stay thumb-sized. */
 button,
 a {
   touch-action: manipulation;
+}
+
+/* ------------------------------------------------- surfaces the browser draws
+   Selection, caret, scrollbars and underlines ship with defaults that belong to
+   no design system — a blue caret and a grey scrollbar on a cream ground read as
+   "assembled", not "built". They are cheap to theme and they are everywhere. */
+
+::selection {
+  background: var(--color-highlight);
+  color: var(--color-ink);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Route changes move focus to <main> so the new screen is announced. That target is
+   spoken, not pointed at — ringing the whole content region on every navigation is
+   noise. Only programmatic targets are exempt; real keyboard focus keeps its ring. */
+[tabindex='-1']:focus,
+[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
+/* The caret is the one blue thing inside a field — same accent as the focus ring. */
+input,
+textarea,
+select,
+[contenteditable] {
+  caret-color: var(--color-accent);
+}
+
+/* A hairline thumb in the ramp's own tone, floating on a transparent track so it
+   sits correctly on canvas, surface and paper alike. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fill-empty);
+  background-clip: padding-box;
+}
+
+/* Default underlines sit on the baseline and cut through descenders. */
+a:not([class*='no-underline']) {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: from-font;
+}
+
+/* ------------------------------------------------------------------ motion */
+@keyframes kvRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Animating `background-position` repaints the element every frame, forever, on
+   every skeleton bar at once. The same sweep on a `transform` runs on the
+   compositor and costs nothing while a screen waits for data. */
+@keyframes kvShimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.kv-rise {
+  animation: kvRise 0.34s var(--ease-out) both;
+}
+
+.kv-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-fill);
+}
+
+.kv-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-surface) 75%, transparent) 50%,
+    transparent 100%
+  );
+  animation: kvShimmer 1.4s var(--ease-soft) infinite;
+}
+
+/* Reduced motion means reduced, not dead. Animation stops outright; transitions
+   shorten to a beat that still confirms a press, a hover and a focus change —
+   killing them to 0.01ms removes the feedback along with the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .kv-rise {
+    animation: none;
+  }
+  .kv-shimmer::after {
+    animation: none;
+    opacity: 0;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 80ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------ shadcn-shaped alias tokens
+   `components/ui/sign-in.tsx` was authored against the shadcn token names
+   (background / foreground / card / border / primary / muted-foreground …).
+   Rather than fork the component, the names are aliased onto the Kinvox ramp
+   above, so a stock shadcn block drops in and comes out wearing this palette.
+   Extend this block when another shadcn component needs a name we lack. */
+@theme {
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--color-accent-soft);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted-foreground: var(--color-muted-strong);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-accent);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: #ffffff;
+
+  /* The component asks for `font-geist`; the product ships IBM Plex Sans. */
+  --font-geist: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* --------------------------------------------- sign-in entrance choreography
+   Each element starts blurred and displaced, then settles. `both` matters: it
+   holds the *from* state before the delay elapses (no flash of finished layout)
+   and the *to* state after — which is also what makes the reduced-motion clamp
+   below land on the final frame instead of an invisible one. */
+@keyframes fadeSlideIn {
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0px);
+  }
+}
+
+@keyframes slideRightIn {
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateX(0px);
+  }
+}
+
+@keyframes testimonialIn {
+  to {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0px) scale(1);
+  }
+}
+
+.animate-element {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateY(12px);
+  animation: fadeSlideIn 0.7s var(--ease-out) both;
+}
+
+.animate-slide-right {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateX(32px);
+  animation: slideRightIn 0.9s var(--ease-out) both;
+}
+
+.animate-testimonial {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(20px) scale(0.96);
+  animation: testimonialIn 0.8s var(--ease-out) both;
+}
+
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+.animate-delay-600 { animation-delay: 600ms; }
+.animate-delay-700 { animation-delay: 700ms; }
+.animate-delay-800 { animation-delay: 800ms; }
+.animate-delay-900 { animation-delay: 900ms; }
+.animate-delay-1000 { animation-delay: 1000ms; }
+.animate-delay-1200 { animation-delay: 1200ms; }
+.animate-delay-1400 { animation-delay: 1400ms; }
+
+/* The one checkbox the design system draws itself, so it can be accent-coloured
+   and sized for a thumb instead of inheriting the OS control. */
+.custom-checkbox {
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 0.375rem;
+  background: var(--color-surface);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: background 140ms var(--ease-soft), border-color 140ms var(--ease-soft);
+}
+
+.custom-checkbox::before {
+  content: '';
+  width: 0.6rem;
+  height: 0.6rem;
+  transform: scale(0);
+  transition: transform 120ms var(--ease-out);
+  background: var(--color-paper);
+  clip-path: polygon(14% 44%, 0 65%, 40% 100%, 100% 16%, 84% 0, 39% 68%);
+}
+
+.custom-checkbox:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.custom-checkbox:checked::before {
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-element,
+  .animate-slide-right,
+  .animate-testimonial {
+    animation-delay: 0ms !important;
+    filter: none;
+  }
 }
