@@ -90,6 +90,24 @@ function hasValidApiKey(req) {
 function authenticateWebSocket(req) {
   const serverKey = process.env.API_KEY;
 
+  // PLAYGROUND_KEY is a second, deliberately weaker credential for the
+  // /playground socket, and only for it.
+  //
+  // The caregiver app's "meet the agent" step opens this socket straight from
+  // the browser, so whatever it presents is public — anything VITE_-prefixed is
+  // inlined into the bundle (NFR-7). Sending API_KEY there would publish the key
+  // that guards POST /api/call, which places real phone calls, and GET /api/calls,
+  // which returns call history. A visitor could dial arbitrary numbers.
+  //
+  // So the browser gets its own key and holds nothing else. Someone who lifts it
+  // out of the bundle can talk to the demo agent and burn TTS credits; they
+  // cannot place a call or read a record. API_KEY still works here, for the
+  // operator tooling that already sends it.
+  //
+  // Unset means only API_KEY is accepted, so this cannot widen access by
+  // accident on a deployment that never configures it.
+  const playgroundKey = process.env.PLAYGROUND_KEY;
+
   // If no API_KEY is configured, allow all (development mode)
   if (!serverKey) {
     return true;
@@ -99,7 +117,15 @@ function authenticateWebSocket(req) {
   const url = new URL(req.url, 'http://localhost');
   const providedKey = url.searchParams.get('api_key');
 
-  if (!providedKey || providedKey !== serverKey) {
+  // PLAYGROUND_KEY unlocks the playground socket and nothing else. Scoped by
+  // pathname rather than by trusting the caller, so presenting it against
+  // /api/stt — the Vapi audio bridge — is still rejected.
+  const isPlayground = url.pathname === '/playground';
+  const accepted = isPlayground && playgroundKey
+    ? [serverKey, playgroundKey]
+    : [serverKey];
+
+  if (!providedKey || !accepted.includes(providedKey)) {
     logger.log('ws_auth_failed', { path: req.url });
     return false;
   }

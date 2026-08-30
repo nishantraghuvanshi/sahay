@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AGENT_BASE } from '../../config'
+import { AGENT_BASE, AGENT_KEY } from '../../config'
 import { useSession } from '../../auth/SessionProvider'
 import { Button, Card, Label, Tag } from '../../ui'
 import {
@@ -153,6 +153,7 @@ export default function Meet() {
 
     const conversation = new VoiceSession({
       agentBase: AGENT_BASE,
+      apiKey: AGENT_KEY,
       language,
       // The caregiver's own number stands in for the parent's, so the agent has
       // a record to open a session against. `direction: outbound` is what makes

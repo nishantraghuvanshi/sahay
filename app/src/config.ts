@@ -80,3 +80,18 @@ export const DESKTOP_MIN_PX = 1024
  * the default is the port `agent/src/server.js` listens on locally.
  */
 export const AGENT_BASE = import.meta.env.VITE_AGENT_BASE ?? 'http://localhost:3001'
+
+/**
+ * Credential for the agent's /playground socket, which the "meet the agent"
+ * step opens directly from the browser.
+ *
+ * This ships in the bundle — every VITE_ var does — so it must NOT be the
+ * agent's API_KEY. That key guards POST /api/call, which places real phone
+ * calls, and GET /api/calls, which returns call history. Set PLAYGROUND_KEY on
+ * the agent and put the same value here: it unlocks the playground socket and
+ * nothing else.
+ *
+ * Empty is correct for local work, where the agent runs without API_KEY and the
+ * socket accepts anyone.
+ */
+export const AGENT_KEY = import.meta.env.VITE_AGENT_KEY ?? ''
