@@ -325,6 +325,23 @@ describe('boot log — a DB_PATH shaped like a URL is coarsened, never parsed', 
     });
   });
 
+  test('a malformed scheme (digit-led, punctuation-led, or missing) is still coarsened, not returned raw (round-4 finding)', async () => {
+    // Round 4: the function found "://" correctly but then GATED the
+    // coarsening on the text before it being a well-formed scheme name —
+    // when it wasn't (digit-led, punctuation-led, or nothing at all before
+    // "://"), it fell through to returning the value verbatim, credential
+    // intact. Worse than the mangling bug this replaced. Fixed so any
+    // value containing "://" coarsens unconditionally; a malformed prefix
+    // becomes "<redacted>", never itself.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-malformed-scheme-'));
+    const secret = 'round4-secret-token';
+    await assertCoarsened({
+      dbDir,
+      dbPathValue: `${dbDir}/1abc://user:${secret}@host/db`,
+      secret,
+    });
+  });
+
   test('a path merely containing an embedded scheme:// is coarsened, not mangled into a false path', async () => {
     // The re-review's own example was /mnt/backups/scp://deploy:build@2024/
     // release.db — reproduced here under a writable tmpdir instead of a

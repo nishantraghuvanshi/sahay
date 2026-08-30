@@ -30,21 +30,48 @@ class NotAFilesystemPathError(Exception):
     pass
 
 
-def redact_credentials(value: str) -> str:
-    """Collapse a `scheme:/...` value (see _URL_SCHEME_RE for why one slash
-    is enough) to `scheme://<redacted>` before it reaches a log line or an
-    error message. A value with no scheme prefix — an ordinary filesystem
-    path — is returned untouched.
+_SCHEME_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-"
+)
+_ASCII_LETTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-    Deliberately coarse rather than trying to extract just the userinfo: a
-    real filesystem path never starts with a scheme, so nothing legitimate
-    is ever touched, and there is no per-character parsing left to get
-    wrong.
+
+def redact_credentials(value) -> str:
+    """Collapse a `scheme:/...` value — ANYWHERE in the string, not only at
+    the start — to `scheme://<redacted>` before it reaches a log line or an
+    error message. Mirrors agent/src/utils/db-path.js's redactCredentials;
+    see that file's docstring for the full rationale. In short: this used
+    to require the whole value to *start* with a scheme
+    (`_URL_SCHEME_RE.match`), which left every one of these unredacted —
+    ":/user:pw@host" (no scheme at all), "1abc:/user:pw@host" (digit-led),
+    "$$$:/user:pw@host" (punctuation-led), "/mnt/1x:/user:pw@host" (a
+    scheme-looking run after a real path prefix) — because each was a case
+    where the anchored match simply failed and the value fell through
+    untouched, credential intact. There is no such fallthrough now: finding
+    ":/" anywhere is the only thing checked, and it always produces a fully
+    coarsened `scheme://<redacted>` — `<redacted>://<redacted>` when
+    whatever precedes it isn't a clean scheme — so no userinfo character,
+    and no part of an unclean prefix, ever reaches the output.
+
+    A value with no ":/" anywhere is an ordinary path and is returned
+    byte-identical.
+
+    Never throws on any input, including None, a number, or an empty
+    string: coerced to str() first, and every operation after that is a
+    substring search and slicing, neither of which can raise.
     """
-    if not _URL_SCHEME_RE.match(value):
-        return value
-    scheme = value.split(":", 1)[0]
-    return f"{scheme}://<redacted>"
+    text = value if isinstance(value, str) else str(value)
+    idx = text.find(":/")
+    if idx == -1:
+        return text
+
+    start = idx
+    while start > 0 and text[start - 1] in _SCHEME_CHARS:
+        start -= 1
+    scheme = text[start:idx]
+    starts_with_letter = bool(scheme) and scheme[0] in _ASCII_LETTERS
+    scheme_label = scheme if starts_with_letter else "<redacted>"
+    return f"{scheme_label}://<redacted>"
 
 
 def assert_filesystem_path(value: str, var_name: str | None = None) -> None:

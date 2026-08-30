@@ -69,8 +69,80 @@ class TestRedactCredentials:
         assert "secretpw" not in redacted
         assert redacted.startswith("postgresql://")
 
+    # A malformed-scheme leak: the earlier version of this function required
+    # the value to *start* with a scheme (`_URL_SCHEME_RE.match`, anchored),
+    # so anything where the text before the colon-slash wasn't a clean
+    # scheme fell through untouched, credential intact. Fixed to search for
+    # ":/" anywhere and coarsen unconditionally — no validity gate.
+    @pytest.mark.parametrize(
+        "label,value",
+        [
+            ("no scheme at all before :/", "://user:SECRET@host"),
+            ("a digit-led scheme", "1abc://user:SECRET@host"),
+            ("a punctuation-led scheme", "$$$://user:SECRET@host"),
+            ("a scheme-shaped run after a real path prefix", "/mnt/1x://user:SECRET@host"),
+        ],
+    )
+    def test_still_coarsened_not_returned_raw(self, label, value):
+        redacted = redact_credentials(value)
+        assert "SECRET" not in redacted, f"{label}: leaked -> {redacted!r}"
+        assert "user:" not in redacted, f"{label}: leaked -> {redacted!r}"
+
+    def test_postgresql_url_collapses_to_scheme_redacted(self):
+        assert redact_credentials("postgresql://u:s@h") == "postgresql://<redacted>"
+
+    def test_sqlite_triple_slash_no_authority_is_coarsened_too(self):
+        assert redact_credentials("sqlite:///abs/path.db") == "sqlite://<redacted>"
+
+    def test_embedded_scheme_after_a_real_path_prefix_redacts_the_secret(self):
+        redacted = redact_credentials("/mnt/backups/scp://deploy:build@2024/release.db")
+        assert "build" not in redacted
+        assert "2024" not in redacted
+
     def test_a_plain_filesystem_path_is_untouched(self):
         assert redact_credentials("/data/voxikin.db") == "/data/voxikin.db"
 
     def test_a_path_with_at_but_no_scheme_is_untouched(self):
         assert redact_credentials("/tmp/a@b/x.db") == "/tmp/a@b/x.db"
+
+    def test_a_path_with_colon_but_no_scheme_is_untouched(self):
+        assert redact_credentials("/tmp/a:b/x.db") == "/tmp/a:b/x.db"
+
+    @pytest.mark.parametrize(
+        "label,value",
+        [
+            ("None", None),
+            ("a number", 5),
+            ("an empty string", ""),
+            ("a lone ':/'", "://"),
+            ("a null byte", "\x00abc://x"),
+            ("whitespace-padded", "   \t ://x   "),
+            ("unicode", "ünïcödé://x"),
+        ],
+    )
+    def test_never_throws(self, label, value):
+        redact_credentials(value)  # must not raise
+
+    def test_never_throws_on_multi_megabyte_input(self):
+        redact_credentials("a" * 4_000_000)  # must not raise
+
+    def test_no_redos_long_scheme_char_run_no_colon_slash(self):
+        import time
+
+        start = time.monotonic()
+        redact_credentials("a" * 4_000_000)
+        assert time.monotonic() - start < 1.0
+
+    def test_no_redos_long_scheme_char_run_before_colon_slash(self):
+        import time
+
+        start = time.monotonic()
+        redact_credentials(("a" * 4_000_000) + "://x")
+        assert time.monotonic() - start < 1.0
+
+    def test_no_redos_many_repetitions_of_a_colon_slash_slash(self):
+        import time
+
+        start = time.monotonic()
+        redact_credentials("a://" * 1_000_000)
+        assert time.monotonic() - start < 1.0
