@@ -310,19 +310,25 @@ def init(reset: bool = False) -> None:
 
     Fails closed: a configured path that is evidently not a filesystem path
     (a Postgres/MySQL/etc connection string — see agent/postgresql:/... in
-    this working tree) is refused before anything is created, and an
-    existing-but-incompatible database (wrong primary-key type, or a
+    this working tree) is refused before anything is created OR DESTROYED,
+    and an existing-but-incompatible database (wrong primary-key type, or a
     pre-rename column name) is refused with nothing written. See
     schema_version.check_and_migrate for the verdict logic — this used to
     run the full schema script unconditionally before that check, which
     would have created any wholly-new table on an incompatible database
     (CREATE TABLE IF NOT EXISTS is a no-op only for tables that already
     exist) before refusal had a chance to run.
+
+    Fix round 1, finding 2: assert_filesystem_path used to run AFTER
+    `reset and DB_PATH.exists(): DB_PATH.unlink()` — so `init(reset=True)`
+    with a URL-shaped VOXIKIN_DB deleted the file before refusing.
+    Deletion is not creation; the guard has to come first, unconditionally,
+    before reset has a chance to touch anything.
     """
+    assert_filesystem_path(str(DB_PATH), _DB_PATH_ENV if _DB_PATH_ENV in os.environ else None)
+
     if reset and DB_PATH.exists():
         DB_PATH.unlink()
-
-    assert_filesystem_path(str(DB_PATH), _DB_PATH_ENV if _DB_PATH_ENV in os.environ else None)
 
     con = connect()
     try:

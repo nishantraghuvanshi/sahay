@@ -100,6 +100,26 @@ function parseTableColumns(schemaSql) {
     }
     tables[tableName] = cols;
   }
+
+  // Minor fix, round 1: tableRe requires a closing "\n);" — a future table
+  // whose closing "); " lands on the same line as its last column (no
+  // newline before it) would silently vanish from this authority's output
+  // instead of failing loudly, and every open of every database would then
+  // treat that table as though schema.sql never declared it. Count
+  // "CREATE TABLE IF NOT EXISTS" occurrences independently of the paired
+  // regex and refuse to proceed on a mismatch, rather than trusting the
+  // paired regex found everything it should have.
+  const declaredCount = (schemaSql.match(/CREATE TABLE IF NOT EXISTS \w+/g) || []).length;
+  const parsedCount = Object.keys(tables).length;
+  if (parsedCount !== declaredCount) {
+    throw new Error(
+      `parseTableColumns found ${parsedCount} table(s) but schema.sql declares ` +
+        `${declaredCount} — a CREATE TABLE statement failed to parse (its closing ");" ` +
+        `may not be on its own line). Refusing to derive a partial column list from the ` +
+        `single source of truth rather than silently dropping a table.`
+    );
+  }
+
   return tables;
 }
 
@@ -241,8 +261,14 @@ function checkAndMigrate(db, schemaSql, dbLabel) {
     if (!wantType) continue;
     const liveCols = db.prepare(`PRAGMA table_info(${table})`).all();
     const liveId = liveCols.find((c) => c.name === 'id');
+    // liveId.type is '' for an untyped column (e.g. `id PRIMARY KEY` with no
+    // type keyword) — that already compares unequal to wantType and refuses
+    // correctly (an untyped id is not a TEXT id), but rendered as "id is ,
+    // schema requires TEXT" with nothing between "is" and the comma. Fix
+    // round 1, finding 3: label it explicitly instead.
     if (liveId && liveId.type.toUpperCase() !== wantType.toUpperCase()) {
-      problems.push(`${table}.id is ${liveId.type}, schema requires ${wantType}`);
+      const typeLabel = liveId.type || '(untyped)';
+      problems.push(`${table}.id is ${typeLabel}, schema requires ${wantType}`);
     }
   }
 
@@ -265,6 +291,22 @@ function checkAndMigrate(db, schemaSql, dbLabel) {
     return { verdict: 'current', version: targetVersion };
   }
 
+  // Deviation from the brief, ruled on deliberately (fix round 1, finding
+  // 4 — not an oversight): task-4-brief.md says "Version 0 (no marker,
+  // pre-reconciliation) is incompatible." This code instead falls through
+  // to the migratable branch below for a version-0 database whose SHAPE is
+  // otherwise compatible (right PK types, no pre-rename column names) — the
+  // rename/PK-type checks above already ran and would have refused it if
+  // it actually were the pre-reconciliation shape. A strict reading of the
+  // brief would refuse every database that predates this task (there was
+  // no marker anywhere before it), including every currently-working dev
+  // database, and would make the `migratable` verdict unreachable at
+  // target=1 since there is no version 0.5 to migrate from. Ruled that the
+  // behaviour stands: "version 0" in the brief means the specific
+  // pre-reconciliation shape, which the shape checks already catch by
+  // construction, not literally every database that has never had a
+  // version stamped on it.
+  //
   // Migratable: add any column an existing table is missing FIRST — before
   // creating any wholly-new table or index, because schema.sql may declare
   // an index on a column an old table doesn't have yet
@@ -290,9 +332,42 @@ function checkAndMigrate(db, schemaSql, dbLabel) {
   // Now safe to create any wholly-new table and every index that only
   // references columns that were either already there or just added above.
   // An index on a column this migration had to skip (_isSafeToAdd) cannot
-  // be created either — that failure is caught and logged rather than
-  // aborting the whole migration.
+  // be created either — that failure is caught, not swallowed: see below.
   const skippedIndexes = _createTablesAndIndexes(db, schemaSql, existing);
+
+  // Fix round 1, finding 1: this used to stamp user_version unconditionally
+  // here, regardless of `skipped`/`skippedIndexes` — so a migration that
+  // knowingly could not add a column, or could not create an index that
+  // depended on it (idx_meds_patient_name_start is UNIQUE — the exact
+  // idempotency guarantee TRD §3.1 requires), still recorded the database
+  // as fully current. Every later open then took the `current` branch
+  // above and returned instantly: the gap became permanent and invisible,
+  // which is precisely the failure this whole task exists to remove.
+  //
+  // Folded into the `incompatible` verdict rather than adding a fourth one:
+  // the brief specifies three verdicts, and an unstamped, retried-on-every-
+  // open refusal already delivers "visible on every subsequent open" — no
+  // separate `incomplete` bookkeeping is needed for that. The columns that
+  // WERE safely added above are left in place (they are harmless additive
+  // changes on their own); only the version stamp — the claim "this
+  // database is fully current" — is withheld. A future open of this same
+  // database re-runs this exact code path (found_version is still behind
+  // target, tables still exist), gets the same added/skipped verdict again
+  // deterministically, and throws again — that is what makes it visible on
+  // every open rather than once, not a stored "incomplete" flag.
+  if (skipped.length > 0 || skippedIndexes.length > 0) {
+    throw new IncompatibleDatabaseError(
+      `Refusing to certify ${dbLabel} as migrated to version ${targetVersion} ` +
+        `(found user_version=${foundVersion}): the migration could not complete safely. ` +
+        `${skipped.length} column(s) could not be added — ${skipped.join(', ') || 'none'} — ` +
+        `${skippedIndexes.length} index statement(s) could not run as a result. ` +
+        `SQLite cannot ALTER TABLE ADD COLUMN a NOT NULL column with no DEFAULT, or any ` +
+        `column whose DEFAULT is not a constant, onto a table that already has rows. ` +
+        `user_version was left unchanged so this refusal repeats on every open until the ` +
+        `database is rebuilt — do not treat this as transient.`
+    );
+  }
+
   db.exec(`PRAGMA user_version = ${targetVersion}`);
   return {
     verdict: 'migrated',

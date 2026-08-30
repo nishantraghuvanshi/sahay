@@ -100,24 +100,21 @@ describe('verdict: current (fresh database)', () => {
   });
 });
 
-describe('verdict: migratable (additive-behind)', () => {
-  test('a compatible database missing gap columns gets them added, and the version bumped', () => {
+describe('verdict: migratable (additive-behind, and it actually completes)', () => {
+  test('a compatible database missing only safely-addable gap columns gets them added, and the version bumped', () => {
     const dbPath = tmpDbPath('sahay-schema-version-migratable-');
     const db = new DatabaseSync(dbPath);
-    // TEXT ids, current column names, but stripped down to only the columns
-    // that existed before the gap columns were added — an honestly
-    // additive-behind shape, never a rename.
+    // TEXT id, current column names, stripped to only the columns that
+    // existed before the caregiver-app gap columns were added — every one
+    // of those gap columns is nullable or DEFAULT-constant (fix round 1,
+    // finding 1's fixture deliberately avoids medications' NOT-NULL-no-
+    // DEFAULT and non-constant-DEFAULT columns, which is a separate,
+    // now-refusing case covered below).
     db.exec(`
       CREATE TABLE patients (
         id TEXT PRIMARY KEY,
         phone_e164 TEXT NOT NULL UNIQUE,
         created_at TEXT NOT NULL
-      );
-      CREATE TABLE medications (
-        id TEXT PRIMARY KEY,
-        patient_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        dose TEXT NOT NULL
       );
     `);
     const result = checkAndMigrate(db, SCHEMA_SQL, dbPath);
@@ -125,35 +122,73 @@ describe('verdict: migratable (additive-behind)', () => {
     assert.strictEqual(result.from, 0);
     assert.strictEqual(result.version, 1);
     assert.ok(result.added.includes('patients.timezone'));
-    assert.ok(result.added.includes('medications.slots'));
-    // patient_id/dose are NOT NULL with no DEFAULT on medications, and
-    // already exist on this table anyway; assert the guard never tried to
-    // add a NOT-NULL-no-DEFAULT column that was genuinely missing.
+    assert.ok(result.added.includes('patients.caregiver_id'));
+    assert.deepStrictEqual(result.skipped, []);
+    assert.deepStrictEqual(result.skippedIndexes, []);
     assert.strictEqual(db.prepare('PRAGMA user_version').get().user_version, 1);
     db.close();
   });
+});
 
-  test('never attempts to add a NOT NULL column with no DEFAULT — it is skipped, not thrown', () => {
+describe('verdict: incompatible (a migration that cannot complete safely)', () => {
+  // Fix round 1, finding 1: this used to be "never attempts to add a NOT
+  // NULL column with no DEFAULT — it is skipped, not thrown", asserting a
+  // `migrated` verdict with `skipped` columns AND user_version stamped
+  // anyway. That stamped the database as fully current despite a stranded
+  // UNIQUE index gap (idx_meds_patient_name_start needs start_date, which
+  // cannot be safely ALTERed) — every later open then took the fast
+  // `current` path and the gap became permanent and invisible. Fixed to
+  // refuse instead, and to refuse identically on every subsequent open.
+  test('a column SQLite cannot safely ALTER in is refused, not silently certified as migrated', () => {
     const dbPath = tmpDbPath('sahay-schema-version-skip-unsafe-');
     const db = new DatabaseSync(dbPath);
     // A pathologically stripped table: missing patient_id, which schema.sql
     // declares NOT NULL with no DEFAULT. Adding it via ALTER TABLE against a
-    // populated table would throw; the migration must skip it instead.
+    // populated table would throw if attempted; the migration must refuse
+    // to certify the database as migrated rather than attempt it.
     db.exec(`
       CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);
       CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);
       INSERT INTO medications (id, name) VALUES ('m1', 'Metformin');
     `);
-    const result = checkAndMigrate(db, SCHEMA_SQL, dbPath);
-    assert.strictEqual(result.verdict, 'migrated');
-    assert.ok(result.skipped.includes('medications.patient_id'));
-    assert.ok(result.skipped.includes('medications.dose'));
-    assert.ok(result.added.includes('medications.slots')); // has a DEFAULT — safe
+
+    assert.throws(() => checkAndMigrate(db, SCHEMA_SQL, dbPath), IncompatibleDatabaseError);
+    // user_version must NOT be stamped — this is the whole point of the fix.
+    assert.strictEqual(db.prepare('PRAGMA user_version').get().user_version, 0);
+    // The existing row survives untouched; only safe additive columns may
+    // have been added alongside the refusal (harmless on their own).
     assert.strictEqual(
       db.prepare("SELECT name FROM medications WHERE id = 'm1'").get().name,
       'Metformin',
       'the existing row must survive untouched'
     );
+
+    // Visible on EVERY subsequent open, not once: re-running the exact same
+    // check against the same (still-unstamped) database throws again,
+    // identically — this is what makes the gap impossible to miss on a
+    // real restart, rather than a one-time warning nobody sees again.
+    assert.throws(() => checkAndMigrate(db, SCHEMA_SQL, dbPath), IncompatibleDatabaseError);
+    assert.strictEqual(db.prepare('PRAGMA user_version').get().user_version, 0);
+    db.close();
+  });
+
+  test('the refusal message names which columns and how many index statements could not complete', () => {
+    const dbPath = tmpDbPath('sahay-schema-version-skip-message-');
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);
+      CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);
+    `);
+    let error;
+    try {
+      checkAndMigrate(db, SCHEMA_SQL, dbPath);
+    } catch (e) {
+      error = e;
+    }
+    assert.ok(error instanceof IncompatibleDatabaseError);
+    assert.match(error.message, /medications\.patient_id/);
+    assert.match(error.message, /medications\.dose/);
+    assert.match(error.message, /index statement\(s\) could not run/);
     db.close();
   });
 });
@@ -174,6 +209,30 @@ describe('verdict: incompatible', () => {
     assert.strictEqual(db.prepare('PRAGMA user_version').get().user_version, 0);
     const cols = db.prepare('PRAGMA table_info(patients)').all().map((c) => c.name);
     assert.deepStrictEqual(cols, ['id', 'phone_e164', 'created_at']);
+    db.close();
+  });
+
+  test('an untyped id column is refused too, not just a mismatched-type one (fix round 1, finding 3)', () => {
+    const dbPath = tmpDbPath('sahay-schema-version-untyped-pk-');
+    const db = new DatabaseSync(dbPath);
+    // `id PRIMARY KEY` with no type keyword — PRAGMA table_info reports its
+    // type as the empty string. An untyped id is not a TEXT id.
+    db.exec(`
+      CREATE TABLE patients (
+        id PRIMARY KEY,
+        phone_e164 TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+      );
+    `);
+    let error;
+    try {
+      checkAndMigrate(db, SCHEMA_SQL, dbPath);
+    } catch (e) {
+      error = e;
+    }
+    assert.ok(error instanceof IncompatibleDatabaseError);
+    assert.match(error.message, /patients\.id is \(untyped\), schema requires TEXT/);
+    assert.strictEqual(db.prepare('PRAGMA user_version').get().user_version, 0);
     db.close();
   });
 

@@ -13,7 +13,16 @@
  * caught once, in one place, before anything is created.
  */
 
-const URL_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
+// One or more slashes after the colon, not exactly "://" (minor fix, round
+// 1): api/db_path.py's equivalent accepts the collapsed single-slash form
+// because pathlib.Path() collapses "//" to "/" the moment a raw value is
+// wrapped in it — see that file's comment for the concrete example. Node
+// never does that collapse on its own, so this file was never actually
+// bitten by it, but a value could still arrive here already collapsed by
+// something upstream (a caller doing its own path.resolve() first, a value
+// read back out of a Path-like structure). Matching Python's pattern here
+// removes that divergence rather than relying on "Node happens not to".
+const URL_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/+/;
 // Anchored at both ends: the whole prefix, or nothing. Deterministic, so it
 // is linear in the prefix length however long that prefix is.
 const CLEAN_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*$/;

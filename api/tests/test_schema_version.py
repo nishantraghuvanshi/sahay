@@ -86,40 +86,74 @@ class TestVerdictCurrent:
 
 class TestVerdictMigratable:
     def test_a_compatible_database_missing_gap_columns_gets_them_added(self, tmp_path):
+        # TEXT id, current column names, stripped to only the columns that
+        # existed before the caregiver-app gap columns were added — every
+        # one of those gap columns is nullable or DEFAULT-constant. A
+        # `medications` table deliberately isn't part of this fixture: its
+        # missing gap columns include NOT-NULL-no-DEFAULT and non-constant-
+        # DEFAULT ones, which is the separate, now-refusing case in
+        # TestVerdictIncompatible below (fix round 1, finding 1).
         con = _open(tmp_path / "old.db")
         con.executescript(
             "CREATE TABLE patients (id TEXT PRIMARY KEY, phone_e164 TEXT NOT NULL UNIQUE, "
             "created_at TEXT NOT NULL);"
-            "CREATE TABLE medications (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, "
-            "name TEXT NOT NULL, dose TEXT NOT NULL);"
         )
         result = schema_version.check_and_migrate(con, SCHEMA_SQL, "old.db")
         assert result["verdict"] == "migrated"
         assert result["from"] == 0
         assert result["version"] == 1
         assert "patients.timezone" in result["added"]
-        assert "medications.slots" in result["added"]
+        assert "patients.caregiver_id" in result["added"]
+        assert result["skipped"] == []
+        assert result["skipped_indexes"] == []
         assert con.execute("PRAGMA user_version").fetchone()[0] == 1
         con.close()
 
-    def test_never_adds_a_not_null_no_default_column_it_is_skipped_not_thrown(self, tmp_path):
+
+class TestVerdictIncompatible:
+    # Fix round 1, finding 1: this used to be "never adds a NOT NULL column
+    # with no DEFAULT — it is skipped, not thrown", asserting a `migrated`
+    # verdict with `skipped` columns AND user_version stamped anyway. That
+    # stamped the database as fully current despite a stranded UNIQUE index
+    # gap (idx_meds_patient_name_start needs start_date, which cannot be
+    # safely ALTERed) — every later open then took the fast `current` path
+    # and the gap became permanent and invisible. Fixed to refuse instead,
+    # and to refuse identically on every subsequent open.
+    def test_a_column_sqlite_cannot_safely_alter_in_is_refused_not_silently_certified(self, tmp_path):
         con = _open(tmp_path / "stripped.db")
         con.executescript(
             "CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);"
             "CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);"
             "INSERT INTO medications (id, name) VALUES ('m1', 'Metformin');"
         )
-        result = schema_version.check_and_migrate(con, SCHEMA_SQL, "stripped.db")
-        assert result["verdict"] == "migrated"
-        assert "medications.patient_id" in result["skipped"]
-        assert "medications.dose" in result["skipped"]
-        assert "medications.slots" in result["added"]  # has a DEFAULT — safe
+
+        with pytest.raises(schema_version.IncompatibleDatabaseError):
+            schema_version.check_and_migrate(con, SCHEMA_SQL, "stripped.db")
+        # user_version must NOT be stamped — this is the whole point of the fix.
+        assert con.execute("PRAGMA user_version").fetchone()[0] == 0
         row = con.execute("SELECT name FROM medications WHERE id = 'm1'").fetchone()
         assert row["name"] == "Metformin"
+
+        # Visible on EVERY subsequent open, not once.
+        with pytest.raises(schema_version.IncompatibleDatabaseError):
+            schema_version.check_and_migrate(con, SCHEMA_SQL, "stripped.db")
+        assert con.execute("PRAGMA user_version").fetchone()[0] == 0
         con.close()
 
+    def test_the_refusal_message_names_which_columns_could_not_complete(self, tmp_path):
+        con = _open(tmp_path / "stripped-message.db")
+        con.executescript(
+            "CREATE TABLE medications (id TEXT PRIMARY KEY, name TEXT);"
+            "CREATE TABLE dose_events (id TEXT PRIMARY KEY, status TEXT);"
+        )
+        with pytest.raises(schema_version.IncompatibleDatabaseError) as exc_info:
+            schema_version.check_and_migrate(con, SCHEMA_SQL, "stripped-message.db")
+        message = str(exc_info.value)
+        assert "medications.patient_id" in message
+        assert "medications.dose" in message
+        assert "index statement(s) could not run" in message
+        con.close()
 
-class TestVerdictIncompatible:
     def test_integer_primary_key_where_schema_says_text_is_refused(self, tmp_path):
         con = _open(tmp_path / "intpk.db")
         con.executescript(
@@ -132,6 +166,25 @@ class TestVerdictIncompatible:
         assert con.execute("PRAGMA user_version").fetchone()[0] == 0
         cols = [r[1] for r in con.execute("PRAGMA table_info(patients)")]
         assert cols == ["id", "phone_e164", "created_at"]
+        con.close()
+
+    def test_an_untyped_id_column_is_refused_too_not_just_a_mismatched_type_one(self, tmp_path):
+        """Fix round 1, finding 3: `if live_type and ...` treated an untyped
+        id column (PRAGMA table_info reports its type as "") the same as
+        "column absent", silently skipping the mismatch — Node already
+        caught this case, so the two runtimes disagreed. An untyped id is
+        not a TEXT id."""
+        con = _open(tmp_path / "untyped-pk.db")
+        con.executescript(
+            "CREATE TABLE patients (id PRIMARY KEY, "
+            "phone_e164 TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);"
+        )
+        with pytest.raises(
+            schema_version.IncompatibleDatabaseError,
+            match=r"patients\.id is \(untyped\), schema requires TEXT",
+        ):
+            schema_version.check_and_migrate(con, SCHEMA_SQL, "untyped-pk.db")
+        assert con.execute("PRAGMA user_version").fetchone()[0] == 0
         con.close()
 
     def test_a_pre_rename_column_is_refused_never_auto_added_beside_slots(self, tmp_path):

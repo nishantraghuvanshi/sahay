@@ -75,6 +75,9 @@ def _split_top_level(text: str) -> list[str]:
     return parts
 
 
+_TABLE_DECLARATION_RE = re.compile(r"CREATE TABLE IF NOT EXISTS \w+")
+
+
 def parse_table_columns(schema_sql: str) -> dict[str, list[tuple[str, str]]]:
     """@returns table name -> declared [(column, decl), ...], CREATE TABLE order."""
     tables: dict[str, list[tuple[str, str]]] = {}
@@ -89,6 +92,24 @@ def parse_table_columns(schema_sql: str) -> dict[str, list[tuple[str, str]]]:
                 continue  # a standalone table-level constraint, if one ever appears
             cols.append((m.group(1), m.group(2).strip()))
         tables[table_name] = cols
+
+    # Minor fix, round 1: _TABLE_RE requires a closing "\n);" — a future
+    # table whose closing "); " lands on the same line as its last column
+    # (no newline before it) would silently vanish from this authority's
+    # output instead of failing loudly, and every open of every database
+    # would then treat that table as though schema.sql never declared it.
+    # Count "CREATE TABLE IF NOT EXISTS" occurrences independently of the
+    # paired regex and refuse to proceed on a mismatch, rather than
+    # trusting the paired regex found everything it should have.
+    declared_count = len(_TABLE_DECLARATION_RE.findall(schema_sql))
+    if len(tables) != declared_count:
+        raise RuntimeError(
+            f"parse_table_columns found {len(tables)} table(s) but schema.sql declares "
+            f"{declared_count} — a CREATE TABLE statement failed to parse (its closing "
+            '");" may not be on its own line). Refusing to derive a partial column list '
+            "from the single source of truth rather than silently dropping a table."
+        )
+
     return tables
 
 
@@ -236,8 +257,16 @@ def check_and_migrate(con: sqlite3.Connection, schema_sql: str, db_label: str) -
         want_type = pk_decl.split()[0]
         live = {r[1]: r[2] for r in con.execute(f"PRAGMA table_info({table})")}
         live_type = live.get("id")
-        if live_type and live_type.upper() != want_type.upper():
-            problems.append(f"{table}.id is {live_type}, schema requires {want_type}")
+        # `is not None`, not a truthy check: PRAGMA table_info reports an
+        # untyped column (e.g. `id PRIMARY KEY` with no type keyword) as the
+        # empty string, and Python's `if live_type` treats "" the same as
+        # "column absent" — silently skipping the mismatch instead of
+        # flagging it. An untyped id is not a TEXT id; this used to migrate
+        # such a table instead of refusing it, disagreeing with the Node
+        # implementation, which does catch it (fix round 1, finding 3).
+        if live_type is not None and live_type.upper() != want_type.upper():
+            type_label = live_type or "(untyped)"
+            problems.append(f"{table}.id is {type_label}, schema requires {want_type}")
 
     if problems:
         raise IncompatibleDatabaseError(
@@ -258,6 +287,22 @@ def check_and_migrate(con: sqlite3.Connection, schema_sql: str, db_label: str) -
     if found_version == target_version:
         return {"verdict": "current", "version": target_version}
 
+    # Deviation from the brief, ruled on deliberately (fix round 1, finding
+    # 4 — not an oversight): task-4-brief.md says "Version 0 (no marker,
+    # pre-reconciliation) is incompatible." This code instead falls through
+    # to the migratable branch below for a version-0 database whose SHAPE
+    # is otherwise compatible (right PK types, no pre-rename column names)
+    # — the rename/PK-type checks above already ran and would have refused
+    # it if it actually were the pre-reconciliation shape. A strict reading
+    # of the brief would refuse every database that predates this task
+    # (there was no marker anywhere before it), including every currently-
+    # working dev database, and would make the `migratable` verdict
+    # unreachable at target=1 since there is no version 0.5 to migrate
+    # from. Ruled that the behaviour stands: "version 0" in the brief means
+    # the specific pre-reconciliation shape, which the shape checks already
+    # catch by construction, not literally every database that has never
+    # had a version stamped on it.
+    #
     # Migratable: add any column an existing table is missing FIRST — before
     # creating any wholly-new table or index, because schema.sql may declare
     # an index on a column an old table doesn't have yet
@@ -282,9 +327,44 @@ def check_and_migrate(con: sqlite3.Connection, schema_sql: str, db_label: str) -
     # Now safe to create any wholly-new table and every index that only
     # references columns that were either already there or just added
     # above. An index on a column this migration had to skip
-    # (_is_safe_to_add) cannot be created either — that failure is caught
-    # and logged rather than aborting the whole migration.
+    # (_is_safe_to_add) cannot be created either — that failure is caught,
+    # not swallowed: see below.
     skipped_indexes = _create_tables_and_indexes(con, schema_sql, existing)
+
+    # Fix round 1, finding 1: this used to stamp user_version unconditionally
+    # here, regardless of `skipped`/`skipped_indexes` — so a migration that
+    # knowingly could not add a column, or could not create an index that
+    # depended on it (idx_meds_patient_name_start is UNIQUE — the exact
+    # idempotency guarantee TRD §3.1 requires), still recorded the database
+    # as fully current. Every later open then took the `current` branch
+    # above and returned instantly: the gap became permanent and invisible,
+    # which is precisely the failure this whole task exists to remove.
+    #
+    # Folded into the `incompatible` verdict rather than adding a fourth
+    # one: the brief specifies three verdicts, and an unstamped, retried-
+    # on-every-open refusal already delivers "visible on every subsequent
+    # open" — no separate `incomplete` bookkeeping is needed for that. The
+    # columns that WERE safely added above are left in place (they are
+    # harmless additive changes on their own); only the version stamp —
+    # the claim "this database is fully current" — is withheld. A future
+    # open of this same database re-runs this exact code path (found_
+    # version is still behind target, tables still exist), gets the same
+    # added/skipped verdict again deterministically, and raises again —
+    # that is what makes it visible on every open rather than once, not a
+    # stored "incomplete" flag.
+    if skipped or skipped_indexes:
+        raise IncompatibleDatabaseError(
+            f"Refusing to certify {db_label} as migrated to version {target_version} "
+            f"(found user_version={found_version}): the migration could not complete "
+            f"safely. {len(skipped)} column(s) could not be added — "
+            f"{', '.join(skipped) or 'none'} — {len(skipped_indexes)} index statement(s) "
+            "could not run as a result. SQLite cannot ALTER TABLE ADD COLUMN a NOT NULL "
+            "column with no DEFAULT, or any column whose DEFAULT is not a constant, onto "
+            "a table that already has rows. user_version was left unchanged so this "
+            "refusal repeats on every open until the database is rebuilt — do not treat "
+            "this as transient."
+        )
+
     con.execute(f"PRAGMA user_version = {target_version}")
     return {
         "verdict": "migrated",
