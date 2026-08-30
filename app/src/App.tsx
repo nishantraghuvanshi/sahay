@@ -27,6 +27,7 @@ import Calendar from './screens/Calendar'
 import MedicinesEdit from './screens/MedicinesEdit'
 import NotFound from './screens/NotFound'
 import Settings from './screens/Settings'
+import SetupChrome from './setup/SetupChrome'
 import Checkout from './screens/Checkout'
 
 /**
@@ -50,18 +51,23 @@ export default function App() {
       {/* Onboarding writes against the signed-in caregiver, so it is behind the
           same gate as the app itself — step 2 of login is what opens it. */}
       <Route element={<RequireAuth />}>
-        <Route path="/setup">
-          {/* First stop after signup: hear the agent before describing a parent to it. */}
-          <Route path="meet" element={<Meet />} />
-          <Route path="parent" element={<Parent />} />
-          <Route path="prescription" element={<Prescription />} />
-          <Route path="analysing" element={<Analysing />} />
-          <Route path="schedule" element={<Schedule />} />
-          <Route path="consent" element={<Consent />} />
+        {/* SetupChrome is the only chrome these screens get: a sign-out. They sit
+            outside AppShell on purpose, and that left the screens a stuck
+            caregiver sees most often with no way out of the session at all. */}
+        <Route element={<SetupChrome />}>
+          <Route path="/setup">
+            {/* First stop after signup: hear the agent before describing a parent to it. */}
+            <Route path="meet" element={<Meet />} />
+            <Route path="parent" element={<Parent />} />
+            <Route path="prescription" element={<Prescription />} />
+            <Route path="analysing" element={<Analysing />} />
+            <Route path="schedule" element={<Schedule />} />
+            <Route path="consent" element={<Consent />} />
+          </Route>
+          {/* Checkout is signed-in but chrome-free, like /setup: a tab bar during a
+              payment is an invitation to wander off mid-transfer. */}
+          <Route path="/checkout" element={<Checkout />} />
         </Route>
-        {/* Checkout is signed-in but chrome-free, like /setup: a tab bar during a
-            payment is an invitation to wander off mid-transfer. */}
-        <Route path="/checkout" element={<Checkout />} />
       </Route>
 
       {/* handoff — no login, no chrome, its own layout (TRD §11) */}

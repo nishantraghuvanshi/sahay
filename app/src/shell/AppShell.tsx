@@ -6,6 +6,7 @@ import { NAV, TABS } from './nav'
 import { Bar, Dot, Wordmark } from '../ui'
 import { useCareRecord } from '../api/hooks'
 import { LogoutButton } from '../auth/LogoutButton'
+import SessionBar from './SessionBar'
 
 /**
  * One shell, two layouts: sidebar + top bar on desktop, bottom tab bar on a phone.
@@ -33,6 +34,11 @@ export default function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* The phone layout's only chrome was the tab bar, and that bar is capped at
+          four items by the design contract — so sign-out lived on /settings and
+          nowhere else. This strip is where it goes on every other screen; the
+          desktop branch above does not need one, the sidebar carries it. */}
+      <SessionBar />
       <main id="main" ref={mainRef} tabIndex={-1} className="min-h-0 flex-1 overflow-auto p-4">
         <Outlet />
       </main>

@@ -33,7 +33,10 @@ export function Wordmark({ className, size }: { className?: string; size?: numbe
     >
       <span className="tracking-[-0.01em]">Voxikin</span>
       <span className="absolute inset-x-0 bottom-0 h-px bg-current" />
-      <span className="absolute bottom-[-0.1em] left-[0.38em] size-[0.2em] rounded-full bg-accent" />
+      {/* Centred under the first "i", measured in the display face at 1.702-1.969em,
+          so the dot reads as that letter's tittle come to rest on the rule. Was
+          0.38em while the word was "Kinvox", where the i is the second glyph. */}
+      <span className="absolute bottom-[-0.1em] left-[1.74em] size-[0.2em] rounded-full bg-accent" />
     </span>
   )
 }
