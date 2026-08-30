@@ -780,3 +780,40 @@ describe('data_collection — a backstop when report_outcome is not called', () 
     assert.strictEqual(cfg.platform_settings.workspace_overrides, undefined);
   });
 });
+
+describe('call duration — a stuck call must end on its own', () => {
+  // Two scenarios still loop: the agent repeats one refusal until the turn cap
+  // and never files an outcome. Every attempt to fix that in the prompt has
+  // half-worked, because the model cannot count its own turns — it has no idea
+  // it is on the eighth identical reply.
+  //
+  // So bound it outside the model. A dose call that has run five minutes has
+  // failed whatever it contains, and on a real line the caller is stuck on the
+  // phone with it. The cap ends the call, the post-call webhook still fires,
+  // and tier-2 extraction still files an outcome — so a bounded call is a
+  // recorded call, not a lost one.
+  test('caps the call well below the five-minute default', () => {
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    const secs = cfg.conversation_config.conversation.max_duration_seconds;
+    assert.ok(secs > 0 && secs <= 240, `expected a real cap, got ${secs}`);
+  });
+
+  test('says something before hanging up on them', () => {
+    // A call that simply stops is indistinguishable from the line dropping,
+    // which for an elderly caller is the failure this product exists to avoid.
+    const a = new ElevenLabsTransportAdapter({});
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    const msg = cfg.conversation_config.agent.max_conversation_duration_message;
+    assert.ok(msg && msg.length > 10, 'a closing line is required');
+    assert.doesNotMatch(msg, /\{\{/, 'must not carry an unfilled placeholder');
+  });
+
+  test('both are configurable from providers.yaml', () => {
+    const a = new ElevenLabsTransportAdapter({}, {
+      transport: { elevenlabs: { max_call_seconds: 90 } },
+    });
+    const cfg = a.buildAssistantConfig(STRATEGY, {}, 'https://x');
+    assert.strictEqual(cfg.conversation_config.conversation.max_duration_seconds, 90);
+  });
+});
