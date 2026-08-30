@@ -203,7 +203,10 @@ describe('createDoseTick', () => {
       callId: 'call-stale-1',
       direction: 'outbound',
     });
-    await repo.endSession('sess-stale-1', 'dropped');
+    // Inject the same clock the tick runs on. Without this the row is stamped
+    // with real wall-clock time while the assertion reasons about NOW, so the
+    // test passes only while the two happen to coincide.
+    await repo.endSession('sess-stale-1', 'dropped', NOW);
 
     const farFuture = new Date(NOW.getTime() + 60 * 60_000); // 1h later, past a 15min window
     const dial = fakeDial();

@@ -578,13 +578,20 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @param {string} sessionId
    * @param {string} status - completed | dropped | abandoned
    */
-  async endSession(sessionId, status) {
+  async endSession(sessionId, status, now = new Date()) {
     if (!SESSION_END_STATES.includes(status)) {
       throw new Error(
         `Invalid session status: "${status}". Expected one of ${SESSION_END_STATES.join(', ')}`
       );
     }
-    const nowIso = new Date().toISOString();
+    // Injectable clock, matching dueDoseEvents() and expireStaleSessions().
+    // This method used to stamp real wall-clock time regardless, so any caller
+    // running on an injected clock wrote an ended_at the injected clock could
+    // never reason about — the two are compared directly by
+    // expireStaleSessions. A test pinned to a fixed NOW therefore passed only
+    // while real time happened to sit inside its window, and began failing the
+    // moment it drifted out. Same clock in, same clock out.
+    const nowIso = now.toISOString();
     const result = this.db
       .prepare('UPDATE sessions SET status = ?, ended_at = ?, updated_at = ? WHERE session_id = ?')
       .run(status, nowIso, nowIso, sessionId);

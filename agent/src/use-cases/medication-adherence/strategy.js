@@ -181,10 +181,25 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
   getConfig() {
     return {
       version: this.config.version,
-      silenceTimeoutSeconds: 15,
+
+      // Silence handling. The caller is elderly and may take 5-8 seconds to
+      // process a question and answer, so silence must be answered by a gentle
+      // re-prompt, not by hanging up. Vapi's customer.speech.timeout hooks do
+      // the prompting; silenceTimeoutSeconds is only the hard backstop and MUST
+      // stay above idleEndSeconds or the call dies before the hooks finish.
+      // Vapi's own guidance is to allow 2-3s of audio processing on top of each
+      // configured timeout, so 6 here lands nearer 8-9s in practice.
+      idlePromptSeconds: 6,
+      idleEscalateSeconds: 14,
+      idleEndSeconds: 24,
+      silenceTimeoutSeconds: 30,
+
       maxDurationSeconds: 180,
-      maxIdleSeconds: 30,
-      backgroundSound: 'office',
+
+      // Off, not 'office'. An office ambience under a call to a possibly
+      // hard-of-hearing elderly patient costs intelligibility and contradicts
+      // the persona; it buys nothing back.
+      backgroundSound: 'off',
       denoiseEnabled: true,
       temperature: 0.3,
       maxTokens: 250,

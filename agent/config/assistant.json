@@ -100,9 +100,62 @@
   "firstMessage": "नमस्ते रोहन जी, मैं आशा बोल रही हूँ। आपका Crocin लेने का समय हो गया है। क्या आपने ले लिया है?",
   "firstMessageInterruptionsEnabled": false,
   "voicemailMessage": "नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।",
-  "silenceTimeoutSeconds": 15,
+  "hooks": [
+    {
+      "on": "customer.speech.timeout",
+      "name": "idle_gentle_prompt",
+      "options": {
+        "timeoutSeconds": 6,
+        "triggerMaxCount": 3,
+        "triggerResetMode": "onUserSpeech"
+      },
+      "do": [
+        {
+          "type": "say",
+          "exact": "जी, मैं सुन रही हूँ। आराम से बताइए।"
+        }
+      ]
+    },
+    {
+      "on": "customer.speech.timeout",
+      "name": "idle_check_presence",
+      "options": {
+        "timeoutSeconds": 14,
+        "triggerMaxCount": 2,
+        "triggerResetMode": "onUserSpeech"
+      },
+      "do": [
+        {
+          "type": "say",
+          "exact": "क्या आप वहाँ हैं?"
+        }
+      ]
+    },
+    {
+      "on": "customer.speech.timeout",
+      "name": "idle_end_call",
+      "options": {
+        "timeoutSeconds": 24,
+        "triggerMaxCount": 1,
+        "triggerResetMode": "onUserSpeech"
+      },
+      "do": [
+        {
+          "type": "say",
+          "exact": "ठीक है, मैं बाद में फिर कोशिश करूँगी। अपना ख़याल रखियेगा।"
+        },
+        {
+          "type": "tool",
+          "tool": {
+            "type": "endCall"
+          }
+        }
+      ]
+    }
+  ],
+  "silenceTimeoutSeconds": 30,
   "maxDurationSeconds": 180,
-  "backgroundSound": "office",
+  "backgroundSound": "off",
   "backgroundSpeechDenoisingPlan": {
     "smartDenoisingPlan": {
       "enabled": true

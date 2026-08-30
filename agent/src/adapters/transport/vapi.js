@@ -816,6 +816,48 @@ class VapiTransportAdapter extends TransportPort {
       firstMessage,
       firstMessageInterruptionsEnabled: false,  // Don't let user interrupt the greeting
       voicemailMessage: 'नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
+      // Answer silence with a prompt, not a hangup. Three escalating
+      // customer.speech.timeout hooks (docs.vapi.ai/assistants/idle-messages);
+      // silenceTimeoutSeconds below is only the backstop after these have run.
+      // triggerResetMode 'onUserSpeech' so a patient who answers late resets the
+      // ladder instead of carrying strikes for the rest of the call.
+      hooks: [
+        {
+          on: 'customer.speech.timeout',
+          name: 'idle_gentle_prompt',
+          options: {
+            timeoutSeconds: strategyConfig.idlePromptSeconds,
+            triggerMaxCount: 3,
+            triggerResetMode: 'onUserSpeech',
+          },
+          // Deliberately not a repeat of the question: an elderly caller who is
+          // still thinking should be given room, not asked again.
+          do: [{ type: 'say', exact: 'जी, मैं सुन रही हूँ। आराम से बताइए।' }],
+        },
+        {
+          on: 'customer.speech.timeout',
+          name: 'idle_check_presence',
+          options: {
+            timeoutSeconds: strategyConfig.idleEscalateSeconds,
+            triggerMaxCount: 2,
+            triggerResetMode: 'onUserSpeech',
+          },
+          do: [{ type: 'say', exact: 'क्या आप वहाँ हैं?' }],
+        },
+        {
+          on: 'customer.speech.timeout',
+          name: 'idle_end_call',
+          options: {
+            timeoutSeconds: strategyConfig.idleEndSeconds,
+            triggerMaxCount: 1,
+            triggerResetMode: 'onUserSpeech',
+          },
+          do: [
+            { type: 'say', exact: 'ठीक है, मैं बाद में फिर कोशिश करूँगी। अपना ख़याल रखियेगा।' },
+            { type: 'tool', tool: { type: 'endCall' } },
+          ],
+        },
+      ],
       silenceTimeoutSeconds: strategyConfig.silenceTimeoutSeconds,
       maxDurationSeconds: strategyConfig.maxDurationSeconds,
       backgroundSound: strategyConfig.backgroundSound,
