@@ -39,6 +39,32 @@ class ElevenLabsTransportAdapter extends TransportPort {
     this.agentId = process.env.ELEVENLABS_AGENT_ID || null;
     this.phoneNumberId =
       config.providersConfig?.transport?.elevenlabs?.phone_number_id || null;
+
+    const KNOWN_TOOLS = new Set(['report_outcome', 'capture_field']);
+
+    if (config.app) {
+      config.app.post('/el/tools/:name', async (req, res) => {
+        const name = req.params.name;
+
+        // Allow-list rather than pass-through. This endpoint is public through
+        // the tunnel, and forwarding an arbitrary name into the event bus would
+        // let anyone who finds the URL emit events the engine acts on.
+        if (!KNOWN_TOOLS.has(name)) {
+          logger.log('el_tool_unknown', { name });
+          return res.status(404).json({ ok: false, error: 'unknown tool' });
+        }
+
+        try {
+          this.engine.getEventBus().emit(`tool:${name}`, req.body || {});
+          logger.log('el_tool_dispatched', { name });
+          return res.json({ ok: true });
+        } catch (err) {
+          logger.log('el_tool_failed', { name, error: err.message });
+          return res.status(500).json({ ok: false, error: err.message });
+        }
+      });
+    }
+
     logger.log('transport_started', { transport: 'elevenlabs', webhookUrl: this.webhookUrl });
   }
 
