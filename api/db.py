@@ -12,6 +12,7 @@ what stops a dose drifting a day when the server and the phone disagree about zo
 import json
 import os
 import sqlite3
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -24,6 +25,24 @@ SCHEMA = ROOT / "schema.sql"
 FIXTURE = ROOT.parent / "scripts" / "mock-api.json"
 
 DB_PATH = Path(os.getenv("VOXIKIN_DB", ROOT / "voxikin.db"))
+
+# Turso (libSQL) when the URL is set, local SQLite file otherwise.
+#
+# Deployment moved this database off the API's own disk: the free tiers that run
+# this service cannot attach a persistent one, so a local file is erased on every
+# redeploy — and the voice agent, which shares this database and nothing else,
+# would be reading a different copy anyway.
+#
+# Local stays on stdlib sqlite3 rather than pointing libsql at a file. It keeps a
+# fresh clone working with nothing to provision, and it keeps the test suite on
+# the driver it was written against.
+TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL", "").strip()
+TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "").strip()
+
+
+def is_remote() -> bool:
+    return bool(TURSO_DATABASE_URL)
+
 
 # The fixture is written against this date; every timestamp in it is shifted by
 # whole days onto today, so "yesterday" stays yesterday however long the file sits
@@ -44,9 +63,110 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def connect() -> sqlite3.Connection:
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
+# ─────────────────────────────────────────────────────────────────────────
+# libSQL row compatibility.
+#
+# The libsql driver (0.1.11) returns plain tuples and its Connection is a
+# builtins type with no __dict__, so `con.row_factory = sqlite3.Row` raises
+# AttributeError rather than being ignored. Every read in this API does
+# `row["column"]` or `dict(row)` — db.decode(), _migrate()'s PRAGMA walk, and
+# ~40 call sites in the route modules — so without this the port is a rewrite of
+# all of them instead of a change to connect().
+#
+# cursor.description survives, which is all a row wrapper needs.
+
+
+class Row(Mapping):
+    """A sqlite3.Row work-alike: row["col"], row[0], dict(row), .keys()."""
+
+    __slots__ = ("_cols", "_vals", "_idx")
+
+    def __init__(self, cols: tuple[str, ...], vals: tuple):
+        self._cols = cols
+        self._vals = vals
+        self._idx = {c: i for i, c in enumerate(cols)}
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            try:
+                return self._vals[self._idx[key]]
+            except KeyError:
+                # sqlite3.Row raises IndexError, not KeyError, for a bad column.
+                raise IndexError(f"No item with that key: {key!r}") from None
+        return self._vals[key]
+
+    def keys(self) -> list[str]:
+        return list(self._cols)
+
+    def __iter__(self):
+        # Mapping iterates keys. sqlite3.Row iterates values, but nothing here
+        # relies on that, and keys-iteration is what keeps dict(row) correct.
+        return iter(self._cols)
+
+    def __len__(self) -> int:
+        return len(self._cols)
+
+    def __repr__(self) -> str:
+        return f"<Row {dict(self)!r}>"
+
+
+class _LibsqlCursor:
+    """Wraps a libsql cursor so its rows come back as Row."""
+
+    def __init__(self, cur):
+        self._cur = cur
+        self._cols = tuple(d[0] for d in (cur.description or ()))
+
+    def _wrap(self, row):
+        return None if row is None else Row(self._cols, row)
+
+    def fetchone(self):
+        return self._wrap(self._cur.fetchone())
+
+    def fetchall(self) -> list[Row]:
+        return [self._wrap(r) for r in self._cur.fetchall()]
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class _LibsqlConnection:
+    """The slice of the sqlite3 connection API this module uses."""
+
+    def __init__(self, con):
+        self._con = con
+
+    def execute(self, sql: str, params=()) -> _LibsqlCursor:
+        # libsql wants a tuple; _Conn._q hands us a list.
+        return _LibsqlCursor(self._con.execute(sql, tuple(params)))
+
+    def executescript(self, script: str):
+        return self._con.executescript(script)
+
+    def __getattr__(self, name):
+        return getattr(self._con, name)
+
+
+def connect():
+    """A connection to Turso if configured, else the local SQLite file."""
+    if is_remote():
+        import libsql
+
+        # auth_token has to be omitted rather than passed as None: the driver
+        # types it as a string and rejects None outright. A local file path is a
+        # valid URL here and needs no token, which is how the tests reach this
+        # branch without a Turso account.
+        opts = {"auth_token": TURSO_AUTH_TOKEN} if TURSO_AUTH_TOKEN else {}
+        con = _LibsqlConnection(libsql.connect(TURSO_DATABASE_URL, **opts))
+    else:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+
+    # Foreign keys are per-connection in SQLite and must be re-armed every time.
+    # _CASCADE_PARENTS below depends on knowing whether this took effect.
     con.execute("PRAGMA foreign_keys = ON")
     return con
 
@@ -76,7 +196,7 @@ def connect() -> sqlite3.Connection:
 class _Conn:
     """The slice of asyncpg's connection API the auth modules use."""
 
-    def __init__(self, con: sqlite3.Connection, in_transaction: bool = False):
+    def __init__(self, con, in_transaction: bool = False):
         self._con = con
         # Inside `db.transaction()` the block decides when to commit. Committing
         # per statement made the rollback on the way out a no-op, so a failure
@@ -233,7 +353,7 @@ def _encode(table: str, row: dict) -> dict:
 _CASCADE_PARENTS = {"caregivers", "patients"}
 
 
-def insert(con: sqlite3.Connection, table: str, row: dict) -> None:
+def insert(con, table: str, row: dict) -> None:
     data = _encode(table, row)
     cols = ", ".join(data)
     marks = ", ".join("?" for _ in data)
@@ -251,7 +371,7 @@ def insert(con: sqlite3.Connection, table: str, row: dict) -> None:
     con.execute(f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({marks})", tuple(data.values()))
 
 
-def decode(table: str, row: sqlite3.Row) -> dict:
+def decode(table: str, row) -> dict:
     """Row -> dict with JSON columns parsed back and booleans restored."""
     out = dict(row)
     for col in JSON_COLUMNS.get(table, ()):
@@ -313,7 +433,7 @@ _ADDED_COLUMNS["dose_events"].update(
 )
 
 
-def _migrate(con: sqlite3.Connection) -> list[str]:
+def _migrate(con) -> list[str]:
     """Add columns an older database is missing. Returns what it added."""
     added = []
     for table, columns in _ADDED_COLUMNS.items():
@@ -344,22 +464,52 @@ def seed_enabled() -> bool:
     return os.getenv("VOXIKIN_SEED", "").strip().lower() in {"1", "true", "yes"}
 
 
+def migrate_on_boot() -> bool:
+    """Whether startup should apply schema.sql itself.
+
+    On a local file this is what makes a fresh clone work with nothing to
+    provision, so it stays on by default. Against Turso it is 430 statements over
+    the network on every boot, from two services that can race each other, so the
+    schema is applied once out of band instead:
+
+        turso db shell <db> < api/schema.sql
+
+    Set VOXIKIN_MIGRATE_ON_BOOT=1 to force it on anyway — useful the first time a
+    remote database is created, and for a throwaway staging one.
+    """
+    override = os.getenv("VOXIKIN_MIGRATE_ON_BOOT", "").strip().lower()
+    if override in {"1", "true", "yes"}:
+        return True
+    if override in {"0", "false", "no"}:
+        return False
+    return not is_remote()
+
+
 def init(reset: bool = False) -> None:
     """Create the schema, and seed it the first time, if seeding is switched on.
 
     Seeding only happens when `caregivers` is empty, so restarting the API never
     overwrites a schedule someone signed off through the app.
     """
-    if reset and DB_PATH.exists():
-        DB_PATH.unlink()
+    if reset:
+        if is_remote():
+            # Deleting a shared remote database is not this function's call to
+            # make, and `reset` is only ever passed by tests against a local file.
+            raise RuntimeError("init(reset=True) refuses to drop a remote database")
+        if DB_PATH.exists():
+            DB_PATH.unlink()
 
     con = connect()
     try:
-        con.executescript(SCHEMA.read_text())
-        added = _migrate(con)
-        if added:
-            import logging
-            logging.getLogger("voxikin.api").info("migrated: added %s", ", ".join(added))
+        # Seeding is checked either way: whether the schema was applied here or
+        # out of band, an empty database still wants its demo household when the
+        # demo asks for one.
+        if migrate_on_boot():
+            con.executescript(SCHEMA.read_text())
+            added = _migrate(con)
+            if added:
+                import logging
+                logging.getLogger("voxikin.api").info("migrated: added %s", ", ".join(added))
         already = con.execute("SELECT COUNT(*) FROM caregivers").fetchone()[0]
         if not already and seed_enabled():
             _seed(con)
@@ -368,7 +518,7 @@ def init(reset: bool = False) -> None:
         con.close()
 
 
-def _seed(con: sqlite3.Connection) -> None:
+def _seed(con) -> None:
     """TRD §3.2 — the seed everyone else builds against, taken from the fixture."""
     shift = _day_shift()
     data = _rebase(json.loads(FIXTURE.read_text()), shift)

@@ -1,8 +1,27 @@
 'use strict';
 
-const { DatabaseSync } = require('node:sqlite');
+// libsql, not node:sqlite. It is API-compatible with better-sqlite3 — the same
+// prepare()/get()/all()/run()/exec() surface this file already uses, still
+// synchronous — but it also speaks to a remote Turso database over the network.
+// That is what lets the agent and the Python API share one database once they
+// stop sharing a filesystem. See the constructor for the local/remote split.
+const Database = require('libsql');
 const OutcomeRepositoryPort = require('../../core/ports/repository');
 const logger = require('../../utils/logger');
+
+/**
+ * Strip libsql's per-row `_metadata` (query timings) off a result row.
+ *
+ * `.get()` attaches it; `.all()` does not. It is invisible until a row is
+ * spread or serialised — `_withDefaultTimezone` does `{ ...patientRow }` — and
+ * then it rides out through the tool payloads as a bogus field on a patient.
+ */
+function clean(row) {
+  if (!row || typeof row !== 'object') return row;
+  if (!('_metadata' in row)) return row;
+  const { _metadata, ...rest } = row;
+  return rest;
+}
 
 /** States a session may be moved into once it is no longer active. */
 const SESSION_END_STATES = ['completed', 'dropped', 'abandoned'];
@@ -80,28 +99,61 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // One database for the product, not one per lane. It used to be
     // ./data/voiceagent.db while the caregiver app wrote api/voxikin.db, and the two
     // never met: a dose moved on the calendar did not change which call was placed.
-    // VOXIKIN_DB is the same variable the Python API reads, so both land on one file.
-    this.dbPath =
+    //
+    // Deployment split the two processes across separate hosts, so a shared file
+    // stopped being possible at all — and the free tiers they run on cannot keep
+    // one anyway. TURSO_DATABASE_URL is the same variable the Python API reads,
+    // so both land on one database; without it this still opens a local file, and
+    // a clone with nothing provisioned still runs.
+    // An explicit option beats the environment, so a test that spawns a server
+    // with its own temp database is not silently redirected at the shared one.
+    this.url =
+      opts.url ||
       opts.dbPath ||
+      process.env.TURSO_DATABASE_URL ||
       process.env.VOXIKIN_DB ||
       require('path').join(__dirname, '..', '..', '..', '..', 'api', 'voxikin.db');
+    this.authToken = opts.authToken || process.env.TURSO_AUTH_TOKEN || undefined;
+    this.isRemote = /^(libsql|wss?|https?):\/\//.test(this.url);
 
-    // Ensure the data directory exists
-    const path = require('path');
-    const fs = require('fs');
-    const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // A Postgres URL here used to be taken literally as a filename — that is what
+    // created the agent/postgresql:/ directory sitting in this repo — and the
+    // failure was a database that silently had no tables rather than an error.
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(this.url) && !this.isRemote) {
+      throw new Error(
+        `Unusable database URL scheme: ${this.url.split('://')[0]}://. This adapter ` +
+          'speaks SQLite/libSQL only — use a libsql:// or https:// Turso URL, or a ' +
+          'filesystem path.'
+      );
+    }
+    // Kept for the boot log and for callers that still read it.
+    this.dbPath = this.isRemote ? null : this.url;
+
+    if (!this.isRemote) {
+      // Ensure the data directory exists
+      const path = require('path');
+      const fs = require('fs');
+      const dir = path.dirname(this.url);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
     }
 
-    this.db = new DatabaseSync(this.dbPath);
-    this.db.exec('PRAGMA journal_mode = WAL;');
+    this.db = new Database(this.url, this.authToken ? { authToken: this.authToken } : {});
+
+    if (!this.isRemote) {
+      // Both of these describe a local file being shared between processes on one
+      // machine, and neither means anything to a remote server: Turso is not
+      // journalling to a WAL we can see, and it serialises writers itself rather
+      // than handing back SQLITE_BUSY for us to wait out.
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      // Wait rather than fail when another process holds the write lock. SQLite is
+      // single-writer, and seed-medications.js / ground-truth.js are both meant to
+      // run against a live DB — without this they throw SQLITE_BUSY instantly
+      // instead of waiting the moment they overlap with a call in progress.
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+    }
     this.db.exec('PRAGMA foreign_keys = ON;');
-    // Wait rather than fail when another process holds the write lock. SQLite is
-    // single-writer, and seed-medications.js / ground-truth.js are both meant to
-    // run against a live DB — without this they throw SQLITE_BUSY instantly
-    // instead of waiting the moment they overlap with a call in progress.
-    this.db.exec('PRAGMA busy_timeout = 5000;');
 
     this._migrate();
   }
@@ -109,6 +161,27 @@ class SqliteRepository extends OutcomeRepositoryPort {
   /** @returns {boolean} SQLite stores across calls. */
   get isPersistent() {
     return true;
+  }
+
+  /**
+   * Whether boot should apply schema.sql itself.
+   *
+   * Locally it should: it is what makes a fresh clone run with nothing to
+   * provision. Against Turso it should not — 430 statements over the network on
+   * every boot, from two services that restart independently and would race each
+   * other. There the schema is applied once out of band:
+   *
+   *     turso db shell <db> < api/schema.sql
+   *
+   * VOXIKIN_MIGRATE_ON_BOOT overrides either way, and is read by the Python API
+   * with the same meaning. Set it the first time a remote database is created.
+   * @private
+   */
+  _migrateOnBoot() {
+    const v = String(process.env.VOXIKIN_MIGRATE_ON_BOOT || '').trim().toLowerCase();
+    if (['1', 'true', 'yes'].includes(v)) return true;
+    if (['0', 'false', 'no'].includes(v)) return false;
+    return !this.isRemote;
   }
 
   /**
@@ -128,9 +201,28 @@ class SqliteRepository extends OutcomeRepositoryPort {
     //
     // Every statement in it is CREATE TABLE/INDEX IF NOT EXISTS, so running it on
     // every boot stays safe.
+    if (!this._migrateOnBoot()) {
+      logger.log('db_migrate_skipped', { remote: this.isRemote });
+      return;
+    }
+
     const path = require('path');
     const fs = require('fs');
-    const schemaPath = path.join(__dirname, '..', '..', '..', '..', 'api', 'schema.sql');
+    // agent/ is deployed on its own, without the rest of the repo beside it, so
+    // this file is not always reachable. A vendored copy sits next to the
+    // Dockerfile for that case; the repo path stays first so local development
+    // keeps reading the one true schema rather than a copy that can drift.
+    const candidates = [
+      path.join(__dirname, '..', '..', '..', '..', 'api', 'schema.sql'),
+      path.join(__dirname, '..', '..', '..', 'schema.sql'),
+    ];
+    const schemaPath = candidates.find((p) => fs.existsSync(p));
+    if (!schemaPath) {
+      throw new Error(
+        `schema.sql not found (looked in ${candidates.join(', ')}). Apply it out of ` +
+          'band and set VOXIKIN_MIGRATE_ON_BOOT=0, or vendor a copy into agent/.'
+      );
+    }
     this.db.exec(fs.readFileSync(schemaPath, 'utf8'));
 
     // CREATE TABLE IF NOT EXISTS never alters a table that already exists,
@@ -276,7 +368,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async findPatientByPhone(phone) {
     const stmt = this.db.prepare(`${PATIENT_SELECT} WHERE p.phone_e164 = ?`);
-    const row = stmt.get(phone);
+    const row = clean(stmt.get(phone));
     return row ? _withDefaultTimezone(row) : null;
   }
 
@@ -316,7 +408,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @returns {Object|null}
    */
   async findPatientById(patientId) {
-    const row = this.db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId);
+    const row = clean(this.db.prepare('SELECT * FROM patients WHERE id = ?').get(patientId));
     return row ? _withDefaultTimezone(row) : null;
   }
 
@@ -388,7 +480,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
         : undefined,
     });
 
-    const row = this.db.prepare(`${PATIENT_SELECT} WHERE p.id = ?`).get(patientId);
+    const row = clean(this.db.prepare(`${PATIENT_SELECT} WHERE p.id = ?`).get(patientId));
     return _withDefaultTimezone(row);
   }
 
@@ -463,7 +555,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @returns {Object|null}
    */
   async getSession(sessionId) {
-    return this.db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId) || null;
+    return clean(this.db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId)) || null;
   }
 
   /**
@@ -568,7 +660,8 @@ class SqliteRepository extends OutcomeRepositoryPort {
   async findResumableSession(patientId, windowMinutes, now = new Date()) {
     const cutoff = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
     return (
-      this.db
+      clean(
+        this.db
         .prepare(
           `SELECT * FROM sessions
            WHERE patient_id = ? AND status = 'dropped' AND ended_at >= ?
@@ -584,7 +677,8 @@ class SqliteRepository extends OutcomeRepositoryPort {
            -- listSessions() and list() above.
            ORDER BY ended_at DESC, rowid DESC LIMIT 1`
         )
-        .get(patientId, cutoff) || null
+        .get(patientId, cutoff)
+      ) || null
     );
   }
 
@@ -679,9 +773,11 @@ class SqliteRepository extends OutcomeRepositoryPort {
       name: med.name,
       startDate: med.startDate,
     });
-    return this.db
-      .prepare('SELECT * FROM medications WHERE patient_id = ? AND name = ? AND start_date = ?')
-      .get(med.patientId, med.name, med.startDate);
+    return clean(
+      this.db
+        .prepare('SELECT * FROM medications WHERE patient_id = ? AND name = ? AND start_date = ?')
+        .get(med.patientId, med.name, med.startDate)
+    );
   }
 
   /**
@@ -705,7 +801,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @returns {Object|null}
    */
   async findMedicationById(medicationId) {
-    return this.db.prepare('SELECT * FROM medications WHERE id = ?').get(medicationId) || null;
+    return clean(this.db.prepare('SELECT * FROM medications WHERE id = ?').get(medicationId)) || null;
   }
 
   // ── Dose Events ─────────────────────────────────────────────────
@@ -944,9 +1040,11 @@ class SqliteRepository extends OutcomeRepositoryPort {
    * @private
    */
   async _getDoseEvent(medicationId, slotTime) {
-    return this.db
-      .prepare('SELECT * FROM dose_events WHERE medication_id = ? AND slot_time = ?')
-      .get(medicationId, slotTime);
+    return clean(
+      this.db
+        .prepare('SELECT * FROM dose_events WHERE medication_id = ? AND slot_time = ?')
+        .get(medicationId, slotTime)
+    );
   }
 
   /**
@@ -1109,7 +1207,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
    */
   async getCall(callId) {
     const stmt = this.db.prepare('SELECT * FROM calls WHERE call_id = ?');
-    return stmt.get(callId) || null;
+    return clean(stmt.get(callId)) || null;
   }
 
   /**
