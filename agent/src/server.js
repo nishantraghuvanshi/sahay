@@ -346,8 +346,16 @@ app.post('/api/call', async (req, res) => {
 
     const call = await transport.createCall(assistantId, phone, variables);
 
+    // `conversation_id` first: that is what the ElevenLabs transport returns, and
+    // reading only `call.id` — which its response does not carry — meant a
+    // successful call reported `callId: undefined`. The API turned that into
+    // `conversation_id: null`, so the caregiver was told the call was placed with
+    // nothing to link it to, and a real conversation that connected and recorded
+    // an outcome looked like a failure that had somehow returned 200. `.id` stays
+    // for the Vapi transport, whose response does carry it.
     res.json({
-      callId: call.id,
+      callId: call.conversation_id ?? call.id,
+      conversation_id: call.conversation_id ?? null,
       status: call.status || 'queued',
       phone,
       variables,
