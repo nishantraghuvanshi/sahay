@@ -16,7 +16,8 @@
     "setup-elevenlabs": "node scripts/setup-elevenlabs-agent.js",
     "setup-elevenlabs-webhook": "node scripts/setup-elevenlabs-webhook.js",
     "simulate-elevenlabs": "node scripts/simulate-elevenlabs-call.js",
-    "replay-post-call": "node scripts/replay-post-call.js"
+    "replay-post-call": "node scripts/replay-post-call.js",
+    "call": "node scripts/call.js"
   },
   "dependencies": {
     "express": "^4.19.0",

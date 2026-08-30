@@ -126,6 +126,32 @@ npm run replay-post-call -- --conversation=conv_xxx --strip-tools
 `--strip-tools` removes the tool calls, reproducing a call whose agent ended
 without reporting an outcome, which is what the analysis backstop is for.
 
+## Placing a call yourself
+
+```bash
+cd agent
+npm run call -- +918104348262 निशांत Metformin
+```
+
+Phone, name, medicine — in that order. Flags work too if you prefer them
+(`--phone`, `--name`, `--drug`, and `--caregiver` for the escalation line).
+
+It asks before dialling, because a phone rings in someone's house. `--yes`
+skips that; `--no-wait` dials and exits instead of waiting for the transcript.
+
+Before it dials it prints the two sentences the agent will actually say — the
+food instruction and the next-call promise — both read from that patient's real
+medication rows. An empty one usually means no schedule on file rather than a
+bug.
+
+It also refuses to dial on a stale `WEBHOOK_URL`. That is the failure worth
+guarding: if the tunnel has rotated, the call still connects and the agent still
+talks, but every tool call goes to a host that no longer exists, so nothing is
+recorded and the transcript looks perfectly fine.
+
+Afterwards it prints the conversation, what was recorded, the wait before each
+reply, and a warning if the agent spoke a bracket tag aloud.
+
 ## The two buttons in the app
 
 At the bottom of the Calendar screen, once onboarding is done.
