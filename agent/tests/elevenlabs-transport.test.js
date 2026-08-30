@@ -65,8 +65,18 @@ describe('buildAssistantConfig', () => {
     const a = new ElevenLabsTransportAdapter({});
     const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
-    assert.strictEqual(byName.report_outcome.execution_mode, 'sync');
+    assert.strictEqual(byName.report_outcome.execution_mode, 'immediate');
     assert.strictEqual(byName.capture_field.execution_mode, 'async');
+  });
+
+  test('every execution_mode is one the API actually accepts', () => {
+    // 'sync' was invented in the plan and rejected by a live PATCH with a 400.
+    const VALID = new Set(['immediate', 'post_tool_speech', 'async']);
+    const a = new ElevenLabsTransportAdapter({});
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    for (const t of tools) {
+      assert.ok(VALID.has(t.execution_mode), `${t.name} has invalid execution_mode ${t.execution_mode}`);
+    }
   });
 
   test('retires send_guardian_alert rather than repointing it', () => {

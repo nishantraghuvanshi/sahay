@@ -116,8 +116,16 @@ class ElevenLabsTransportAdapter extends TransportPort {
    *
    * The shape is taken from a live tool on the source agent, not from the prose
    * docs, which do not specify it. `execution_mode` mirrors tools.json's `async`
-   * flag: report_outcome is synchronous because two of its outcomes alert the
-   * family, and the agent must not talk past a write that has not landed.
+   * flag, but the two blocking-mode values are otherwise inferred, not
+   * documented — ElevenLabs's OpenAPI spec gives the enum
+   * ('immediate' | 'post_tool_speech' | 'async') with no descriptions at all.
+   * We use 'immediate' rather than 'post_tool_speech' for report_outcome:
+   * the source agent's `send_guardian_alert` tool paired 'post_tool_speech'
+   * with a `pre_tool_speech` field, i.e. it blocks but speaks a filler line
+   * first ("let me just note that down...") before the write lands. Two of
+   * report_outcome's outcomes alert the patient's family, and we do not want
+   * the agent narrating that write before it has landed, so 'immediate' —
+   * blocking, no filler — is the closer fit.
    */
   _toolDeclaration(tool, webhookUrl) {
     const fn = tool.function || tool;
@@ -127,7 +135,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
       name: fn.name,
       description: fn.description,
       response_timeout_secs: 10,
-      execution_mode: tool.async === true ? 'async' : 'sync',
+      execution_mode: tool.async === true ? 'async' : 'immediate',
       api_schema: {
         kind: 'webhook',
         url: `${webhookUrl}/el/tools/${fn.name}`,
