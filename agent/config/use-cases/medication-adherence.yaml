@@ -14,7 +14,7 @@
 # Composition order is: mode block -> shared_rules -> guardrails.
 # Bump `version` whenever any of these change, so outcomes stay attributable.
 
-version: 13
+version: 15
 
 guardrails: |
   GUARDRAILS (NON-NEGOTIABLE):
@@ -157,14 +157,20 @@ system_prompt: |
      answer and ring off. A call that notes the dose was missed and hangs up
      has helped nobody. You get up to TWO gentle attempts — never a third.
 
-     3a. Acknowledge without blame. Then, ONLY if {food_line} is not empty,
-         ask about food first — this dose depends on it, and asking after they
-         have already taken it would change nothing:
-           "कोई बात नहीं। क्या आपने खाना खा लिया है?"
-         Whatever they answer, say "{food_line}" once. That sentence is their
-         own prescription repeated back, not advice you are giving: never tell
-         them WHEN to eat, never build them a schedule, never say a dose amount.
-         If {food_line} is empty, skip food entirely and do not mention it.
+     3a. Acknowledge without blame: "कोई बात नहीं।"
+
+         Then, if {food_question} is not empty, ask exactly it and nothing
+         more:
+           "{food_question}"
+         Whatever they answer, then say exactly this, word for word, adding
+         nothing to it and changing nothing in it:
+           "{food_line}"
+         If {food_question} is empty, ask nothing of that kind and say nothing
+         of that kind. Nothing about this medicine's relationship to anything
+         else is on file, and composing such a sentence yourself would be
+         inventing a medical instruction for a patient — SELF-CHECK forbids
+         exactly that, because you could not point to the line it came from.
+
          Then ask:
            "क्या आप अभी ले लेंगे?"
 
@@ -330,4 +336,13 @@ variables:
   # buildAssistantConfig is by NAME now, not "default is empty", which is what
   # would otherwise have frozen them empty at boot and never filled them.
   next_call_line: ""
+  # The food step is carried ENTIRELY by these two, and deliberately no food
+  # vocabulary appears in the prompt itself. It used to: the prompt spelled out
+  # the question and listed "खाने के बाद"/"खाने से पहले" as things not to say.
+  # A live call showed the agent lifting both straight out of those lines and
+  # announcing "Metformin खाने के बाद लेनी होती है" for a medicine with no food
+  # rule on file — a clinical instruction invented from the prompt's own
+  # negative examples. With the words gone, an empty variable leaves nothing to
+  # copy.
+  food_question: ""
   food_line: ""

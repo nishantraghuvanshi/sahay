@@ -50,6 +50,7 @@ const DEFAULTS = {
   // exercises the branches that depend on them; set either to '' to check the
   // silent path.
   next_call_line: 'मैं आपको रात के खाने के बाद, 9 बजे फिर कॉल करूँगी।',
+  food_question: 'क्या आपने खाना खा लिया है?',
   food_line: 'यह दवाई खाने के बाद लेनी होती है।',
   scenario: 'took',
   // A dose call that needs more than this has already gone wrong. The schema
@@ -83,7 +84,11 @@ async function runScenario(key, scenario, args, credentials) {
     drug_name: args.drug_name,
     caregiver_name: args.caregiver_name,
     next_call_line: args.next_call_line,
+    food_question: args.food_question,
     food_line: args.food_line,
+    // A scenario may override any of these — the empty-variable paths are
+    // behaviour in their own right and need testing, not just the filled ones.
+    ...(scenario.variables || {}),
     // The correlation id createCall mints, so a simulated tool call carries
     // the same parameter a real one would.
     kinvox_call_id: `sim-${key}`,

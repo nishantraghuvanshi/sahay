@@ -26,6 +26,8 @@ const {
 // draws the line at CHANGING the plan, not at restating it. These say what the
 // prescription says and nothing more; none of them tells the patient when to
 // eat, which would be constructing a schedule.
+const FOOD_QUESTION = 'क्या आपने खाना खा लिया है?';
+
 const FOOD_LINES = {
   after: 'यह दवाई खाने के बाद लेनी होती है।',
   before: 'यह दवाई खाने से पहले लेनी होती है।',
@@ -42,10 +44,10 @@ const FOOD_LINES = {
  *   is derived from `nowHHMM`: a call placed by hand at 08:45 is about the
  *   08:30 dose, not the 21:00 one.
  * @param {string} [params.nowHHMM] - local "HH:MM" at the patient
- * @returns {Promise<{next_call_line: string, food_line: string}>}
+ * @returns {Promise<{next_call_line: string, food_question: string, food_line: string}>}
  */
 async function buildScheduleVariables({ repository, phone, slot, nowHHMM } = {}) {
-  const empty = { next_call_line: '', food_line: '' };
+  const empty = { next_call_line: '', food_question: '', food_line: '' };
   if (!repository || !phone || (!slot && !nowHHMM)) return empty;
 
   let patient;
@@ -74,8 +76,12 @@ async function buildScheduleVariables({ repository, phone, slot, nowHHMM } = {})
       afterSlot: effectiveSlot || nowHHMM,
       mealTimes: patient.meal_times,
     }),
+    // Both empty together: the prompt carries no food wording of its own, so
+    // an absent rule means the agent has nothing about food to say and no
+    // words to borrow.
+    food_question: relation ? FOOD_QUESTION : '',
     food_line: (relation && FOOD_LINES[relation]) || '',
   };
 }
 
-module.exports = { buildScheduleVariables, FOOD_LINES };
+module.exports = { buildScheduleVariables, FOOD_LINES, FOOD_QUESTION };

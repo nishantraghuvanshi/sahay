@@ -50,7 +50,13 @@ const TransportRegistry = require('../src/adapters/transport/registry');
  * placed via this script could never be resumed.
  */
 function buildRepository() {
-  const dbPath = process.env.DB_PATH || process.env.DATABASE_URL;
+  // KINVOX_DB included, matching server.js. Without it this script quietly
+  // used the console repository against a machine that has a real database:
+  // no session was opened, and the schedule lookup that fills next_call_line
+  // and food_line found no patient, so both came back empty and the call went
+  // out missing them. Nothing errored.
+  const dbPath =
+    process.env.DB_PATH || process.env.DATABASE_URL || process.env.KINVOX_DB;
   return dbPath ? new SqliteRepository({ dbPath }) : new ConsoleRepository();
 }
 
