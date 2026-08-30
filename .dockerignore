@@ -1,0 +1,60 @@
+# Root build context for both api/Dockerfile and agent/Dockerfile.
+#
+# agent/.dockerignore is NOT read any more: Docker uses the ignore file beside
+# the context root, and both images now build from the repo root so api/schema.sql
+# is reachable. Everything that file excluded is repeated here.
+
+# Secrets. Never in an image — the platform injects them as environment.
+.env
+.env.*
+!.env.example
+*.env
+
+# Local databases. State lives in Turso; a stale copy baked into the image is
+# worse than none, because it looks like data.
+*.db
+*.db.bak
+*.db-journal
+*.db-wal
+*.db-shm
+agent/data
+# Left by an older bug that took a Postgres URL as a filename.
+agent/postgresql:
+
+# Dependencies and build output, reinstalled in the image
+node_modules
+**/node_modules
+.venv
+**/__pycache__
+**/*.pyc
+npm-debug.log
+
+# The frontend deploys to Vercel, not into either backend image
+app
+
+# Version control and tooling
+.git
+.gitignore
+.graphify
+graphify-out
+.claude
+.emergent
+.superpowers
+
+# Tests, fixtures and evidence
+**/tests
+**/test
+evidence
+handoff
+wireframe
+
+# Docs and local process config
+*.md
+!api/rx_extract/README.md
+docs
+Dockerfile
+**/Dockerfile
+docker-compose.yml
+**/docker-compose.yml
+.dockerignore
+ecosystem.config.cjs

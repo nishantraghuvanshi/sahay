@@ -64,6 +64,10 @@
   const statusText = document.getElementById('statusText');
   const modeBadge = document.getElementById('modeBadge');
   const transcriptEl = document.getElementById('transcript');
+  const squadToggle = document.getElementById('squadToggle');
+  const foodRuleSelect = document.getElementById('foodRuleSelect');
+  const forceModeSelect = document.getElementById('forceModeSelect');
+  const stateBadge = document.getElementById('stateBadge');
   const errorBox = document.getElementById('errorBox');
   const outcomeBox = document.getElementById('outcomeBox');
 
@@ -233,6 +237,12 @@
       case 'agent_response':
         appendMessage('agent', message.text);
         break;
+      case 'squad-transition':
+        // Live view of the state machine. Without this the graph is invisible
+        // while testing, and a wrong transition looks like a bad answer.
+        showState(message.label || message.member);
+        if (message.member === 'emergency') stateBadge.classList.add('emergency');
+        break;
       case 'audio':
         handleIncomingAudio(message.data);
         break;
@@ -320,6 +330,24 @@
    * @param {boolean} [isPartial=false] - render as italic/gray partial text
    * @returns {HTMLDivElement} The created message element.
    */
+  /**
+   * Empty the transcript so a new call starts on a blank window.
+   *
+   * Without this the previous call's turns stayed on screen and the new
+   * call's appended below them, which read as the conversation continuing.
+   * (The other half of that symptom was real: an explicit Stop used to leave
+   * a resumable session behind, so the agent genuinely did continue. Fixed
+   * separately in the turn manager.)
+   */
+  function clearTranscript() {
+    transcriptEl.innerHTML = '';
+    partialMessageEl = null;
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'बात शुरू करने के लिए Start दबाइए।';
+    transcriptEl.appendChild(hint);
+  }
+
   function appendMessage(role, text, isPartial) {
     // Remove the initial hint on first real message.
     const hint = transcriptEl.querySelector('.hint');
@@ -796,11 +824,28 @@
         await connectWebSocket();
       }
 
-      // 2. Request microphone access and begin streaming.
+      // 2. A new call starts on a clean window — see clearTranscript().
+      clearTranscript();
+
+      // 3. Request microphone access and begin streaming.
       await startMicrophone();
 
-      // 3. Tell the server to start the conversation.
-      sendJSON({ type: 'start', language, phone, direction });
+      // 4. Tell the server to start the conversation.
+      sendJSON({
+        type: 'start',
+        language,
+        phone,
+        direction,
+        // Read at Start, not live: these decide how the call is BUILT, so
+        // changing them mid-call would describe a call that isn't running.
+        squadMode: squadToggle.checked,
+        foodRule: foodRuleSelect.value || undefined,
+        forceMode: forceModeSelect.value || undefined,
+      });
+
+      // Lock the testing controls for the duration — see above.
+      setTestingControlsDisabled(true);
+      showState(squadToggle.checked ? 'starting…' : null);
 
       // 4. Update UI state. (The button was already disabled on entry.)
       isRunning = true;
@@ -848,7 +893,27 @@
   /**
    * Reset the UI to its idle state (used on error / disconnect).
    */
+  /** Show (or hide) the current squad member. */
+  function showState(label) {
+    if (!label) {
+      stateBadge.hidden = true;
+      stateBadge.textContent = '';
+      stateBadge.classList.remove('emergency');
+      return;
+    }
+    stateBadge.hidden = false;
+    stateBadge.textContent = label;
+  }
+
+  function setTestingControlsDisabled(disabled) {
+    squadToggle.disabled = disabled;
+    foodRuleSelect.disabled = disabled;
+    forceModeSelect.disabled = disabled;
+  }
+
   function resetUI() {
+    setTestingControlsDisabled(false);
+    showState(null);
     isRunning = false;
     stopMicrophone();
     cancelTTS();

@@ -1,0 +1,64 @@
+# Both backend services, from the repo root.
+#
+#     docker compose up --build
+#
+# Moved up from agent/docker-compose.yml, which built with agent/ as the context
+# and so could not see api/schema.sql, and which loaded only agent/.env while
+# src/server.js also reads the repo-root .env — so half the shared credentials
+# were missing inside the container and present outside it.
+#
+# This is for running the pair locally. Deployments do not use it: there the
+# platform injects environment directly and the database is Turso.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      # Both services share one database. Left as a file here so the stack runs
+      # with nothing provisioned; set TURSO_DATABASE_URL/TURSO_AUTH_TOKEN in .env
+      # to point the pair at Turso instead.
+      - VOXIKIN_DB=/data/voxikin.db
+    volumes:
+      - voxikin-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  agent:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    ports:
+      - "3001:3001"
+    # Both files, in the order src/server.js loads them. agent/.env wins on a
+    # key set in both, matching dotenv's no-overwrite behaviour outside Docker.
+    env_file:
+      - agent/.env
+      - .env
+    environment:
+      - PORT=3001
+      - VOXIKIN_DB=/data/voxikin.db
+    volumes:
+      - voxikin-data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  voxikin-data:

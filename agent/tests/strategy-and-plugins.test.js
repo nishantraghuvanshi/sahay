@@ -170,6 +170,33 @@ describe('ConversationEngine', () => {
     await engine.getEventBus().emit(EVENT_TYPES.CONVERSATION_ENDED, { callData });
     assert.ok(!plugin.hooksCalled.includes('onEscalation'));
   });
+
+  test('CONVERSATION_ENDED still escalates and notifies plugins when repository.save() throws', async () => {
+    // A DB write failing must never be the reason a caregiver alert is
+    // never sent — escalation matters more, not less, when the write failed.
+    const plugin = new MockPlugin();
+    const plugins = new PluginRegistry();
+    plugins.register(plugin);
+    const repo = new MockRepository();
+    repo.save = async () => { throw new Error('database is locked'); };
+    const engine = new ConversationEngine({
+      strategy: new MockStrategy(),
+      plugins,
+      repository: repo,
+    });
+    const callData = {
+      callId: 'call-db-down',
+      toolCalls: [{ name: 'report_outcome', arguments: { outcome: 'ESCALATED', reason: 'chest pain' } }],
+      transcript: 'seene mein dard',
+      duration: 15,
+      cost: 0.01,
+    };
+
+    await engine.getEventBus().emit(EVENT_TYPES.CONVERSATION_ENDED, { callData });
+
+    assert.ok(plugin.hooksCalled.includes('onEscalation'));
+    assert.ok(plugin.hooksCalled.includes('onConversationEnd'));
+  });
 });
 
 describe('PluginRegistry', () => {

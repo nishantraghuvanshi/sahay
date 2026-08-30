@@ -55,6 +55,48 @@ describe('TransportPort', () => {
     const port = new TransportPort();
     await assert.rejects(() => port.createCall('', '', {}), /not implemented/);
   });
+
+  test('requiredSecrets throws not-implemented — no silent "needs nothing" default', () => {
+    const port = new TransportPort();
+    assert.throws(() => port.requiredSecrets(), /not implemented/);
+  });
+
+  test('getCallStatus throws not-implemented — no silent fake status', async () => {
+    const port = new TransportPort();
+    await assert.rejects(() => port.getCallStatus('call-1'), /not implemented/);
+  });
+
+  test('every registered transport adapter implements getCallStatus()', () => {
+    const { TRANSPORT_ADAPTERS } = require('../src/adapters/transport/registry');
+    for (const [name, AdapterClass] of Object.entries(TRANSPORT_ADAPTERS)) {
+      const adapter = new AdapterClass({}, {});
+      assert.strictEqual(
+        typeof adapter.getCallStatus,
+        'function',
+        `${name} transport must override getCallStatus()`
+      );
+      assert.notStrictEqual(
+        adapter.getCallStatus,
+        TransportPort.prototype.getCallStatus,
+        `${name} transport inherits the base not-implemented getCallStatus()`
+      );
+    }
+  });
+
+  test('every registered transport adapter implements requiredSecrets()', () => {
+    const { TRANSPORT_ADAPTERS } = require('../src/adapters/transport/registry');
+    for (const [name, AdapterClass] of Object.entries(TRANSPORT_ADAPTERS)) {
+      const adapter = new AdapterClass({}, {});
+      assert.doesNotThrow(
+        () => adapter.requiredSecrets(),
+        `${name} transport must override requiredSecrets()`
+      );
+      assert.ok(
+        Array.isArray(adapter.requiredSecrets()),
+        `${name} transport's requiredSecrets() must return an array`
+      );
+    }
+  });
 });
 
 describe('OutcomeRepositoryPort', () => {
@@ -66,5 +108,48 @@ describe('OutcomeRepositoryPort', () => {
   test('list throws not-implemented', async () => {
     const port = new OutcomeRepositoryPort();
     await assert.rejects(() => port.list({}), /not implemented/);
+  });
+
+  // src/core/call/lifecycle.js is the transport-agnostic state machine every
+  // orchestrator shares; it calls these methods directly on whatever
+  // repository is wired in. If the port stops declaring one, a new adapter
+  // can satisfy the interface and still crash the first real call.
+  const LIFECYCLE_METHODS = [
+    'createCall',
+    'createSession',
+    'getSession',
+    'updateSessionFields',
+    'endSession',
+    'saveMessage',
+    'findPatientByPhone',
+  ];
+
+  for (const method of LIFECYCLE_METHODS) {
+    test(`declares ${method} (required by call/lifecycle.js)`, () => {
+      assert.strictEqual(typeof OutcomeRepositoryPort.prototype[method], 'function');
+    });
+  }
+
+  test('both real repository adapters implement every method the port declares', () => {
+    const ConsoleRepository = require('../src/adapters/persistence/console');
+    const SqliteRepository = require('../src/adapters/persistence/sqlite');
+
+    const portMethods = Object.getOwnPropertyNames(OutcomeRepositoryPort.prototype)
+      .filter((name) => {
+        if (name === 'constructor') return false;
+        const descriptor = Object.getOwnPropertyDescriptor(OutcomeRepositoryPort.prototype, name);
+        return typeof descriptor.value === 'function';
+      });
+
+    const consoleRepo = new ConsoleRepository();
+    const sqliteRepo = new SqliteRepository({ dbPath: ':memory:' });
+    try {
+      for (const method of portMethods) {
+        assert.strictEqual(typeof consoleRepo[method], 'function', `ConsoleRepository missing ${method}`);
+        assert.strictEqual(typeof sqliteRepo[method], 'function', `SqliteRepository missing ${method}`);
+      }
+    } finally {
+      sqliteRepo.close();
+    }
   });
 });

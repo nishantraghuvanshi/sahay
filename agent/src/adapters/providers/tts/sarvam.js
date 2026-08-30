@@ -32,6 +32,9 @@ class SarvamTTSAdapter extends TTSPort {
     this._wsConfig = null;
     this._disposed = false;
     this._pingInterval = null;
+    // sendText() calls are chained onto this so only one request at a time
+    // has 'message' listeners on the shared socket — see sendText() below.
+    this._sendQueue = Promise.resolve();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -172,7 +175,23 @@ class SarvamTTSAdapter extends TTSPort {
    * @param {Function} onAudioChunk - (pcmBuffer: Buffer) => void
    * @returns {Promise<void>}
    */
-  async sendText(text, onAudioChunk) {
+  sendText(text, onAudioChunk) {
+    // Sarvam's audio messages carry no request id to correlate them back to
+    // a specific sendText() call — the only way to keep two rapid sentences
+    // from interleaving or cross-delivering chunks on the shared socket is
+    // to run them one at a time. Chaining onto _sendQueue means the next
+    // call's 'message' listener isn't attached until this one's is removed.
+    const run = this._sendQueue.then(() => this._sendOne(text, onAudioChunk));
+    this._sendQueue = run.catch(() => {}); // don't let one rejection wedge the queue
+    return run;
+  }
+
+  /**
+   * Send a single text chunk and resolve once its audio is fully delivered.
+   * Not meant to be called directly — use sendText(), which serializes calls.
+   * @private
+   */
+  async _sendOne(text, onAudioChunk) {
     if (!this._ws || this._ws.readyState !== 1) {
       throw new Error('TTS WebSocket not connected. Call connectStream() first.');
     }

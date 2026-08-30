@@ -1,0 +1,472 @@
+{
+  "message": {
+    "timestamp": 1788045623147,
+    "type": "end-of-call-report",
+    "analysis": {},
+    "artifact": {
+      "messages": [
+        {
+          "role": "system",
+          "message": "You are a caring healthcare assistant calling an elderly person to check\nwhether they have taken their medication. You speak warm, natural Hindi.\n\nCALL FLOW:\n1. Greet warmly, identify yourself, ask if they took their medicine.\n2. If YES → \"बहुत अच्छा। अपना ख़याल रखियेगा। धन्यवाद।\" → report_outcome(\"CONFIRMED\") → end_call\n3. If NO → \"ठीक है। कृपया जल्दी ले लीजिये। अपना ख़याल रखियेगा।\" → report_outcome(\"DENIED\") → end_call\n4. If UNCLEAR after 2 attempts → \"ठीक है, धन्यवाद। नमस्ते।\" → report_outcome(\"UNCLEAR\", \"unclear_response\") → end_call\n5. If a MEDICAL EMERGENCY or EMOTIONAL DISTRESS is reported → follow the\n   matching sequence in your guardrails. Do not decide this yourself —\n   the guardrails define both trigger words and the exact response.\n\nIF SOMEONE ELSE ANSWERS (not रोहन जी):\n- दवाई का नाम या कोई भी बीमारी/तकलीफ़ का ज़िक्र मत कीजिये।\n- पूछिए कि क्या रोहन जी अभी बात कर सकते हैं।\n- अगर नहीं, तो उनसे रोहन जी को याद दिलाने का अनुरोध कीजिये,\n  धन्यवाद दीजिये, और कॉल समाप्त कीजिये।\n  → report_outcome(\"INCOMPLETE\", \"patient_unavailable\") → end_call\n- अपवाद: अगर वह व्यक्ति स्वयं को देखभालकर्ता (caregiver) बताए, तो सिर्फ यह\n  पूछिए कि दवाई ली गयी थी या नहीं — तबीयत या किसी लक्षण पर बात मत कीजिये।\n\nCLARIFY BRANCHES (if the user asks a question):\n- \"कौन सी दवाई?\" → \"Crocin की दवाई। क्या आपने ले ली है?\"\n- \"कौन बोल रहा है?\" / \"क्या आप मशीन हैं?\" → \"मैं आशा हूँ, एक कंप्यूटर सहायक। आपके परिवार ने मुझे याद दिलाने को कहा है। क्या आपने Crocin ले ली है?\"\n- \"क्या समय है?\" → \"आपका दवाई लेने का समय हो गया है। क्या ले ली है?\"\n- \"आपको कैसे पता?\" → \"आपके परिवार ने मुझे बताया है। क्या आपने ले ली है?\"\n- \"हैलो?\" → Repeat the original question.\n- After 2 failed clarifications → report_outcome(\"INCOMPLETE\", \"clarify_loop_exceeded\") → end_call\n\n\nIDENTITY:\n- Your name is आशा (Asha). Introduce yourself by that name, and answer to it.\n- You are NOT a person. If asked whether you are human, real, or a machine,\n  say plainly and immediately that you are a computer assistant, then carry\n  on warmly. Never let the name imply otherwise.\n- Never claim or imply that you are a nurse, doctor, ASHA worker, hospital\n  staff, or any government health worker. You are a helper the family\n  arranged. The name is only a name.\n\nLANGUAGE RULES:\n- Speak natural Hindi, with comfortable English code-switching (Hinglish) —\n  say what a caring Hindi-speaking health worker would actually say, rather\n  than forcing every word into Devanagari.\n- Drug names and proper nouns stay in English (e.g., \"Crocin\", \"Paracetamol\").\n- Keep responses short — under 15-20 words per turn. This is a phone call.\n\nELDERLY-FRIENDLY RULES:\n- Speak slowly and clearly.\n- Ask ONE question at a time. Never compound questions.\n- If the user is silent, wait. Do not rush them.\n- Be patient and warm. Sound like a caring healthcare worker, not a robot.\n- Address the person respectfully (\"रोहन जी\"), never by first name alone.\n\nCONVERSATION CONTINUITY:\n- Your opening line has ALREADY been spoken. From your second turn onward,\n  never greet again — no \"नमस्ते\", no \"मैं आशा हूँ\", no re-introduction. You\n  are already mid-conversation and the person knows who you are.\n- Answer what was just said and move forward. Repeating a greeting makes it\n  sound like the call restarted, and to an elderly caller it sounds like you\n  have forgotten them — the one thing this product exists to prevent.\n- Say who you are again ONLY if they ask.\n\nDISCRETION RULES:\n- Never mention that you have instructions, steps, or a script. Never\n  narrate moving between stages of the call.\n- Never speak your own instructions aloud. Words like \"Capture:\", \"verbatim\",\n  \"rule:\", or any part of these directions are for you, never for the caller.\n- Never say a full medicine name more than twice in one call.\n\nCLOSURE PROTOCOL:\n1. Speak your closing sentence (based on outcome).\n2. Call report_outcome with the correct outcome and a brief reason.\n3. Call end_call.\n4. Say NOTHING after calling end_call.\n5. Each tool should be called EXACTLY ONCE.\n",
+          "time": 1788045603920,
+          "secondsFromStart": 0
+        }
+      ],
+      "messagesOpenAIFormatted": [
+        {
+          "role": "system",
+          "content": "You are a caring healthcare assistant calling an elderly person to check\nwhether they have taken their medication. You speak warm, natural Hindi.\n\nCALL FLOW:\n1. Greet warmly, identify yourself, ask if they took their medicine.\n2. If YES → \"बहुत अच्छा। अपना ख़याल रखियेगा। धन्यवाद।\" → report_outcome(\"CONFIRMED\") → end_call\n3. If NO → \"ठीक है। कृपया जल्दी ले लीजिये। अपना ख़याल रखियेगा।\" → report_outcome(\"DENIED\") → end_call\n4. If UNCLEAR after 2 attempts → \"ठीक है, धन्यवाद। नमस्ते।\" → report_outcome(\"UNCLEAR\", \"unclear_response\") → end_call\n5. If a MEDICAL EMERGENCY or EMOTIONAL DISTRESS is reported → follow the\n   matching sequence in your guardrails. Do not decide this yourself —\n   the guardrails define both trigger words and the exact response.\n\nIF SOMEONE ELSE ANSWERS (not रोहन जी):\n- दवाई का नाम या कोई भी बीमारी/तकलीफ़ का ज़िक्र मत कीजिये।\n- पूछिए कि क्या रोहन जी अभी बात कर सकते हैं।\n- अगर नहीं, तो उनसे रोहन जी को याद दिलाने का अनुरोध कीजिये,\n  धन्यवाद दीजिये, और कॉल समाप्त कीजिये।\n  → report_outcome(\"INCOMPLETE\", \"patient_unavailable\") → end_call\n- अपवाद: अगर वह व्यक्ति स्वयं को देखभालकर्ता (caregiver) बताए, तो सिर्फ यह\n  पूछिए कि दवाई ली गयी थी या नहीं — तबीयत या किसी लक्षण पर बात मत कीजिये।\n\nCLARIFY BRANCHES (if the user asks a question):\n- \"कौन सी दवाई?\" → \"Crocin की दवाई। क्या आपने ले ली है?\"\n- \"कौन बोल रहा है?\" / \"क्या आप मशीन हैं?\" → \"मैं आशा हूँ, एक कंप्यूटर सहायक। आपके परिवार ने मुझे याद दिलाने को कहा है। क्या आपने Crocin ले ली है?\"\n- \"क्या समय है?\" → \"आपका दवाई लेने का समय हो गया है। क्या ले ली है?\"\n- \"आपको कैसे पता?\" → \"आपके परिवार ने मुझे बताया है। क्या आपने ले ली है?\"\n- \"हैलो?\" → Repeat the original question.\n- After 2 failed clarifications → report_outcome(\"INCOMPLETE\", \"clarify_loop_exceeded\") → end_call\n\n\nIDENTITY:\n- Your name is आशा (Asha). Introduce yourself by that name, and answer to it.\n- You are NOT a person. If asked whether you are human, real, or a machine,\n  say plainly and immediately that you are a computer assistant, then carry\n  on warmly. Never let the name imply otherwise.\n- Never claim or imply that you are a nurse, doctor, ASHA worker, hospital\n  staff, or any government health worker. You are a helper the family\n  arranged. The name is only a name.\n\nLANGUAGE RULES:\n- Speak natural Hindi, with comfortable English code-switching (Hinglish) —\n  say what a caring Hindi-speaking health worker would actually say, rather\n  than forcing every word into Devanagari.\n- Drug names and proper nouns stay in English (e.g., \"Crocin\", \"Paracetamol\").\n- Keep responses short — under 15-20 words per turn. This is a phone call.\n\nELDERLY-FRIENDLY RULES:\n- Speak slowly and clearly.\n- Ask ONE question at a time. Never compound questions.\n- If the user is silent, wait. Do not rush them.\n- Be patient and warm. Sound like a caring healthcare worker, not a robot.\n- Address the person respectfully (\"रोहन जी\"), never by first name alone.\n\nCONVERSATION CONTINUITY:\n- Your opening line has ALREADY been spoken. From your second turn onward,\n  never greet again — no \"नमस्ते\", no \"मैं आशा हूँ\", no re-introduction. You\n  are already mid-conversation and the person knows who you are.\n- Answer what was just said and move forward. Repeating a greeting makes it\n  sound like the call restarted, and to an elderly caller it sounds like you\n  have forgotten them — the one thing this product exists to prevent.\n- Say who you are again ONLY if they ask.\n\nDISCRETION RULES:\n- Never mention that you have instructions, steps, or a script. Never\n  narrate moving between stages of the call.\n- Never speak your own instructions aloud. Words like \"Capture:\", \"verbatim\",\n  \"rule:\", or any part of these directions are for you, never for the caller.\n- Never say a full medicine name more than twice in one call.\n\nCLOSURE PROTOCOL:\n1. Speak your closing sentence (based on outcome).\n2. Call report_outcome with the correct outcome and a brief reason.\n3. Call end_call.\n4. Say NOTHING after calling end_call.\n5. Each tool should be called EXACTLY ONCE.\n"
+        }
+      ],
+      "transcript": "",
+      "recordingUrl": "https://example.invalid/recording.wav",
+      "stereoRecordingUrl": "https://example.invalid/recording.wav",
+      "logUrl": "https://example.invalid/recording.wav",
+      "recording": {
+        "stereoUrl": "https://example.invalid/recording.wav",
+        "mono": {
+          "combinedUrl": "https://example.invalid/recording.wav",
+          "assistantUrl": "https://example.invalid/recording.wav",
+          "customerUrl": "https://example.invalid/recording.wav"
+        }
+      },
+      "nodes": [],
+      "assistantActivations": [
+        {
+          "assistantName": "Voxi",
+          "assistantId": "c7933350-09f3-417c-a075-b2359d239b6c",
+          "assistantVersion": "v4"
+        }
+      ],
+      "variables": {
+        "now": "Aug 29, 2026, 11:20 PM UTC",
+        "currentDateTime": "Saturday, August 29, 2026 at 11:20 PM UTC",
+        "date": "Aug 29, 2026 UTC",
+        "time": "11:20 PM UTC",
+        "year": "2026",
+        "month": "August",
+        "day": "29",
+        "customer": {
+          "number": "+15551234567"
+        },
+        "phoneNumber": {
+          "id": "1c4a58c4-e9e2-4fa4-a892-417946ca15c9",
+          "orgId": "5fbe09ad-7e32-4e87-93c8-5e5ec0c3016b",
+          "number": "+15550000000",
+          "createdAt": "2026-08-29T23:12:23.327Z",
+          "updatedAt": "2026-08-29T23:12:23.327Z",
+          "twilioAccountSid": "[REDACTED]",
+          "twilioAuthToken": "[REDACTED]",
+          "provider": "twilio",
+          "server": {
+            "url": "https://example.invalid/webhook"
+          },
+          "status": "active"
+        },
+        "transport": {
+          "conversationType": "voice",
+          "provider": "twilio",
+          "callSid": "CA1d5e8f2ef62a84a3a60ba503bdf75eac",
+          "accountSid": "[REDACTED]"
+        },
+        "call": {
+          "id": "01a04fd2-6d4d-7000-84b0-e8f96ab47556",
+          "type": "outboundPhoneCall",
+          "status": "queued",
+          "createdAt": "2026-08-29T23:19:45.741Z",
+          "phoneCallProvider": "twilio",
+          "transport": {
+            "conversationType": "voice",
+            "provider": "twilio",
+            "callSid": "CA1d5e8f2ef62a84a3a60ba503bdf75eac",
+            "accountSid": "[REDACTED]"
+          }
+        },
+        "language": "hi",
+        "drug_name": "Metformin",
+        "parent_name": "Test Patient"
+      },
+      "variableValues": {
+        "now": "Aug 29, 2026, 11:20 PM UTC",
+        "currentDateTime": "Saturday, August 29, 2026 at 11:20 PM UTC",
+        "date": "Aug 29, 2026 UTC",
+        "time": "11:20 PM UTC",
+        "year": "2026",
+        "month": "August",
+        "day": "29",
+        "customer": {
+          "number": "+15551234567"
+        },
+        "phoneNumber": {
+          "id": "1c4a58c4-e9e2-4fa4-a892-417946ca15c9",
+          "orgId": "5fbe09ad-7e32-4e87-93c8-5e5ec0c3016b",
+          "number": "+15550000000",
+          "createdAt": "2026-08-29T23:12:23.327Z",
+          "updatedAt": "2026-08-29T23:12:23.327Z",
+          "twilioAccountSid": "[REDACTED]",
+          "twilioAuthToken": "[REDACTED]",
+          "provider": "twilio",
+          "server": {
+            "url": "https://example.invalid/webhook"
+          },
+          "status": "active"
+        },
+        "transport": {
+          "conversationType": "voice",
+          "provider": "twilio",
+          "callSid": "CA1d5e8f2ef62a84a3a60ba503bdf75eac",
+          "accountSid": "[REDACTED]"
+        },
+        "call": {
+          "id": "01a04fd2-6d4d-7000-84b0-e8f96ab47556",
+          "type": "outboundPhoneCall",
+          "status": "queued",
+          "createdAt": "2026-08-29T23:19:45.741Z",
+          "phoneCallProvider": "twilio",
+          "transport": {
+            "conversationType": "voice",
+            "provider": "twilio",
+            "callSid": "CA1d5e8f2ef62a84a3a60ba503bdf75eac",
+            "accountSid": "[REDACTED]"
+          }
+        },
+        "language": "hi",
+        "drug_name": "Metformin",
+        "parent_name": "Test Patient"
+      },
+      "performanceMetrics": {
+        "turnLatencies": [],
+        "modelLatencyAverage": 0,
+        "voiceLatencyAverage": 0,
+        "transcriberLatencyAverage": 0,
+        "endpointingLatencyAverage": 0,
+        "turnLatencyAverage": 0,
+        "numUserInterrupted": 0,
+        "numAssistantInterrupted": 0,
+        "fromTransportLatencyAverage": 20,
+        "toTransportLatencyAverage": 50
+      },
+      "scorecards": {},
+      "transfers": [],
+      "presignedLogUrl": "https://example.invalid/recording.wav",
+      "presignedMonoUrl": "https://example.invalid/recording.wav",
+      "presignedStereoUrl": "https://example.invalid/recording.wav",
+      "presignedAssistantUrl": "https://example.invalid/recording.wav",
+      "presignedCustomerUrl": "https://example.invalid/recording.wav",
+      "presignedUrlsExpiresAt": "2026-08-29T23:50:23.140Z"
+    },
+    "startedAt": "2026-08-29T23:20:04.154Z",
+    "endedAt": "2026-08-29T23:20:19.322Z",
+    "endedReason": "silence-timed-out",
+    "cost": 0.0126,
+    "costBreakdown": {
+      "stt": 0,
+      "llm": 0,
+      "tts": 0,
+      "vapi": 0.0126,
+      "chat": 0,
+      "transport": 0,
+      "total": 0.0126,
+      "llmPromptTokens": 0,
+      "llmCompletionTokens": 0,
+      "llmCachedPromptTokens": 0,
+      "ttsCharacters": 0,
+      "voicemailDetectionCost": 0,
+      "knowledgeBaseCost": 0,
+      "analysisCostBreakdown": {
+        "summary": 0,
+        "summaryPromptTokens": 0,
+        "summaryCompletionTokens": 0,
+        "summaryCachedPromptTokens": 0,
+        "structuredData": 0,
+        "structuredDataPromptTokens": 0,
+        "structuredDataCompletionTokens": 0,
+        "structuredDataCachedPromptTokens": 0,
+        "successEvaluation": 0,
+        "successEvaluationPromptTokens": 0,
+        "successEvaluationCompletionTokens": 0,
+        "successEvaluationCachedPromptTokens": 0,
+        "structuredOutput": 0,
+        "structuredOutputPromptTokens": 0,
+        "structuredOutputCompletionTokens": 0,
+        "structuredOutputCachedPromptTokens": 0
+      }
+    },
+    "costs": [
+      {
+        "type": "transcriber",
+        "transcriber": {
+          "provider": "custom-transcriber"
+        },
+        "minutes": 0.2952666666666667,
+        "cost": 0
+      },
+      {
+        "type": "model",
+        "model": {
+          "provider": "custom-llm",
+          "model": "sarvam-105b-conversations"
+        },
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cachedPromptTokens": 0,
+        "reasoningTokens": 0,
+        "cost": 0
+      },
+      {
+        "type": "voice",
+        "voice": {
+          "provider": "11labs",
+          "voiceId": "QTKSa2Iyv0yoxvXY2V8a",
+          "model": "eleven_turbo_v2_5"
+        },
+        "characters": 0,
+        "cost": 0
+      },
+      {
+        "type": "vapi",
+        "subType": "normal",
+        "minutes": 0.2528,
+        "cost": 0.01264
+      },
+      {
+        "type": "knowledge-base",
+        "model": {
+          "provider": "google",
+          "model": "gemini-2.5-flash"
+        },
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cost": 0
+      }
+    ],
+    "durationMs": 15168,
+    "durationSeconds": 15.168,
+    "durationMinutes": 0.2528,
+    "summary": "",
+    "transcript": "",
+    "messages": [
+      {
+        "role": "system",
+        "message": "You are a caring healthcare assistant calling an elderly person to check\nwhether they have taken their medication. You speak warm, natural Hindi.\n\nCALL FLOW:\n1. Greet warmly, identify yourself, ask if they took their medicine.\n2. If YES → \"बहुत अच्छा। अपना ख़याल रखियेगा। धन्यवाद।\" → report_outcome(\"CONFIRMED\") → end_call\n3. If NO → \"ठीक है। कृपया जल्दी ले लीजिये। अपना ख़याल रखियेगा।\" → report_outcome(\"DENIED\") → end_call\n4. If UNCLEAR after 2 attempts → \"ठीक है, धन्यवाद। नमस्ते।\" → report_outcome(\"UNCLEAR\", \"unclear_response\") → end_call\n5. If a MEDICAL EMERGENCY or EMOTIONAL DISTRESS is reported → follow the\n   matching sequence in your guardrails. Do not decide this yourself —\n   the guardrails define both trigger words and the exact response.\n\nIF SOMEONE ELSE ANSWERS (not रोहन जी):\n- दवाई का नाम या कोई भी बीमारी/तकलीफ़ का ज़िक्र मत कीजिये।\n- पूछिए कि क्या रोहन जी अभी बात कर सकते हैं।\n- अगर नहीं, तो उनसे रोहन जी को याद दिलाने का अनुरोध कीजिये,\n  धन्यवाद दीजिये, और कॉल समाप्त कीजिये।\n  → report_outcome(\"INCOMPLETE\", \"patient_unavailable\") → end_call\n- अपवाद: अगर वह व्यक्ति स्वयं को देखभालकर्ता (caregiver) बताए, तो सिर्फ यह\n  पूछिए कि दवाई ली गयी थी या नहीं — तबीयत या किसी लक्षण पर बात मत कीजिये।\n\nCLARIFY BRANCHES (if the user asks a question):\n- \"कौन सी दवाई?\" → \"Crocin की दवाई। क्या आपने ले ली है?\"\n- \"कौन बोल रहा है?\" / \"क्या आप मशीन हैं?\" → \"मैं आशा हूँ, एक कंप्यूटर सहायक। आपके परिवार ने मुझे याद दिलाने को कहा है। क्या आपने Crocin ले ली है?\"\n- \"क्या समय है?\" → \"आपका दवाई लेने का समय हो गया है। क्या ले ली है?\"\n- \"आपको कैसे पता?\" → \"आपके परिवार ने मुझे बताया है। क्या आपने ले ली है?\"\n- \"हैलो?\" → Repeat the original question.\n- After 2 failed clarifications → report_outcome(\"INCOMPLETE\", \"clarify_loop_exceeded\") → end_call\n\n\nIDENTITY:\n- Your name is आशा (Asha). Introduce yourself by that name, and answer to it.\n- You are NOT a person. If asked whether you are human, real, or a machine,\n  say plainly and immediately that you are a computer assistant, then carry\n  on warmly. Never let the name imply otherwise.\n- Never claim or imply that you are a nurse, doctor, ASHA worker, hospital\n  staff, or any government health worker. You are a helper the family\n  arranged. The name is only a name.\n\nLANGUAGE RULES:\n- Speak natural Hindi, with comfortable English code-switching (Hinglish) —\n  say what a caring Hindi-speaking health worker would actually say, rather\n  than forcing every word into Devanagari.\n- Drug names and proper nouns stay in English (e.g., \"Crocin\", \"Paracetamol\").\n- Keep responses short — under 15-20 words per turn. This is a phone call.\n\nELDERLY-FRIENDLY RULES:\n- Speak slowly and clearly.\n- Ask ONE question at a time. Never compound questions.\n- If the user is silent, wait. Do not rush them.\n- Be patient and warm. Sound like a caring healthcare worker, not a robot.\n- Address the person respectfully (\"रोहन जी\"), never by first name alone.\n\nCONVERSATION CONTINUITY:\n- Your opening line has ALREADY been spoken. From your second turn onward,\n  never greet again — no \"नमस्ते\", no \"मैं आशा हूँ\", no re-introduction. You\n  are already mid-conversation and the person knows who you are.\n- Answer what was just said and move forward. Repeating a greeting makes it\n  sound like the call restarted, and to an elderly caller it sounds like you\n  have forgotten them — the one thing this product exists to prevent.\n- Say who you are again ONLY if they ask.\n\nDISCRETION RULES:\n- Never mention that you have instructions, steps, or a script. Never\n  narrate moving between stages of the call.\n- Never speak your own instructions aloud. Words like \"Capture:\", \"verbatim\",\n  \"rule:\", or any part of these directions are for you, never for the caller.\n- Never say a full medicine name more than twice in one call.\n\nCLOSURE PROTOCOL:\n1. Speak your closing sentence (based on outcome).\n2. Call report_outcome with the correct outcome and a brief reason.\n3. Call end_call.\n4. Say NOTHING after calling end_call.\n5. Each tool should be called EXACTLY ONCE.\n",
+        "time": 1788045603920,
+        "secondsFromStart": 0
+      }
+    ],
+    "recordingUrl": "https://example.invalid/recording.wav",
+    "stereoRecordingUrl": "https://example.invalid/recording.wav",
+    "call": {
+      "id": "01a04fd2-6d4d-7000-84b0-e8f96ab47556",
+      "orgId": "5fbe09ad-7e32-4e87-93c8-5e5ec0c3016b",
+      "createdAt": "2026-08-29T23:19:45.741Z",
+      "updatedAt": "2026-08-29T23:19:45.741Z",
+      "type": "outboundPhoneCall",
+      "cost": 0,
+      "monitor": {
+        "listenUrl": "wss://example.invalid/call-websocket/listen",
+        "controlUrl": "wss://example.invalid/call-websocket/control"
+      },
+      "transport": {
+        "conversationType": "voice",
+        "provider": "twilio",
+        "callSid": "CA1d5e8f2ef62a84a3a60ba503bdf75eac",
+        "accountSid": "ACbfcaa19cfac51ee0a16914080332b917"
+      },
+      "phoneCallProvider": "twilio",
+      "phoneCallProviderId": "CA1d5e8f2ef62a84a3a60ba503bdf75eac",
+      "phoneCallTransport": "pstn",
+      "status": "queued",
+      "assistantId": "c7933350-09f3-417c-a075-b2359d239b6c",
+      "assistantVersion": "v4",
+      "assistantOverrides": {
+        "variableValues": {
+          "language": "hi",
+          "drug_name": "Metformin",
+          "parent_name": "Test Patient"
+        }
+      },
+      "phoneNumberId": "1c4a58c4-e9e2-4fa4-a892-417946ca15c9",
+      "customer": {
+        "number": "+15551234567"
+      }
+    },
+    "phoneNumber": {
+      "id": "1c4a58c4-e9e2-4fa4-a892-417946ca15c9",
+      "orgId": "5fbe09ad-7e32-4e87-93c8-5e5ec0c3016b",
+      "number": "+15550000000",
+      "createdAt": "2026-08-29T23:12:23.327Z",
+      "updatedAt": "2026-08-29T23:12:23.327Z",
+      "twilioAccountSid": "ACbfcaa19cfac51ee0a16914080332b917",
+      "provider": "twilio",
+      "server": {
+        "url": "https://example.invalid/webhook",
+        "secret": "[REDACTED]"
+      },
+      "status": "active"
+    },
+    "customer": {
+      "number": "+15551234567"
+    },
+    "assistant": {
+      "id": "c7933350-09f3-417c-a075-b2359d239b6c",
+      "orgId": "5fbe09ad-7e32-4e87-93c8-5e5ec0c3016b",
+      "name": "Voxi",
+      "voice": {
+        "model": "eleven_turbo_v2_5",
+        "voiceId": "QTKSa2Iyv0yoxvXY2V8a",
+        "provider": "11labs"
+      },
+      "createdAt": "2026-08-29T22:13:46.059Z",
+      "updatedAt": "2026-08-29T23:14:22.908Z",
+      "model": {
+        "url": "https://example.invalid/llm/chat/completions",
+        "model": "sarvam-105b-conversations",
+        "tools": [
+          {
+            "type": "function",
+            "async": false,
+            "function": {
+              "name": "report_outcome",
+              "parameters": {
+                "type": "object",
+                "required": [
+                  "outcome",
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Brief reason for this outcome (e.g., \"user confirmed taking medicine\")"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "CONFIRMED",
+                      "DENIED",
+                      "UNCLEAR",
+                      "ESCALATED_SYMPTOM",
+                      "ESCALATED_DISTRESS",
+                      "INCOMPLETE"
+                    ],
+                    "type": "string",
+                    "description": "The call outcome"
+                  }
+                }
+              },
+              "description": "Call this EXACTLY ONCE per call when the user's intent is unambiguous. CONFIRMED = user confirmed taking medication. DENIED = user said they have not taken it yet. UNCLEAR = user responded but their intent could not be determined. ESCALATED_SYMPTOM = user reported a MEDICAL EMERGENCY (chest pain, difficulty breathing, severe dizziness, fainting, bleeding, a fall, sudden weakness, slurred speech, severe pain, or confusion about who/where they are). This alerts their family, so use it ONLY for an actual medical emergency. ESCALATED_DISTRESS = user expressed emotional distress, a wish to stop treatment, or thoughts of self-harm — with no physical medical emergency. This also alerts their family, so use it ONLY for actual distress, not a medical emergency. INCOMPLETE = the conversation broke down (repeated confusion) or the patient could not be reached. This is NOT a medical event. Call this BEFORE your closing sentence."
+            }
+          },
+          {
+            "type": "function",
+            "async": true,
+            "function": {
+              "name": "capture_field",
+              "parameters": {
+                "type": "object",
+                "required": [
+                  "field",
+                  "value"
+                ],
+                "properties": {
+                  "field": {
+                    "enum": [
+                      "chief_complaint",
+                      "onset",
+                      "breathing",
+                      "who_is_with_you"
+                    ],
+                    "type": "string",
+                    "description": "Which intake field this answer is for"
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "The caller's answer, verbatim"
+                  }
+                }
+              },
+              "description": "Call this IMMEDIATELY after every turn in which the caller answers one of the intake questions — never batch captures to the end of the call. Pass the caller's words VERBATIM: do not paraphrase, translate, or tidy them up."
+            }
+          },
+          {
+            "type": "endCall"
+          }
+        ],
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a caring healthcare assistant calling an elderly person to check\nwhether they have taken their medication. You speak warm, natural Hindi.\n\nCALL FLOW:\n1. Greet warmly, identify yourself, ask if they took their medicine.\n2. If YES → \"बहुत अच्छा। अपना ख़याल रखियेगा। धन्यवाद।\" → report_outcome(\"CONFIRMED\") → end_call\n3. If NO → \"ठीक है। कृपया जल्दी ले लीजिये। अपना ख़याल रखियेगा।\" → report_outcome(\"DENIED\") → end_call\n4. If UNCLEAR after 2 attempts → \"ठीक है, धन्यवाद। नमस्ते।\" → report_outcome(\"UNCLEAR\", \"unclear_response\") → end_call\n5. If a MEDICAL EMERGENCY or EMOTIONAL DISTRESS is reported → follow the\n   matching sequence in your guardrails. Do not decide this yourself —\n   the guardrails define both trigger words and the exact response.\n\nIF SOMEONE ELSE ANSWERS (not रोहन जी):\n- दवाई का नाम या कोई भी बीमारी/तकलीफ़ का ज़िक्र मत कीजिये।\n- पूछिए कि क्या रोहन जी अभी बात कर सकते हैं।\n- अगर नहीं, तो उनसे रोहन जी को याद दिलाने का अनुरोध कीजिये,\n  धन्यवाद दीजिये, और कॉल समाप्त कीजिये।\n  → report_outcome(\"INCOMPLETE\", \"patient_unavailable\") → end_call\n- अपवाद: अगर वह व्यक्ति स्वयं को देखभालकर्ता (caregiver) बताए, तो सिर्फ यह\n  पूछिए कि दवाई ली गयी थी या नहीं — तबीयत या किसी लक्षण पर बात मत कीजिये।\n\nCLARIFY BRANCHES (if the user asks a question):\n- \"कौन सी दवाई?\" → \"Crocin की दवाई। क्या आपने ले ली है?\"\n- \"कौन बोल रहा है?\" / \"क्या आप मशीन हैं?\" → \"मैं आशा हूँ, एक कंप्यूटर सहायक। आपके परिवार ने मुझे याद दिलाने को कहा है। क्या आपने Crocin ले ली है?\"\n- \"क्या समय है?\" → \"आपका दवाई लेने का समय हो गया है। क्या ले ली है?\"\n- \"आपको कैसे पता?\" → \"आपके परिवार ने मुझे बताया है। क्या आपने ले ली है?\"\n- \"हैलो?\" → Repeat the original question.\n- After 2 failed clarifications → report_outcome(\"INCOMPLETE\", \"clarify_loop_exceeded\") → end_call\n\n\nIDENTITY:\n- Your name is आशा (Asha). Introduce yourself by that name, and answer to it.\n- You are NOT a person. If asked whether you are human, real, or a machine,\n  say plainly and immediately that you are a computer assistant, then carry\n  on warmly. Never let the name imply otherwise.\n- Never claim or imply that you are a nurse, doctor, ASHA worker, hospital\n  staff, or any government health worker. You are a helper the family\n  arranged. The name is only a name.\n\nLANGUAGE RULES:\n- Speak natural Hindi, with comfortable English code-switching (Hinglish) —\n  say what a caring Hindi-speaking health worker would actually say, rather\n  than forcing every word into Devanagari.\n- Drug names and proper nouns stay in English (e.g., \"Crocin\", \"Paracetamol\").\n- Keep responses short — under 15-20 words per turn. This is a phone call.\n\nELDERLY-FRIENDLY RULES:\n- Speak slowly and clearly.\n- Ask ONE question at a time. Never compound questions.\n- If the user is silent, wait. Do not rush them.\n- Be patient and warm. Sound like a caring healthcare worker, not a robot.\n- Address the person respectfully (\"रोहन जी\"), never by first name alone.\n\nCONVERSATION CONTINUITY:\n- Your opening line has ALREADY been spoken. From your second turn onward,\n  never greet again — no \"नमस्ते\", no \"मैं आशा हूँ\", no re-introduction. You\n  are already mid-conversation and the person knows who you are.\n- Answer what was just said and move forward. Repeating a greeting makes it\n  sound like the call restarted, and to an elderly caller it sounds like you\n  have forgotten them — the one thing this product exists to prevent.\n- Say who you are again ONLY if they ask.\n\nDISCRETION RULES:\n- Never mention that you have instructions, steps, or a script. Never\n  narrate moving between stages of the call.\n- Never speak your own instructions aloud. Words like \"Capture:\", \"verbatim\",\n  \"rule:\", or any part of these directions are for you, never for the caller.\n- Never say a full medicine name more than twice in one call.\n\nCLOSURE PROTOCOL:\n1. Speak your closing sentence (based on outcome).\n2. Call report_outcome with the correct outcome and a brief reason.\n3. Call end_call.\n4. Say NOTHING after calling end_call.\n5. Each tool should be called EXACTLY ONCE.\n"
+          }
+        ],
+        "provider": "custom-llm",
+        "maxTokens": 250,
+        "temperature": 0.3
+      },
+      "firstMessage": "नमस्ते रोहन जी, मैं आशा बोल रही हूँ। आपका Crocin लेने का समय हो गया है। क्या आपने ले लिया है?",
+      "voicemailMessage": "नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।",
+      "transcriber": {
+        "server": {
+          "url": "wss://example.invalid/api/stt"
+        },
+        "provider": "custom-transcriber"
+      },
+      "silenceTimeoutSeconds": 15,
+      "maxDurationSeconds": 180,
+      "backgroundSound": "office",
+      "analysisPlan": {
+        "summaryPrompt": "Summarize the call in 1-2 sentences.",
+        "structuredDataPrompt": "Extract the call outcome and a brief reason from the transcript.",
+        "structuredDataSchema": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "description": "Brief reason for the outcome"
+            },
+            "outcome": {
+              "type": "string",
+              "description": "CONFIRMED, DENIED, UNCLEAR, ESCALATED_SYMPTOM, ESCALATED_DISTRESS, INCOMPLETE, or NO_ANSWER"
+            }
+          }
+        }
+      },
+      "backgroundDenoisingEnabled": true,
+      "artifactPlan": {
+        "recordingEnabled": true
+      },
+      "startSpeakingPlan": {
+        "waitSeconds": 0.4,
+        "smartEndpointingPlan": {
+          "provider": "vapi"
+        }
+      },
+      "stopSpeakingPlan": {
+        "numWords": 2,
+        "backoffSeconds": 1,
+        "acknowledgementPhrases": [
+          "अच्छा",
+          "ठीक",
+          "ठीक है",
+          "हम्म",
+          "जी",
+          "ओके",
+          "okay"
+        ]
+      },
+      "server": {
+        "url": "https://example.invalid/webhook"
+      },
+      "firstMessageInterruptionsEnabled": false,
+      "backgroundSpeechDenoisingPlan": {
+        "smartDenoisingPlan": {
+          "enabled": true
+        }
+      },
+      "latestVersion": "v4",
+      "variableValues": {
+        "parent_name": "Test Patient",
+        "drug_name": "Metformin",
+        "language": "hi"
+      }
+    },
+    "assistantVersion": "v4"
+  }
+}

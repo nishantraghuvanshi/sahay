@@ -195,6 +195,34 @@ class PlaygroundTransportAdapter extends TransportPort {
   async createCall() {
     throw new Error('PlaygroundTransportAdapter.createCall() is not applicable — the playground never dials out.');
   }
+
+  /**
+   * Not applicable — same story as getAssistantId()/createCall() above: the
+   * playground never dials out, so there is no callId a caller could ever
+   * legitimately hold. Throws rather than returning a structured
+   * `{ok:false}` "unsupported" result, matching this adapter's own
+   * convention for the other not-applicable methods above.
+   */
+  async getCallStatus() {
+    throw new Error(
+      'PlaygroundTransportAdapter.getCallStatus() is not applicable — the playground never dials out.'
+    );
+  }
+
+  /**
+   * @see TransportPort#requiredSecrets
+   *
+   * The playground is a browser session, not a phone call — there is no
+   * vendor webhook to authenticate and no orchestrator to share a secret
+   * with, so it needs none. Explicit empty array rather than inheriting a
+   * default, per TransportPort's contract: a transport that needs no secret
+   * says so on purpose.
+   *
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    return [];
+  }
 }
 
 /**

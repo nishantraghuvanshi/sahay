@@ -4,6 +4,11 @@ const LLMPort = require('../../../core/ports/llm');
 const logger = require('../../../utils/logger');
 const { withRetry } = require('../../../utils/retry');
 const { parseSSEStream } = require('../../../utils/sse');
+const {
+  fetchWithStreamTimeout,
+  DEFAULT_FIRST_CHUNK_TIMEOUT_MS,
+  DEFAULT_IDLE_TIMEOUT_MS,
+} = require('../../../utils/stream-timeout');
 
 
 /**
@@ -125,14 +130,26 @@ class OpenAILLMAdapter extends LLMPort {
 
     const requestBody = buildRequestBody(body, config, { stream: true });
 
-    const response = await fetch(`${config.base_url}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+    // A stalled stream (connection accepted, then silence — no error, no
+    // close) would otherwise hang the turn forever. fetchWithStreamTimeout
+    // aborts if the first chunk never arrives, and separately if any later
+    // chunk takes too long, without capping the length of a normal answer.
+    const response = await fetchWithStreamTimeout(
+      `${config.base_url}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
       },
-      body: JSON.stringify(requestBody),
-    });
+      {
+        provider: 'openai',
+        firstChunkTimeoutMs: config.stream_first_chunk_timeout_ms ?? DEFAULT_FIRST_CHUNK_TIMEOUT_MS,
+        idleTimeoutMs: config.stream_idle_timeout_ms ?? DEFAULT_IDLE_TIMEOUT_MS,
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();

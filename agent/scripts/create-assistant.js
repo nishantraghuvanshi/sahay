@@ -21,16 +21,18 @@ require('dotenv').config();
 const vapiClient = require('./lib/vapi-client');
 
 async function main() {
-  // 1. Read the generated assistant config
-  const configPath = path.join(__dirname, '..', 'config', 'assistant.json');
-
-  if (!fs.existsSync(configPath)) {
-    console.error('Error: config/assistant.json not found.');
-    console.error('Run `node scripts/generate-assistant-config.js` first.');
-    process.exit(1);
-  }
-
-  const assistantConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  // 1. Build the config fresh rather than reading config/assistant.json.
+  //
+  // The committed file is deliberately REDACTED: VAPI_SECRET is replaced with a
+  // placeholder so a tracked, soon-to-be-public artifact never holds the live
+  // value. Sending that file to Vapi would register the literal placeholder as
+  // the shared secret, and every webhook would then fail authentication — while
+  // the assistant still looked correctly configured in the dashboard.
+  //
+  // generate() returns the in-memory config with the real secret, which is what
+  // Vapi must receive. update-assistant.js does the same for the same reason.
+  const { generate } = require('./generate-assistant-config');
+  const { assistantConfig } = generate();
 
   console.log('Creating Vapi assistant...');
   console.log(`  Name: ${assistantConfig.name}`);

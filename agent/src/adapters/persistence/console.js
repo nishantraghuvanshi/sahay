@@ -66,6 +66,10 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return [];
   }
 
+  async findPatientById() {
+    return null;
+  }
+
   async setPatientSchedule(patientId, updates) {
     this._noop('patient_schedule_set_skipped', { patientId, ...updates });
     return null;
@@ -142,6 +146,10 @@ class ConsoleRepository extends OutcomeRepositoryPort {
     return [];
   }
 
+  async findMedicationById() {
+    return null;
+  }
+
   async upsertDoseEvent(event) {
     this._noop('dose_event_upsert_skipped', {
       medicationId: event && event.medicationId,
@@ -172,6 +180,16 @@ class ConsoleRepository extends OutcomeRepositoryPort {
 
   async saveMessage(message) {
     this._noop('message_save_skipped', { callId: message && message.callId, role: message && message.role });
+  }
+
+  /**
+   * The port declares this because a dropped caregiver alert must be visible
+   * in the data. This adapter stores nothing, so the honest thing it can do is
+   * say so loudly rather than inherit the port's throw and surface as an
+   * unexplained failure inside the escalation plugin's catch.
+   */
+  async recordAlert(callId, channel) {
+    this._noop('alert_record_skipped', { callId, channel });
   }
 
   async getMessages() {

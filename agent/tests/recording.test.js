@@ -27,6 +27,10 @@ const MedicationAdherenceStrategy = require('../src/use-cases/medication-adheren
  * end-of-call-report (mono preferred over stereo, null when absent).
  */
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+process.env.VAPI_SECRET = TEST_VAPI_SECRET;
+
 const tmpDbs = [];
 
 function freshRepo() {
@@ -145,7 +149,7 @@ describe('end-of-call-report — recording URL extraction', () => {
       await repository.createCall({ callId: 'rec-both' });
       const res = await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: {
             type: 'end-of-call-report',
@@ -172,7 +176,7 @@ describe('end-of-call-report — recording URL extraction', () => {
       await repository.createCall({ callId: 'rec-stereo-only' });
       await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: {
             type: 'end-of-call-report',
@@ -195,7 +199,7 @@ describe('end-of-call-report — recording URL extraction', () => {
       await repository.createCall({ callId: 'rec-none' });
       const res = await fetch(`${baseUrl}/webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
         body: JSON.stringify({
           message: { type: 'end-of-call-report', call: { id: 'rec-none' } },
         }),

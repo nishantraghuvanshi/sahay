@@ -113,6 +113,17 @@ function normaliseLabel(label, reason) {
   if (raw === 'DENIED' && UNCLEAR_REASONS.some((r) => why.includes(r))) {
     return OUTCOMES.UNCLEAR;
   }
+
+  // /webhook has no signature verification, so `label` can be anything an
+  // unauthenticated caller chooses to send — including a non-string value
+  // that `String()` above turns into junk like "[OBJECT OBJECT]". Any label
+  // outside the known enum falls back to UNCLEAR (the "we do not know"
+  // outcome), never NO_ANSWER: UNCLEAR means the intent could not be
+  // determined, NO_ANSWER means the patient was not reached, and treating
+  // an unrecognised label as a missed call would be a false clinical claim.
+  if (!Object.values(OUTCOMES).includes(raw)) {
+    return OUTCOMES.UNCLEAR;
+  }
   return raw;
 }
 

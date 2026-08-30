@@ -282,6 +282,27 @@ describe('resume window', () => {
     const found = await repo.findResumableSession(patientId, WINDOW, minutesFromNow(1));
     assert.strictEqual(found.session_id, 's2');
   });
+
+  test('a timestamp tie is broken by insertion order, not id', async () => {
+    // Pin the tie directly rather than relying on two statements racing to
+    // land in the same millisecond: both rows get the exact same ended_at,
+    // so ended_at alone cannot decide the winner and the tiebreak column is
+    // what's under test.
+    await repo.createSession({ sessionId: 's1', patientId, callId: 'c1', direction: 'inbound' });
+    await repo.endSession('s1', 'dropped');
+    await repo.createSession({ sessionId: 's2', patientId, callId: 'c2', direction: 'inbound' });
+    await repo.endSession('s2', 'dropped');
+
+    const tiedAt = (await repo.getSession('s2')).ended_at;
+    repo.db
+      .prepare("UPDATE sessions SET ended_at = ? WHERE session_id IN ('s1', 's2')")
+      .run(tiedAt);
+
+    // id is a random UUID (newId() in sqlite.js), so ordering by it is not
+    // ordering by insertion order — it must not decide this tie.
+    const found = await repo.findResumableSession(patientId, WINDOW, minutesFromNow(1));
+    assert.strictEqual(found.session_id, 's2', 'the later-inserted session must win a timestamp tie');
+  });
 });
 
 describe('recent call history for a patient', () => {

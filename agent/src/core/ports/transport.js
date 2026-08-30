@@ -61,6 +61,49 @@ class TransportPort {
   async createCall(assistantId, phoneNumber, variables) {
     throw new Error('TransportPort.createCall() not implemented');
   }
+
+  /**
+   * The env vars this transport needs set before it is safe to serve traffic
+   * over it — e.g. the shared secret that authenticates its webhooks.
+   * Consulted by core/safety-guard.js so the boot guard checks whichever
+   * transport is actually active instead of hardcoding one orchestrator's
+   * variable name.
+   *
+   * Deliberately no default that returns []: a transport that needs no
+   * secret (the playground — no phone, no vendor webhook) must say so
+   * explicitly by overriding this. Throwing here means a new transport
+   * that forgets to implement it fails loud at boot instead of silently
+   * requiring nothing.
+   *
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    throw new Error('TransportPort.requiredSecrets() not implemented');
+  }
+
+  /**
+   * Poll the status of a previously dispatched call.
+   *
+   * GET /api/call/:callId used to fetch api.vapi.ai directly, hardcoded to
+   * one orchestrator — the same class of bug getAssistantId() exists to
+   * prevent. A transport with no status-polling equivalent (or nothing yet
+   * implemented) must say so explicitly rather than fake a result: return
+   * `{ ok: false, error: '<reason>', httpStatus: <code> }` instead of a
+   * fabricated status. Following requiredSecrets()'s convention, the base
+   * class throws rather than defaulting to something silently wrong, so a
+   * new transport that forgets to implement this fails loud at call time
+   * instead of always reporting "unsupported" without meaning to.
+   *
+   * @param {string} callId
+   * @returns {Promise<Object>} `{ ok: true, callId, status, duration, cost,
+   *   outcome, transcript }` on success, or `{ ok: false, error, httpStatus }`
+   *   on failure/unsupported. `httpStatus` is the code the caller — a
+   *   caregiver-app-facing route, not a tool endpoint bound by the
+   *   always-200 contract — should mirror back.
+   */
+  async getCallStatus(callId) {
+    throw new Error('TransportPort.getCallStatus() not implemented');
+  }
 }
 
 module.exports = TransportPort;

@@ -131,7 +131,10 @@ describe('Task 2 — buildAssistantConfig emits native or custom shapes per isBr
     const config = configFor({ stt: true, llm: true, tts: true });
 
     assert.strictEqual(config.transcriber.provider, 'custom-transcriber');
-    assert.match(config.transcriber.server.url, /\/api\/stt$/);
+    // ?api_key=<secret> is appended for the WS handshake (see vapiSecretAuth
+    // / authenticateVapiWebSocket in auth.js) — the path itself still ends
+    // at /api/stt.
+    assert.match(config.transcriber.server.url, /\/api\/stt\?api_key=/);
 
     assert.strictEqual(config.model.provider, 'custom-llm');
     assert.strictEqual(config.model.url, `${WEBHOOK_URL}/llm/chat/completions`);

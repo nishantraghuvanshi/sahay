@@ -30,9 +30,13 @@ const { localSlotToUtc } = require('../src/utils/time');
  * today and the look-ahead window, while the medication is active and
  * within [startDate, endDate].
  */
+// Phone numbers come from the environment with placeholder defaults. Real test
+// numbers previously sat in this file, which is tracked and ships in a repo that
+// becomes public at submission (NFR-7). Set SEED_PATIENT_PHONE /
+// SEED_PATIENT_PHONE_2 in .env (gitignored) to seed against your own handset.
 const SEED_PATIENTS = [
   {
-    phone: '+918104348262',
+    phone: process.env.SEED_PATIENT_PHONE || '+15551230001',
     name: 'Anmol',
     drugName: 'Metformin',
     language: 'hi',
@@ -53,7 +57,7 @@ const SEED_PATIENTS = [
     ],
   },
   {
-    phone: '+919748670058',
+    phone: process.env.SEED_PATIENT_PHONE_2 || '+15551230002',
     name: 'Anmol',
     drugName: 'Metformin',
     language: 'hi',

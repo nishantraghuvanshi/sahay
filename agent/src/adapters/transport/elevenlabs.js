@@ -100,6 +100,21 @@ const DOSE_OUTCOME_EXTRACTION = [
  * schemas. No transfer_* or subagent tools: there is nobody to transfer an
  * elderly caller to, and a transfer_to_number would let the agent dial out.
  */
+/**
+ * How the prompt refers to hanging up, on THIS transport.
+ *
+ * SYSTEM_TOOLS above declares a real system tool literally named `end_call`,
+ * so here the prompt can name it. The config's own defaults are the prose form
+ * ("end the call") because Vapi's native {type:'endCall'} takes no function
+ * name, and naming a tool that does not exist is what makes the model speak
+ * "[end_call]" at the caller instead of hanging up. A transport therefore has
+ * to opt IN to the literal name; one that forgets stays on the safe wording.
+ */
+const END_CALL_VARS = {
+  end_call_action: 'call end_call',
+  end_call_name: 'end_call',
+};
+
 const SYSTEM_TOOLS = [
   { system_tool_type: 'end_call' },
   { system_tool_type: 'language_detection', only_at_conversation_start: false },
@@ -663,8 +678,16 @@ class ElevenLabsTransportAdapter extends TransportPort {
       // Never substituted via their own tag; folded into alert_delivered_line.
       'alert_delivered_true_line',
       'alert_delivered_false_line',
+      // Properties of the TRANSPORT, not of the call. No per-call
+      // dynamic_variable would ever fill them, so a "{{end_call_action}}"
+      // placeholder would sit unfilled in text meant to be spoken.
+      'end_call_action',
+      'end_call_name',
     ]);
-    const defaults = typeof strategy.getVariables === 'function' ? strategy.getVariables() : {};
+    const defaults = {
+      ...(typeof strategy.getVariables === 'function' ? strategy.getVariables() : {}),
+      ...END_CALL_VARS,
+    };
     const placeholders = Object.fromEntries(
       Object.entries(defaults).map(([k, v]) => [
         k,
@@ -868,6 +891,50 @@ class ElevenLabsTransportAdapter extends TransportPort {
     // Returned alongside the API's own response so a caller can correlate
     // this dispatch with the tool calls and post-call webhook that follow.
     return { ...body, voxikin_call_id: voxikinCallId };
+  }
+
+  /**
+   * @see TransportPort#getCallStatus
+   *
+   * ElevenLabs has a conversation-status endpoint, but it is keyed by their
+   * own conversation_id — not the callId this route is handed, which on the
+   * phone path is a Vapi call id and on this transport would need to be the
+   * voxikin_call_id minted in createCall() above, not looked up anywhere
+   * today. Rather than guess at a mapping, this says plainly that polling
+   * isn't wired up yet instead of faking a status.
+   *
+   * @returns {Promise<Object>}
+   */
+  async getCallStatus(callId) {
+    return {
+      ok: false,
+      error: 'unsupported',
+      httpStatus: 501,
+      detail: 'ElevenLabs transport has no callId-to-conversation lookup implemented.',
+    };
+  }
+
+  /**
+   * @see TransportPort#requiredSecrets
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    return [
+      {
+        name: 'ELEVENLABS_WEBHOOK_SECRET',
+        why: 'sent back to us as X-Voxikin-Token on every server-tool call ' +
+          '(report_outcome, log_observation, ...) and verified before that ' +
+          'call is trusted — unset, every tool call 401s, including the one ' +
+          'that files ESCALATED_SYMPTOM, so a chest-pain report never reaches ' +
+          'a caregiver.',
+      },
+      {
+        name: 'ELEVENLABS_POST_CALL_SECRET',
+        why: 'verifies the HMAC signature on the post-call webhook — unset, a ' +
+          'forged post-call payload can write a fabricated transcript and ' +
+          'outcome for a call that never happened.',
+      },
+    ];
   }
 }
 

@@ -8,6 +8,26 @@ const {
 } = require('../../use-cases/medication-adherence/inbound-context');
 const { EVENT_TYPES } = require('../../core/events/types');
 const logger = require('../../utils/logger');
+const {
+  vapiSecretAuth,
+  authenticateVapiWebSocket,
+  verifyVapiSecret,
+  extractVapiSecret,
+} = require('../../core/middleware/auth');
+const { createRateLimiter } = require('../../core/middleware/rate-limit');
+
+// Fixed-window budgets, generous enough that real Vapi traffic for a handful
+// of concurrent calls is never throttled — a false-positive throttle drops a
+// live call, which is worse than the cost-amplification risk these guard
+// against. See rate-limit.js for why a fixed window is enough precision here.
+const WEBHOOK_RATE_LIMIT_WINDOW_MS = 60_000;
+const WEBHOOK_RATE_LIMIT_MAX = 600; // ~10/s — one call emits several webhook events
+const STT_CONNECT_RATE_LIMIT_WINDOW_MS = 60_000;
+const STT_CONNECT_RATE_LIMIT_MAX = 100; // new STT socket connections per IP per minute
+const LLM_RATE_LIMIT_WINDOW_MS = 60_000;
+const LLM_RATE_LIMIT_MAX = 300; // chat-completion calls per IP per minute
+const TTS_RATE_LIMIT_WINDOW_MS = 60_000;
+const TTS_RATE_LIMIT_MAX = 300; // synthesize calls per IP per minute
 
 /**
  * Vapi Transport Adapter
@@ -25,6 +45,30 @@ class VapiTransportAdapter extends TransportPort {
     this.providerRegistry = providerRegistry;
     this.engine = null;
     this.webhookUrl = null;
+
+    // One limiter instance per route, held for the transport's lifetime —
+    // a limiter created per-request would never accumulate a window's worth
+    // of hits and would rate-limit nothing.
+    this._webhookRateLimiter = createRateLimiter({
+      windowMs: WEBHOOK_RATE_LIMIT_WINDOW_MS,
+      max: WEBHOOK_RATE_LIMIT_MAX,
+      name: 'webhook',
+    });
+    this._sttConnectRateLimiter = createRateLimiter({
+      windowMs: STT_CONNECT_RATE_LIMIT_WINDOW_MS,
+      max: STT_CONNECT_RATE_LIMIT_MAX,
+      name: 'stt_connect',
+    });
+    this._llmRateLimiter = createRateLimiter({
+      windowMs: LLM_RATE_LIMIT_WINDOW_MS,
+      max: LLM_RATE_LIMIT_MAX,
+      name: 'llm',
+    });
+    this._ttsRateLimiter = createRateLimiter({
+      windowMs: TTS_RATE_LIMIT_WINDOW_MS,
+      max: TTS_RATE_LIMIT_MAX,
+      name: 'tts',
+    });
   }
 
   /**
@@ -48,6 +92,20 @@ class VapiTransportAdapter extends TransportPort {
     // and never dials in here.
     if (this.providerRegistry.isBridged('stt')) {
       wss.on('connection', async (ws, req) => {
+        const remoteAddress = req.socket?.remoteAddress || 'unknown';
+        if (!this._sttConnectRateLimiter.allow(remoteAddress)) {
+          ws.close(1008, 'rate limited');
+          return;
+        }
+
+        // Unauthenticated by default: this socket opens a billed STT session
+        // per connection, with no operator API key possible on a route Vapi
+        // itself must reach. See auth.js / safety-guard.js.
+        if (!authenticateVapiWebSocket(req)) {
+          ws.close(4001, 'Unauthorized: invalid or missing Vapi secret');
+          return;
+        }
+
         logger.log('stt_connect', { url: req.url });
 
         let sttAdapter;
@@ -61,12 +119,24 @@ class VapiTransportAdapter extends TransportPort {
           return;
         }
 
+        // Vapi announces the real audio format in its 'start' control message.
+        // This used to be hardcoded to 2 while only sampleRate was logged, so a
+        // mono stream would be de-interleaved as if stereo — every other sample
+        // taken, yielding noise that Sarvam accepts and silently declines to
+        // transcribe. No error, healthy socket, empty transcript, and the call
+        // dies on silence-timed-out. Trust what the transport says it is sending.
+        let streamChannels = 2;
+
+        // Same story as streamChannels above: the configured rate
+        // (providers.yaml) is only a fallback. null here means "nothing
+        // announced yet" — sarvam.js falls back to its own configured
+        // default rather than us guessing one.
+        let streamSampleRate = null;
+
         ws.on('message', async (data, isBinary) => {
           try {
             if (isBinary) {
-              // Binary frame = audio chunk
-              // Vapi streams 2-channel PCM; the caller declares this because the
-              // playground streams mono through the same adapter.
+              // Binary frame = audio chunk. Channel 0 is the customer.
               await sttAdapter.transcribe(data, (transcript, isFinal, channel) => {
                 const response = {
                   type: 'transcriber-response',
@@ -75,12 +145,37 @@ class VapiTransportAdapter extends TransportPort {
                   transcriptType: isFinal ? 'final' : 'partial',
                 };
                 if (ws.readyState === 1) ws.send(JSON.stringify(response));
-              }, { channels: 2 });
+              }, { channels: streamChannels, sampleRate: streamSampleRate });
             } else {
               // Text frame = JSON config message
               const message = JSON.parse(data.toString());
               if (message.type === 'start') {
-                logger.log('stt_started', { sampleRate: message.sampleRate });
+                if (Number.isInteger(message.channels) && message.channels > 0) {
+                  streamChannels = message.channels;
+                }
+                if (Number.isInteger(message.sampleRate) && message.sampleRate > 0) {
+                  streamSampleRate = message.sampleRate;
+                }
+                logger.log('stt_started', {
+                  sampleRate: message.sampleRate,
+                  channels: message.channels,
+                  usingChannels: streamChannels,
+                  configuredSampleRate: this.providerRegistry.getSTTConfig().sample_rate,
+                });
+                if (
+                  message.sampleRate &&
+                  message.sampleRate !== this.providerRegistry.getSTTConfig().sample_rate
+                ) {
+                  // Used to log this mismatch and then transcribe at the
+                  // configured rate anyway. streamSampleRate now carries the
+                  // announced rate through to sttAdapter.transcribe() above,
+                  // so this only needs to report that it was corrected.
+                  logger.log('stt_sample_rate_corrected', {
+                    transportSays: message.sampleRate,
+                    configuredFallback: this.providerRegistry.getSTTConfig().sample_rate,
+                    usingSampleRate: streamSampleRate,
+                  });
+                }
               }
             }
           } catch (err) {
@@ -107,7 +202,11 @@ class VapiTransportAdapter extends TransportPort {
     // when LLM is bridged — a native LLM provider is called by Vapi
     // directly and never posts here.
     if (this.providerRegistry.isBridged('llm')) {
-      app.post('/llm/chat/completions', async (req, res) => {
+      app.post(
+        '/llm/chat/completions',
+        this._llmRateLimiter.middleware,
+        vapiSecretAuth,
+        async (req, res) => {
         const llmAdapter = this.providerRegistry.getActiveLLM();
         const llmConfig = this.providerRegistry.getLLMConfig();
 
@@ -166,7 +265,8 @@ class VapiTransportAdapter extends TransportPort {
             res.status(500).json({ error: err.message });
           }
         }
-      });
+        }
+      );
     } else {
       logger.log('route_skipped_native_provider', {
         type: 'llm',
@@ -179,7 +279,7 @@ class VapiTransportAdapter extends TransportPort {
     // TTS is bridged — a native TTS provider is synthesized by Vapi
     // directly and never posts here.
     if (this.providerRegistry.isBridged('tts')) {
-      app.post('/api/tts/:provider', async (req, res) => {
+      app.post('/api/tts/:provider', this._ttsRateLimiter.middleware, vapiSecretAuth, async (req, res) => {
         const ttsAdapter = this.providerRegistry.getActiveTTS();
         const ttsConfig = this.providerRegistry.getTTSConfig();
         try {
@@ -201,6 +301,23 @@ class VapiTransportAdapter extends TransportPort {
     // --- HTTP route: /webhook ---
     // Vapi sends server messages (end-of-call, tool-call, call-started, etc.)
     app.post('/webhook', async (req, res) => {
+      // A forged end-of-call-report or tool-call here writes fake rows into
+      // `calls` / fabricated symptom text into a patient's record — this
+      // route had no auth at all before vapiSecretAuth existed. It stays a
+      // 200 on rejection (not the 401 the other bridge routes use): a real
+      // caller is waiting on this response, and NFR-6 requires errors to be
+      // data, never a stalled transport, on this specific endpoint.
+      const remoteAddress = req.ip || req.socket?.remoteAddress || 'unknown';
+      if (!this._webhookRateLimiter.allow(remoteAddress)) {
+        logger.log('webhook_rate_limited', { remoteAddress });
+        return res.status(200).json({ ok: false, error: 'rate limited' });
+      }
+
+      if (!verifyVapiSecret(extractVapiSecret(req))) {
+        logger.log('vapi_secret_rejected', { path: '/webhook', method: 'POST' });
+        return res.status(200).json({ ok: false, error: 'Invalid or missing Vapi secret' });
+      }
+
       const message = req.body.message || req.body;
       const eventBus = this.engine.getEventBus();
 
@@ -223,11 +340,56 @@ class VapiTransportAdapter extends TransportPort {
             return res.json({ assistant });
           }
 
+          // UNOBSERVED: an audit of two real phone calls (see
+          // tests/fixtures/vapi-real/) found Vapi never actually sends
+          // 'call-started' — it sends 'status-update' with
+          // status: 'in-progress' instead (handled below). Kept here in
+          // case some other Vapi configuration does emit it.
           case 'call-started':
             await eventBus.emit(EVENT_TYPES.CONVERSATION_STARTED, {
               callId: message.call?.id,
               phone: message.call?.customer?.number,
             });
+            break;
+
+          // Confirmed against real traffic (tests/fixtures/vapi-real/) —
+          // Vapi's actual start-of-call signal on the phone path.
+          // 'ended' is deliberately a log-only branch: end-of-call-report
+          // always follows and already owns closeCall/CONVERSATION_ENDED,
+          // so duplicating that here would just double the work.
+          case 'status-update': {
+            if (message.status === 'in-progress') {
+              await eventBus.emit(EVENT_TYPES.CONVERSATION_STARTED, {
+                callId: message.call?.id,
+                phone: message.call?.customer?.number,
+              });
+            } else if (message.status === 'ended') {
+              logger.log('vapi_status_update_ended', {
+                call_id: message.call?.id,
+                endedReason: message.endedReason,
+              });
+            } else {
+              logger.log('vapi_status_update', {
+                call_id: message.call?.id,
+                status: message.status,
+              });
+            }
+            break;
+          }
+
+          // Confirmed against real traffic (tests/fixtures/vapi-real/).
+          // Nothing meaningful to do with these yet — logged so they're
+          // distinguishable from a genuinely unknown event type.
+          case 'speech-update':
+            logger.log('vapi_speech_update', {
+              call_id: message.call?.id,
+              status: message.status,
+              role: message.role,
+            });
+            break;
+
+          case 'assistant.started':
+            logger.log('vapi_assistant_started', { call_id: message.call?.id });
             break;
 
           // Vapi's real server message for a tool invocation is 'tool-calls'
@@ -273,9 +435,11 @@ class VapiTransportAdapter extends TransportPort {
 
           // UNVERIFIED: 'transcript' / 'role' / 'transcriptType' are this
           // project's best reading of Vapi's documented per-turn transcript
-          // shape, not confirmed against a live account. Only final
-          // transcripts are persisted — partials would otherwise duplicate
-          // the same turn as it's refined.
+          // shape, not confirmed against a live account — an audit of two
+          // real phone calls (tests/fixtures/vapi-real/) never observed
+          // this event at all; only 'speech-update' (started/stopped, no
+          // text) arrived. Only final transcripts are persisted — partials
+          // would otherwise duplicate the same turn as it's refined.
           case 'transcript': {
             if (message.transcriptType === 'final' && message.transcript) {
               await recordTurn({
@@ -305,9 +469,19 @@ class VapiTransportAdapter extends TransportPort {
                   || {},
                 transcript,
                 analysis,
-                endedReason: callData.endedReason,
-                duration: callData.durationSeconds,
-                cost: callData.cost,
+                // Read from message.* FIRST. In real captured payloads
+                // (tests/fixtures/vapi-real/call-sequences.json) endedReason,
+                // durationSeconds and cost are top-level on the message and
+                // null inside message.call — reading only the nested copy meant
+                // duration and cost were never persisted, and closeCall below
+                // received endedReason undefined. session-status.js maps an
+                // unrecognised reason to 'dropped', and a dropped session is
+                // what makes a call resumable, so every completed call looked
+                // resumable for the whole resume window. The nested fallback is
+                // kept because other Vapi configurations may populate it.
+                endedReason: message.endedReason ?? callData.endedReason,
+                duration: message.durationSeconds ?? callData.durationSeconds,
+                cost: message.cost ?? callData.cost,
                 recordingUrl: this._extractRecordingUrl(message),
               },
             });
@@ -318,7 +492,7 @@ class VapiTransportAdapter extends TransportPort {
             await closeCall({
               repository: this.repository,
               callId: callData.id,
-              endedReason: callData.endedReason,
+              endedReason: message.endedReason ?? callData.endedReason,
             });
             break;
           }
@@ -441,8 +615,19 @@ class VapiTransportAdapter extends TransportPort {
    * @private
    */
   _extractRecordingUrl(message) {
+    // Same story as endedReason/durationSeconds/cost above: the real capture
+    // carries recordingUrl at the top level of message AND inside
+    // message.artifact — this already worked because it happened to check
+    // the nested copy, but reading top-level first keeps all four fields
+    // consistent about which shape wins rather than three agreeing and one
+    // differing by accident.
     const artifact = message.artifact || message.call?.artifact || {};
-    return artifact.recordingUrl || artifact.stereoRecordingUrl || null;
+    return (
+      message.recordingUrl ||
+      artifact.recordingUrl ||
+      artifact.stereoRecordingUrl ||
+      null
+    );
   }
 
   /**
@@ -493,6 +678,70 @@ class VapiTransportAdapter extends TransportPort {
    * @param {Object} [opts] - { mode, variables } for inbound and resume
    * @returns {Object} Vapi assistant config
    */
+  /**
+   * Build a Vapi squad — the multi-state form of the call.
+   *
+   * Shape per docs.vapi.ai/squads-example: { members: [{ assistant,
+   * assistantDestinations }] }, first member handles the call, the rest are
+   * reached by transfer. Returned from assistant-request as `{ squad }` rather
+   * than `{ assistant }`, which is what lets inbound stay dynamic per caller —
+   * a Vapi Workflow attaches to the phone number instead and would have cost
+   * the resolve-caller design entirely.
+   *
+   * Each member is built by buildAssistantConfig with only its prompt
+   * overridden, so providers, secrets, hooks and timeouts cannot drift between
+   * members.
+   *
+   * @param {Object} strategy
+   * @param {Object} providers
+   * @param {string} webhookUrl
+   * @param {Object} [opts] - { mode, variables }
+   * @returns {{ members: Array }}
+   */
+  buildSquadConfig(strategy, providers, webhookUrl, opts = {}) {
+    if (typeof strategy.buildSquadMembers !== 'function') {
+      throw new Error(
+        'Active strategy has no buildSquadMembers() — it cannot run as a squad. '
+          + 'Use buildAssistantConfig for single-state strategies.'
+      );
+    }
+
+    const variables = { ...strategy.getVariables(), ...(opts.variables || {}) };
+    const members = strategy.buildSquadMembers(variables);
+
+    const entry = members.filter((m) => m.first);
+    if (entry.length !== 1) {
+      throw new Error(`A squad needs exactly one entry member, found ${entry.length}.`);
+    }
+    // Vapi hands the call to members[0], so the entry member must lead.
+    const ordered = [...entry, ...members.filter((m) => !m.first)];
+
+    return {
+      members: ordered.map((member) => ({
+        assistant: this.buildAssistantConfig(strategy, providers, webhookUrl, {
+          ...opts,
+          variables,
+          name: member.label,
+          systemPrompt: member.systemPrompt,
+          // Only the entry member greets. A first message on an internal
+          // member would narrate the state change to the patient — the seam a
+          // state machine exists to hide.
+          firstMessage: member.first ? undefined : '',
+          firstMessageMode: member.first ? undefined : 'assistant-waits-for-user',
+        }),
+        assistantDestinations: member.destinations.map((d) => ({
+          type: 'assistant',
+          assistantName: d.label,
+          // Silent handoff. "Please hold while I transfer you" is right for a
+          // call centre and wrong here: these are steps inside one
+          // conversation, and announcing them makes the machinery audible.
+          message: '',
+          description: d.description,
+        })),
+      })),
+    };
+  }
+
   buildAssistantConfig(strategy, providers, webhookUrl, opts = {}) {
     const mode = opts.mode || 'outbound';
     const variables = opts.variables || {};
@@ -510,17 +759,45 @@ class VapiTransportAdapter extends TransportPort {
     const isLlmBridged = this.providerRegistry.isBridged('llm');
     const isTtsBridged = this.providerRegistry.isBridged('tts');
 
+    // The one secret Vapi presents on every route it calls into this
+    // server: server.secret (→ X-Vapi-Secret header) on the three
+    // server-url shapes below, and model.headers on the custom-llm model
+    // (Authorization is reserved for the custom-llm credential, so it can't
+    // carry this). auth.js's vapiSecretAuth / authenticateVapiWebSocket
+    // verify against the same VAPI_SECRET env var these read.
+    // '' rather than undefined: JSON.stringify drops undefined-valued keys
+    // on write, so a config generated with VAPI_SECRET unset would compare
+    // unequal to itself after a round trip through the committed file (see
+    // assistant-config-staleness.test.js) — an empty string round-trips
+    // identically either way.
+    const vapiSecret = process.env.VAPI_SECRET || '';
+
+    // A squad member supplies its own already-composed prompt (built through
+    // the strategy's single guardrail path). Everything else — providers,
+    // secrets, hooks, timeouts — is identical for every member, which is the
+    // reason this builds them rather than a parallel squad-specific builder.
     const systemMessage = {
       role: 'system',
-      content: strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
+      content:
+        opts.systemPrompt
+        || strategy.buildSystemPrompt({ ...strategy.getVariables(), ...variables }, mode),
     };
 
     // Build transcriber config
     let transcriber;
     if (isSttBridged) {
+      // Belt and suspenders: `secret` asks Vapi to send X-Vapi-Secret like
+      // every other server-url shape, and `?api_key=` is appended to the URL
+      // itself because a WebSocket upgrade is not guaranteed to carry a
+      // custom header through — authenticateVapiWebSocket (auth.js) already
+      // reads api_key off the connection URL.
+      const sttUrl = `${webhookUrl.replace(/^http/, 'ws')}/api/stt`;
       transcriber = {
         provider: 'custom-transcriber',
-        server: { url: `${webhookUrl.replace(/^http/, 'ws')}/api/stt` },
+        server: {
+          url: `${sttUrl}?api_key=${encodeURIComponent(vapiSecret || '')}`,
+          secret: vapiSecret,
+        },
       };
     } else {
       // Native shape: Vapi runs the provider itself, naming it by our
@@ -541,6 +818,11 @@ class VapiTransportAdapter extends TransportPort {
         provider: 'custom-llm',
         model: llm.model,
         url: `${webhookUrl}/llm/chat/completions`,
+        // Custom-llm models can't use `server.secret` (there is no `server`
+        // object here) and `Authorization` is reserved for the custom-llm
+        // credential per Vapi's docs, so the shared secret rides on its own
+        // header instead — vapiSecretAuth reads the same header name.
+        headers: { 'x-vapi-secret': vapiSecret },
         messages: [systemMessage],
         temperature: llm.temperature,
         maxTokens: llm.max_tokens,
@@ -570,7 +852,7 @@ class VapiTransportAdapter extends TransportPort {
     if (isTtsBridged) {
       voice = {
         provider: 'custom-voice',
-        server: { url: `${webhookUrl}/api/tts/${activeTts}` },
+        server: { url: `${webhookUrl}/api/tts/${activeTts}`, secret: vapiSecret },
       };
     } else if (activeTts === 'elevenlabs') {
       // UNVERIFIED: 'provider: "11labs"' is Vapi's documented identifier
@@ -597,13 +879,59 @@ class VapiTransportAdapter extends TransportPort {
     );
 
     return {
-      name: 'Voxi',
+      name: opts.name || 'Voxi',
       transcriber,
       model,
       voice,
-      firstMessage,
+      // Only the squad's entry member greets. A mid-call member that speaks a
+      // first message would announce every internal state change to the
+      // patient, which is exactly the seam a state machine should hide.
+      firstMessage: opts.firstMessage !== undefined ? opts.firstMessage : firstMessage,
+      ...(opts.firstMessageMode ? { firstMessageMode: opts.firstMessageMode } : {}),
       firstMessageInterruptionsEnabled: false,  // Don't let user interrupt the greeting
       voicemailMessage: 'नमस्ते, मैं आशा बोल रही हूँ। बाद में फिर से संपर्क करेंगे। धन्यवाद।',
+      // Answer silence with a prompt, not a hangup. Three escalating
+      // customer.speech.timeout hooks (docs.vapi.ai/assistants/idle-messages);
+      // silenceTimeoutSeconds below is only the backstop after these have run.
+      // triggerResetMode 'onUserSpeech' so a patient who answers late resets the
+      // ladder instead of carrying strikes for the rest of the call.
+      hooks: [
+        {
+          on: 'customer.speech.timeout',
+          name: 'idle_gentle_prompt',
+          options: {
+            timeoutSeconds: strategyConfig.idlePromptSeconds,
+            triggerMaxCount: 3,
+            triggerResetMode: 'onUserSpeech',
+          },
+          // Deliberately not a repeat of the question: an elderly caller who is
+          // still thinking should be given room, not asked again.
+          do: [{ type: 'say', exact: 'जी, मैं सुन रही हूँ। आराम से बताइए।' }],
+        },
+        {
+          on: 'customer.speech.timeout',
+          name: 'idle_check_presence',
+          options: {
+            timeoutSeconds: strategyConfig.idleEscalateSeconds,
+            triggerMaxCount: 2,
+            triggerResetMode: 'onUserSpeech',
+          },
+          do: [{ type: 'say', exact: 'क्या आप वहाँ हैं?' }],
+        },
+        {
+          on: 'customer.speech.timeout',
+          name: 'idle_end_call',
+          options: {
+            timeoutSeconds: strategyConfig.idleEndSeconds,
+            triggerMaxCount: 1,
+            triggerResetMode: 'onUserSpeech',
+          },
+          do: [
+            { type: 'say', exact: 'ठीक है, मैं बाद में फिर कोशिश करूँगी। अपना ख़याल रखियेगा।' },
+            { type: 'tool', tool: { type: 'endCall' } },
+          ],
+        },
+      ],
       silenceTimeoutSeconds: strategyConfig.silenceTimeoutSeconds,
       maxDurationSeconds: strategyConfig.maxDurationSeconds,
       backgroundSound: strategyConfig.backgroundSound,
@@ -643,7 +971,7 @@ class VapiTransportAdapter extends TransportPort {
         backoffSeconds: 1.0,
         acknowledgementPhrases: ['अच्छा', 'ठीक', 'ठीक है', 'हम्म', 'जी', 'ओके', 'okay'],
       },
-      server: { url: `${webhookUrl}/webhook` },
+      server: { url: `${webhookUrl}/webhook`, secret: vapiSecret },
       // Recording is deliberately enabled — previously nothing set this, so
       // whether a call was recorded depended on an unverified account
       // default. Explicit, not left to Vapi's default.
@@ -774,6 +1102,59 @@ class VapiTransportAdapter extends TransportPort {
       direction: 'outbound',
       callId: call.id,
     });
+  }
+
+  /**
+   * @see TransportPort#getCallStatus
+   * @param {string} callId - Vapi call id
+   * @returns {Promise<Object>}
+   */
+  async getCallStatus(callId) {
+    const apiKey = process.env.VAPI_PRIVATE_KEY;
+    if (!apiKey) {
+      return { ok: false, error: 'VAPI_PRIVATE_KEY not set', httpStatus: 500 };
+    }
+
+    try {
+      const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { ok: false, error: errorText, httpStatus: response.status };
+      }
+
+      const call = await response.json();
+      return {
+        ok: true,
+        callId: call.id,
+        status: call.status,
+        duration: call.durationSeconds,
+        cost: call.cost,
+        outcome: call.analysis?.structuredData?.outcome,
+        transcript: call.transcript,
+      };
+    } catch (err) {
+      return { ok: false, error: err.message, httpStatus: 500 };
+    }
+  }
+
+  /**
+   * @see TransportPort#requiredSecrets
+   * @returns {Array<{name: string, why: string}>}
+   */
+  requiredSecrets() {
+    return [
+      {
+        name: 'VAPI_SECRET',
+        why: '/webhook, /llm/chat/completions, /api/tts/:provider and the /api/stt ' +
+          'WebSocket accept anyone without it — a forged webhook can write fake ' +
+          'call rows, and the bridged endpoints are a free paid-vendor-call ' +
+          'amplifier. Set it and configure the same value on the Vapi ' +
+          'assistant/phone number.',
+      },
+    ];
   }
 }
 

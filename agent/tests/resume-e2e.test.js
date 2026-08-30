@@ -33,6 +33,11 @@ const COMPLAINT = 'सीने में हल्का दर्द है';
 // session eligible for resume in step 5.
 const ABNORMAL_ENDED_REASON = 'pipeline-error-openai-llm-failed';
 
+// vapiSecretAuth (auth.js) now guards /webhook unconditionally — passed to
+// the spawned server's env below, and sent on every request here the same
+// way Vapi itself would.
+const TEST_VAPI_SECRET = 'test-vapi-secret';
+
 let serverProcess = null;
 let baseUrl = null;
 let dbDir = null;
@@ -81,7 +86,13 @@ before(async () => {
       // capability — the ElevenLabs transport is outbound-only and has no
       // inbound path. Name the transport this test needs explicitly rather
       // than inheriting whatever active.transport happens to default to.
-      env: { ...process.env, PORT: String(port), DB_PATH: dbPath, TRANSPORT: 'vapi' },
+      env: {
+        ...process.env,
+        PORT: String(port),
+        DB_PATH: dbPath,
+        VAPI_SECRET: TEST_VAPI_SECRET,
+        TRANSPORT: 'vapi',
+      },
       // Captured (not 'ignore') so a boot crash has a reason attached to the
       // failure instead of vanishing — see the assert.fail below, which is
       // this test's entire reason to exist.
@@ -127,7 +138,7 @@ describe('resume e2e — driven entirely over HTTP', () => {
     // Asserts inbound mode, by inspecting the returned assistant, not the DB.
     const res1 = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'assistant-request',
@@ -156,7 +167,7 @@ describe('resume e2e — driven entirely over HTTP', () => {
     // the session keyed on message.call.id, which step 2 opened.
     const res2 = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'tool-call',
@@ -174,7 +185,7 @@ describe('resume e2e — driven entirely over HTTP', () => {
     // the session lands as 'dropped' (resumable), not 'completed'.
     const res3 = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'end-of-call-report',
@@ -189,7 +200,7 @@ describe('resume e2e — driven entirely over HTTP', () => {
     // complaint captured in step 3, by inspecting the returned assistant.
     const res4 = await fetch(`${baseUrl}/webhook`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-vapi-secret': TEST_VAPI_SECRET },
       body: JSON.stringify({
         message: {
           type: 'assistant-request',

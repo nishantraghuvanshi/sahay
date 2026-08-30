@@ -66,6 +66,15 @@ class PlaygroundConversation {
     this.mealRelation = deps.mealRelation || null;
     this.meal = deps.meal || null;
 
+    // Per-call testing overrides, set from the playground UI so the graph can
+    // be exercised without editing .env or the database between calls.
+    // Deliberately NOT exposed: DISABLE_GUARDRAILS. assertSafeToServe refuses
+    // to boot with it set, and a UI checkbox would route around that guard —
+    // an unguarded agent is one misclick away, and it looks identical.
+    this.squadModeOverride = deps.squadMode;      // true | false | undefined
+    this.foodRuleOverride = deps.foodRule;        // 'after' | 'before' | 'none' | undefined
+    this.forceMode = deps.forceMode || null;      // 'outbound' | 'inbound' | 'resume' | null
+
     // Callbacks
     this.onTranscript = deps.onTranscript || (() => {});
     this.onAgentResponse = deps.onAgentResponse || (() => {});
@@ -73,6 +82,7 @@ class PlaygroundConversation {
     this.onOutcome = deps.onOutcome || (() => {});
     this.onStateChange = deps.onStateChange || (() => {});
     this.onModeResolved = deps.onModeResolved || (() => {});
+    this.onSquadTransition = deps.onSquadTransition || (() => {});
     this.onError = deps.onError || (() => {});
 
     // Conversation state
@@ -139,7 +149,17 @@ class PlaygroundConversation {
         // own stop() can await it — otherwise a disconnect immediately
         // followed by process shutdown could leave the session 'active'
         // instead of 'dropped', which would make it unresumable.
-        const endedReason = outcome && outcome.source === 'tool_call' ? 'customer-ended-call' : undefined;
+        // 'tool_call'  — the agent reported an outcome and hung up.
+        // 'user_ended'  — the person deliberately ended the call.
+        // Both are a finished call, so both close as completed and are NOT
+        // resumable. Anything else (silence timeout, browser disconnect, a
+        // dropped socket) stays `dropped` so the next session resumes.
+        //
+        // Conflating these is why every Stop click used to leave a resumable
+        // session behind, and the next playground call carried on the last
+        // one mid-conversation.
+        const DELIBERATE = new Set(['tool_call', 'user_ended']);
+        const endedReason = outcome && DELIBERATE.has(outcome.source) ? 'customer-ended-call' : undefined;
         await this._closeSession(endedReason);
         this.onOutcome(outcome);
       },
@@ -166,7 +186,12 @@ class PlaygroundConversation {
         drugName: this.drugName,
       });
       this.sessionId = resolution.sessionId;
-      this.mode = resolution.mode;
+      // A forced mode makes 'resume' testable without having to drop a call
+      // and start another inside the resume window.
+      this.mode = this.forceMode || resolution.mode;
+      if (this.forceMode && this.forceMode !== resolution.mode) {
+        logger.log('playground_mode_forced', { resolved: resolution.mode, forced: this.forceMode });
+      }
       this.onModeResolved(this.mode);
 
       // 2. Initialize STT adapter
@@ -201,7 +226,36 @@ class PlaygroundConversation {
         // had just been given.
         ...buildFoodVariables({ mealRelation: this.mealRelation }, this.language),
       };
-      const systemPrompt = this.langStrategy.buildSystemPrompt(variables, this.mode);
+
+      // Squad mode runs the SAME member graph the phone path builds, so the
+      // one place this design can actually be heard is not quietly running a
+      // different agent. Opt-in: the single-prompt path stays the default
+      // until the graph has been listened to.
+      const squadDefault = String(process.env.SQUAD_MODE || '').toLowerCase() === 'true';
+      this.squadEnabled =
+        (this.squadModeOverride === undefined ? squadDefault : Boolean(this.squadModeOverride))
+        && typeof this.langStrategy.buildSquadMembers === 'function';
+
+      if (this.squadEnabled) {
+        // The override lets all three graphs be walked without editing
+        // medications.food_rule between calls. 'none' is a real choice, not
+        // an absence, so it is passed through rather than falling back.
+        const squadVariables = this.foodRuleOverride
+          ? { ...variables, food_rule: this.foodRuleOverride === 'none' ? null : this.foodRuleOverride }
+          : variables;
+        this.squadMembers = this.langStrategy.buildSquadMembers(squadVariables);
+        this.currentMember = this.squadMembers.find((m) => m.first);
+        logger.log('squad_mode_enabled', {
+          members: this.squadMembers.length,
+          entry: this.currentMember.key,
+          foodRule: this.foodRuleOverride ?? variables.food_rule ?? null,
+          overridden: Boolean(this.foodRuleOverride),
+        });
+      }
+
+      const systemPrompt = this.squadEnabled
+        ? this.currentMember.systemPrompt
+        : this.langStrategy.buildSystemPrompt(variables, this.mode);
       const firstMessage = this.langStrategy.buildFirstMessage(variables, this.mode);
 
       // 4. Initialize conversation history
@@ -364,6 +418,10 @@ class PlaygroundConversation {
       // 4. Flush any remaining text in the buffer
       sentenceBuffer.flush();
 
+      // 4b. Decide whether this turn moved the call to a new state. Runs after
+      // the audio is out, so routing never delays what the patient hears.
+      await this._routeSquad(llmAdapter, llmConfig);
+
       // 5. Build assistant message for history
       const assistantMessage = {
         role: 'assistant',
@@ -496,6 +554,48 @@ class PlaygroundConversation {
    * @param {Object} args - { role, content, toolCalls }
    * @private
    */
+  /**
+   * Move to the next squad member if this turn satisfied a destination.
+   *
+   * Swapping messages[0] is the whole mechanism: the conversation history is
+   * kept intact so the new member can see what was already said, but the goal
+   * it is working toward changes. That mirrors what a Vapi handoff does — the
+   * transcript follows the caller between members.
+   *
+   * Never throws. A routing failure leaves the call on its current member,
+   * which is a working conversation, just a less specific one.
+   *
+   * @private
+   */
+  async _routeSquad(llmAdapter, llmConfig) {
+    if (!this.squadEnabled || !this.currentMember) return;
+
+    const next = await chooseDestination({
+      llmAdapter,
+      llmConfig,
+      env: process.env,
+      member: this.currentMember,
+      messages: this.messages,
+      logger,
+    });
+    if (!next) return;
+
+    const target = this.squadMembers.find((m) => m.key === next);
+    if (!target) {
+      // buildSquadMembers already rejects dangling destinations, so this means
+      // the router invented a key. Stay rather than crash a live call.
+      logger.error('squad_route_unknown_member', new Error(`no member "${next}"`));
+      return;
+    }
+
+    logger.log('squad_transition', { from: this.currentMember.key, to: target.key });
+    this.currentMember = target;
+    this.messages[0] = { role: 'system', content: target.systemPrompt };
+    if (typeof this.onSquadTransition === 'function') {
+      this.onSquadTransition({ member: target.key, label: target.label });
+    }
+  }
+
   async _recordTurn({ role, content, toolCalls }) {
     try {
       await this.transport.recordTurn({ sessionId: this.sessionId, role, content, toolCalls });
@@ -587,7 +687,7 @@ class PlaygroundConversation {
   /**
    * Stop the conversation externally (browser disconnect or user stop).
    */
-  async stop() {
+  async stop({ deliberate = false } = {}) {
     this.ended = true;
     // turn.stop() triggers onEndConversation with a non-tool_call outcome,
     // which _closeSession maps to 'dropped' — this is what makes a browser
@@ -596,7 +696,7 @@ class PlaygroundConversation {
     // session is actually closed before this method returns — turn.stop()
     // is idempotent (a no-op if already ended, e.g. a normally-completed
     // conversation), so this never re-closes an already-closed session.
-    await this.turn.stop();
+    await this.turn.stop(deliberate ? { source: 'user_ended', reason: 'stopped_by_user' } : {});
 
     // Disconnect TTS streaming WebSocket, if this adapter has one
     const ttsAdapter = this._getTtsAdapter();

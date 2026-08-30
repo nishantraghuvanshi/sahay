@@ -97,6 +97,15 @@ function handlePlaygroundConnection(ws, deps) {
               language: message.language || 'hi',
               phone: message.phone || null,
               direction: message.direction === 'outbound' ? 'outbound' : 'inbound',
+              // Per-call testing overrides from the UI. Absent means "use the
+              // configured default", which is why squadMode is passed through
+              // as undefined rather than coerced to false.
+              squadMode: typeof message.squadMode === 'boolean' ? message.squadMode : undefined,
+              foodRule: message.foodRule || undefined,
+              forceMode: message.forceMode || null,
+              onSquadTransition: ({ member, label }) => {
+                send({ type: 'squad-transition', member, label });
+              },
               // The dose being simulated. Unvalidated here on purpose: the use
               // case owns what a meal and a relation may be (dose-timing.js
               // drops anything it does not recognise), and this handler's job
@@ -137,7 +146,10 @@ function handlePlaygroundConnection(ws, deps) {
 
           case 'stop':
             if (conversation) {
-              await conversation.stop();
+              // Explicit Stop: the person finished the call. Distinct from the
+              // socket closing below, which may be a refresh or a dropped
+              // connection and should stay resumable.
+              await conversation.stop({ deliberate: true });
               conversation = null;
             }
             send({ type: 'status', state: 'idle' });

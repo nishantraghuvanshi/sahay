@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test --test-timeout=10000 tests/*.test.js",
     "create-assistant": "node scripts/create-assistant.js",
     "update-assistant": "node scripts/update-assistant.js",
     "make-call": "node scripts/make-call.js",
@@ -20,12 +20,13 @@
     "call": "node scripts/call.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.0",
     "express": "^4.19.0",
-    "ws": "^8.16.0",
     "js-yaml": "^4.1.0",
-    "dotenv": "^16.4.0"
+    "libsql": "^0.5.29",
+    "ws": "^8.16.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }

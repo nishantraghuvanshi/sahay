@@ -19,6 +19,11 @@ const { loadProvidersConfig } = require('./core/config/loader');
 const ConversationEngine = require('./core/engine/engine');
 const PluginRegistry = require('./core/plugins/registry');
 const { assertPersistenceSatisfied } = require('./core/persistence-guard');
+const { assertSafeToServe, resolveBindHost, isInsecureLocalOn, OPT_OUT } = require('./core/safety-guard');
+const { asyncRoute, errorMiddleware, installProcessHandlers } = require('./core/errors');
+const { createScheduler } = require('./core/scheduler/loop');
+const { createDoseTick } = require('./use-cases/medication-adherence/scheduling/tick');
+
 const { createWebhookCapture } = require('./utils/webhook-capture');
 
 // Adapters
@@ -32,7 +37,7 @@ const SqliteRepository = require('./adapters/persistence/sqlite');
 const { handlePlaygroundConnection } = require('./playground/ws-handler');
 
 // Middleware
-const { apiKeyAuth, authenticateWebSocket } = require('./core/middleware/auth');
+const { apiKeyAuth, authenticateWebSocket, hasValidApiKey } = require('./core/middleware/auth');
 
 // Use cases
 const { getActiveUseCase } = require('./use-cases/registry');
@@ -42,6 +47,10 @@ const {
 const { runDemoCall, PERSONAS } = require('./use-cases/medication-adherence/demo-call');
 const logger = require('./utils/logger');
 const { utcToLocalParts } = require('./utils/time');
+
+// Attach diagnostic context to fatal errors before any bootstrap work runs,
+// so a failure during config load or DB open is reported with context.
+installProcessHandlers();
 
 // --- Bootstrap ---
 
@@ -56,19 +65,91 @@ const StrategyClass = useCase.strategy;
 const strategy = new StrategyClass();
 
 // 4. Set up repository (Phase 1: SQLite, fallback to console if no DB)
-// VOXIKIN_DB is the shared database the Python Care API also reads; DB_PATH and
-// DATABASE_URL predate it and still work. Any of the three selects SQLite —
+// TURSO_DATABASE_URL is the shared database the Python Care API also reads; DB_PATH
+// and VOXIKIN_DB predate it and still work. Any of the three selects SQLite —
 // without this, setting only VOXIKIN_DB left the console repository active and the
 // persistence guard rejected the boot while a real database sat configured.
-// DB_PATH and DATABASE_URL come first deliberately: they are set per invocation
+// DB_PATH comes first deliberately: it is set per invocation
 // (a test spawning a server with its own temp file), and must beat VOXIKIN_DB, which
 // is the shared product database and typically comes from .env. The other order
 // silently pointed an isolated test at the real database.
+// TURSO_DATABASE_URL sits between them: it is the deployed database, shared with
+// the Python API, and must beat the shared-file variables below it while still
+// losing to a per-invocation DB_PATH. DATABASE_URL is deliberately no longer
+// consulted — it has only ever been set to a Postgres connection string here,
+// which this adapter cannot use and used to treat as a filename.
 const useSqlite =
-  process.env.DB_PATH || process.env.DATABASE_URL || process.env.VOXIKIN_DB;
+  process.env.DB_PATH || process.env.TURSO_DATABASE_URL || process.env.VOXIKIN_DB;
 const repository = useSqlite
-  ? new SqliteRepository({ dbPath: useSqlite })
+  ? new SqliteRepository({ dbPath: useSqlite, authToken: process.env.TURSO_AUTH_TOKEN })
   : new ConsoleRepository();
+
+// Redact userinfo (user:password@) out of a value before it reaches a log
+// line. db_path is meant to be a SQLite filesystem path, but DB_PATH,
+// DATABASE_URL and VOXIKIN_DB have all been seen set to a Postgres
+// connection string by mistake — SqliteRepository takes that literally as a
+// filename (see agent/postgresql:/... in this working tree), and logging it
+// verbatim would put the password in the log. Applied before path.resolve()
+// below: resolving first would collapse the connection string's "//" and
+// hide the credential from a "//user:pass@" pattern while leaving the raw
+// password characters in the string, so redact the source value instead.
+//
+// Not `new URL()`: it throws on an ordinary filesystem path (no scheme),
+// which is the common case and must pass through untouched — that part is
+// fine — but it also throws on a password containing an unencoded '/'
+// (RFC 3986 says such a password must be percent-encoded, so the URL parser
+// treats the '/' as the start of the path and the string stops looking like
+// a URL at all), and an unencoded '/' in a password is exactly the kind of
+// value someone finds out about the hard way. A thrown error there would
+// leave the raw value to fall through unredacted, defeating the point.
+//
+// Only a substring shaped like an actual URL scheme (`word://`) is ever
+// touched, so a plain filesystem path — which never contains "://" — is
+// never misread as one. Within that, the userinfo/host boundary is the
+// LAST '@' before the authority's own
+// terminating '/', '?' or '#' — a password may itself contain '@' (RFC 3986
+// again allows unencoded '@' in userinfo), so scanning for the first '@'
+// redacts too little, as happened in the previous version of this function.
+// If that bounded scan finds no '@' at all, an unencoded '/' inside the
+// password may have made the real boundary look like a path already
+// started — fall back to the last '@' in the whole remainder so that case
+// is still redacted rather than left in the clear.
+function redactCredentials(value) {
+  const str = String(value);
+  return str.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([\s\S]*)$/, (full, scheme, rest) => {
+    const boundary = rest.search(/[/?#]/);
+    const authority = boundary === -1 ? rest : rest.slice(0, boundary);
+
+    let atIndex = authority.lastIndexOf('@');
+    if (atIndex === -1) atIndex = rest.lastIndexOf('@');
+    if (atIndex === -1) return full; // no userinfo — nothing to redact
+
+    const userinfo = rest.slice(0, atIndex);
+    const afterAt = rest.slice(atIndex + 1);
+    const colonIndex = userinfo.indexOf(':');
+    if (colonIndex === -1) return `${scheme}${userinfo}@${afterAt}`; // username only, no password
+
+    const password = userinfo.slice(colonIndex + 1);
+    if (password === '') return full; // explicit empty password — nothing to leak
+
+    const user = userinfo.slice(0, colonIndex);
+    return `${scheme}${user}:***@${afterAt}`;
+  });
+}
+
+// Resolved absolute path for the boot log — repository.dbPath may be
+// relative (a test spawning a server with DB_PATH=./tmp/x.db), and null for
+// ConsoleRepository, which has no file at all.
+//
+// A remote database has no path to resolve, and logging it as null would read
+// exactly like the no-database case this line exists to distinguish. Log the URL
+// instead, through the same redaction — a Turso URL carries no userinfo, but the
+// token that reaches it is a secret and the redaction costs nothing.
+const dbPath = repository.isRemote
+  ? redactCredentials(repository.url)
+  : repository.dbPath
+    ? path.resolve(redactCredentials(repository.dbPath))
+    : null;
 
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
 //     without persistence (inbound context, resume-after-drop).
@@ -98,6 +179,37 @@ const transport = transportRegistry.getActiveTransport();
 // always instantiated alongside whichever transport is active, never itself
 // "active.transport" (see registry.js).
 const playgroundTransport = transportRegistry.getTransport('playground');
+
+// 8c. Refuse to serve traffic with authentication, the active transport's
+//     own secret(s), operator alerting, or the prompt guardrails switched
+//     off. All default to off when unconfigured and none is visible at
+//     runtime, so the check belongs here rather than in a log line. Must
+//     run after the transport is resolved (step 8) — it asks the transport
+//     which secret(s) guard it rather than hardcoding one vendor. Nothing
+//     between here and transport.start()/listen() below serves traffic, so
+//     moving it this far down still fails closed before any request can
+//     reach a route.
+assertSafeToServe(process.env, transport);
+
+// 8d. When ALLOW_INSECURE_LOCAL is on, the process must not become reachable
+// from the network — this project routinely exposes the server through a
+// public tunnel, and a process bound to all interfaces with API_KEY,
+// transport secrets and operator alerting all off is one tunnel restart away
+// from an open PHI endpoint. resolveBindHost() throws if HOST names anything
+// but loopback while insecure; otherwise it defaults insecure mode to
+// 127.0.0.1 and leaves HOST alone when insecure mode is off.
+const BIND_HOST = resolveBindHost(process.env);
+if (isInsecureLocalOn(process.env)) {
+  // Loud on every boot, not once — this is exactly the state that must never
+  // be missed by whoever is reading the log.
+  console.log(JSON.stringify({
+    event: 'auth_disabled',
+    detail: `${OPT_OUT} is set — API_KEY, the active transport's own secret(s), guardrails ` +
+      `and operator alerting are NOT enforced. Bound to ${BIND_HOST} only. Never set ` +
+      `${OPT_OUT} in a deployment.`,
+    timestamp: new Date().toISOString(),
+  }));
+}
 
 // --- Server ---
 
@@ -155,14 +267,24 @@ server.on('upgrade', (req, socket, head) => {
   target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
-// Start transport (sets up Vapi routes: /llm/chat/completions, /api/tts/:provider, /webhook)
+// The webhook URL actually wired into the transport — computed once and
+// reused verbatim in the boot log below, so the two can never disagree. A
+// log rebuilt from PORT alone can print localhost while the transport is
+// genuinely pointed at a public tunnel hostname, which is exactly the wrong
+// answer during the debugging session where this line matters.
+const webhookUrl = process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`;
+
+// Start transport — the active transport wires whatever routes/sockets it
+// needs. Vapi may add /llm/chat/completions, /api/tts/:provider, /webhook
+// and the /api/stt socket (only the bridged ones); ElevenLabs and the
+// playground wire their own, entirely different, routes.
 transport.start(server, engine, {
   wss: sttWss,
   app,
   providersConfig,
   strategy,
   repository,
-  webhookUrl: process.env.WEBHOOK_URL || `http://localhost:${process.env.PORT || 3001}`,
+  webhookUrl,
 }).catch((err) => {
   // A transport that cannot finish starting must not take the server with it.
   // The routes it registered synchronously are already live, and the other
@@ -215,17 +337,30 @@ playgroundWss.on('connection', (ws, req) => {
 // Apply API key auth to all /api routes
 app.use('/api', apiKeyAuth);
 
-// Health check (public — no auth)
+// Health check (public — no auth). Must stay public and answer 200 when
+// healthy: the Dockerfile and compose healthcheck both hit this with no
+// credential. It used to hand every anonymous caller the use case, prompt
+// version, active provider names, plugin list and persistence class — none
+// of that is needed to know "is this alive", and all of it hands a would-be
+// attacker a map of what to target. The liveness shape below never changes;
+// the detail only appears for a caller who already holds API_KEY.
 app.get('/health', (req, res) => {
-  res.json({
+  const body = {
     status: 'ok',
-    useCase: strategy.name,
-    promptVersion: strategy.getPromptVersion(),
-    providers: providerRegistry.getActiveProviderNames(),
-    plugins: plugins.plugins.map((p) => p.name),
-    persistence: repository.constructor.name,
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  if (hasValidApiKey(req)) {
+    Object.assign(body, {
+      useCase: strategy.name,
+      promptVersion: strategy.getPromptVersion(),
+      providers: providerRegistry.getActiveProviderNames(),
+      plugins: plugins.plugins.map((p) => p.name),
+      persistence: repository.constructor.name,
+    });
+  }
+
+  res.json(body);
 });
 
 // Playground page
@@ -293,7 +428,7 @@ app.post('/api/demo-call', async (req, res) => {
   }
 });
 
-app.post('/api/call', async (req, res) => {
+app.post('/api/call', asyncRoute(async (req, res) => {
   const { phone, name, drug, language, caregiver, slot } = req.body;
 
   // Validate
@@ -368,45 +503,36 @@ app.post('/api/call', async (req, res) => {
     }));
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
-// Get call status (polls Vapi API)
-app.get('/api/call/:callId', async (req, res) => {
+// Get call status — delegates to the active transport (see
+// TransportPort#getCallStatus). Not every transport can answer this; one
+// that can't returns { ok: false, error, httpStatus } instead of faking a
+// status. This route is caregiver-app-facing, not a tool endpoint the voice
+// agent calls mid-call, so it keeps its own non-200-on-error contract —
+// NFR-6's always-200 rule is for tool endpoints and does not apply here.
+app.get('/api/call/:callId', asyncRoute(async (req, res) => {
   const { callId } = req.params;
-  const apiKey = process.env.VAPI_PRIVATE_KEY;
 
-  if (!apiKey) {
-    return res.status(500).json({ error: 'VAPI_PRIVATE_KEY not set' });
-  }
-
+  let result;
   try {
-    const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(response.status).json({ error: errorText });
-    }
-
-    const call = await response.json();
-    res.json({
-      callId: call.id,
-      status: call.status,
-      duration: call.durationSeconds,
-      cost: call.cost,
-      outcome: call.analysis?.structuredData?.outcome,
-      transcript: call.transcript,
-    });
+    result = await transport.getCallStatus(callId);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
-});
+
+  if (!result.ok) {
+    return res.status(result.httpStatus || 500).json({ error: result.error });
+  }
+
+  const { ok, httpStatus, ...call } = result;
+  res.json(call);
+}));
 
 // --- Call history API (reads from local DB) ---
 
 // List recent calls
-app.get('/api/calls', async (req, res) => {
+app.get('/api/calls', asyncRoute(async (req, res) => {
   try {
     const filters = {
       limit: req.query.limit ? parseInt(req.query.limit, 10) : 50,
@@ -418,10 +544,10 @@ app.get('/api/calls', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}));
 
 // Get a single call with conversation history
-app.get('/api/calls/:callId', async (req, res) => {
+app.get('/api/calls/:callId', asyncRoute(async (req, res) => {
   try {
     const call = await repository.getCall(req.params.callId);
     if (!call) {
@@ -432,13 +558,115 @@ app.get('/api/calls/:callId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}));
+
+// Terminal error handler. Registered AFTER every route on purpose: Express
+// walks one ordered stack, so a handler mounted earlier would catch nothing —
+// the same ordering property that once served patient data before the auth
+// middleware ran.
+// --- Dose scheduler ---
+//
+// OFF unless SCHEDULER_ENABLED is explicitly true. This is a deliberate
+// exception to the fail-closed default used everywhere else in this file: the
+// dangerous state here is not "unconfigured", it is "dialling". An
+// auto-starting dialler would place real phone calls to whatever numbers are
+// seeded, from any machine that happens to run `npm start`, at whatever hour.
+// Off-unless-asked is the safe default when the side effect leaves the process.
+const SCHEDULER_ENABLED = String(process.env.SCHEDULER_ENABLED || '').toLowerCase() === 'true';
+const SCHEDULER_INTERVAL_MS = Number(process.env.SCHEDULER_INTERVAL_MS || 60000);
+
+/**
+ * The one piece of transport the tick needs. Injected here so the use-case
+ * layer keeps importing no vendor code.
+ */
+async function dialPatient({ doseEvent, medication, patient }) {
+  // Ask the ACTIVE transport for its own id — see the identical comment on
+  // POST /api/call above. This was the one caller still reading
+  // VAPI_ASSISTANT_ID directly: harmless-looking under Vapi, but under
+  // ElevenLabs it silently handed a Vapi assistant id to ElevenLabs as its
+  // agent_id instead of throwing on a missing var.
+  const assistantId = transport.getAssistantId();
+
+  const call = await transport.createCall(assistantId, patient.phone_e164, {
+    parent_name: patient.name,
+    drug_name: medication && medication.name,
+    language: patient.language || 'hi',
+  });
+  return { callId: call && call.id };
+}
+
+let scheduler = null;
+if (SCHEDULER_ENABLED) {
+  scheduler = createScheduler({
+    tick: createDoseTick({ repository, dial: dialPatient }),
+    intervalMs: SCHEDULER_INTERVAL_MS,
+  });
+  scheduler.start();
+}
+console.log(JSON.stringify({
+  event: SCHEDULER_ENABLED ? 'scheduler_started' : 'scheduler_disabled',
+  intervalMs: SCHEDULER_ENABLED ? SCHEDULER_INTERVAL_MS : null,
+  detail: SCHEDULER_ENABLED
+    ? 'Due doses will be dialled automatically.'
+    : 'No dose will be dialled. Set SCHEDULER_ENABLED=true to enable outbound dialling.',
+  timestamp: new Date().toISOString(),
+}));
+
+app.use(errorMiddleware);
+
+// --- Graceful shutdown ---
+//
+// The Dockerfile runs this in a container, and `docker stop` sends SIGTERM
+// then SIGKILLs 10 seconds later. Without a handler the scheduler's
+// setInterval keeps the event loop alive, so the process never exits on its
+// own and is killed mid-flight — potentially during an outbound dial, which
+// on this system means a real phone call to an elderly patient.
+//
+// Stop the timer first so no NEW dial starts, then stop accepting
+// connections. Anything already in flight finishes on its own; if it does
+// not, the container runtime's own timeout is the backstop.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return; // a second SIGTERM must not re-enter this
+  shuttingDown = true;
+
+  console.log(JSON.stringify({
+    event: 'shutdown_started',
+    signal,
+    schedulerRunning: Boolean(scheduler),
+    timestamp: new Date().toISOString(),
+  }));
+
+  if (scheduler) scheduler.stop();
+  server.close(() => {
+    console.log(JSON.stringify({
+      event: 'shutdown_complete',
+      signal,
+      timestamp: new Date().toISOString(),
+    }));
+    process.exit(0);
+  });
+}
+
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => shutdown(signal));
+}
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+
+// BIND_HOST is only set when it must be — insecure mode (forced to
+// loopback), or an operator explicitly configured HOST. Passing an explicit
+// `undefined` host to listen() is not the same overload as omitting the
+// argument entirely, so branch rather than rely on that being interchangeable.
+const bootListening = () => {
   console.log(JSON.stringify({
     event: 'server_listening',
     port: PORT,
+    host: BIND_HOST || '0.0.0.0',
+    active_transport: transportRegistry.getActiveTransportName(),
+    db_path: dbPath,
+    auth_mode: isInsecureLocalOn(process.env) ? 'INSECURE' : 'enforced',
+    webhook_url: webhookUrl,
     use_case: strategy.name,
     prompt_version: strategy.getPromptVersion(),
     active_stt: providersConfig.active.stt,
@@ -454,4 +682,10 @@ server.listen(PORT, () => {
     },
     timestamp: new Date().toISOString(),
   }));
-});
+};
+
+if (BIND_HOST) {
+  server.listen(PORT, BIND_HOST, bootListening);
+} else {
+  server.listen(PORT, bootListening);
+}
