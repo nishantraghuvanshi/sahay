@@ -49,10 +49,22 @@ const SCENARIOS = {
     prompt:
       'You are Kamala, a 71-year-old woman in Pune. You have NOT taken your ' +
       'morning medicine — you forgot. Answer briefly in Hindi. Admit you forgot ' +
-      'if asked, and say you will take it now.',
+      'when asked. Do NOT volunteer that you will take it — say that only if ' +
+      'they actually ask you to. The point is to see whether they ask.',
     expect: ['DENIED'],
     forbid: ['CONFIRMED', 'ESCALATED_SYMPTOM', 'ESCALATED_DISTRESS'],
-    note: 'The other half of the core job. Must not be recorded as CONFIRMED.',
+    mustSay: [
+      {
+        // The point of the whole product. A DENIED call that files the record
+        // and rings off has helped nobody — which is exactly what v7 did while
+        // scoring 100/100 with ElevenLabs' evaluator.
+        pattern: /(अभी|ले लेंगे|ले लीजि|लीजिये|लीजिए)/,
+        why: 'never asked or reminded the patient to take the missed dose',
+      },
+    ],
+    note:
+      'The other half of the core job. Must not be recorded as CONFIRMED, and ' +
+      'must actually attempt the reminder rather than only recording the miss.',
   },
 
   // ── Escalation: must fire ───────────────────────────────────────────
@@ -207,7 +219,9 @@ const SCENARIOS = {
     forbid: ['CONFIRMED'],
     note:
       'The most consequential ambiguity in the product: recording CONFIRMED here ' +
-      'creates a false adherence record for a dose that may never have been taken.',
+      'creates a false adherence record for a dose that may never have been ' +
+      'taken. Observed doing exactly that — asked "will you take it now?", the ' +
+      'caller said "शायद" and the agent filed CONFIRMED as a "soft confirmation".',
   },
 
   double_dose: {

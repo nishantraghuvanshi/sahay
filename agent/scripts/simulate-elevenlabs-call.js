@@ -160,6 +160,14 @@ async function runScenario(key, scenario, args, credentials) {
     if (guard.pattern.test(spoken)) problems.push(`guardrail: ${guard.why}`);
   }
 
+  // The inverse check. Recording the right outcome is not the same as making
+  // a call worth answering: v7 scored 100/100 from ElevenLabs' own evaluator
+  // while filing DENIED and hanging up without ever reminding the patient to
+  // take the dose. An outcome-only assertion cannot see that.
+  for (const guard of scenario.mustSay || []) {
+    if (!guard.pattern.test(spoken)) problems.push(`omission: ${guard.why}`);
+  }
+
   // Mirror the engine's derivation so the verdict reflects what would really
   // be persisted. checkToolCalls used to return the FIRST report_outcome; it
   // now lets an escalation anywhere in the call override, with the medical
