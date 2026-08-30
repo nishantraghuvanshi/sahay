@@ -1,3 +1,23 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "https://p01--voxikin-api--mcgjbd4m7frz.code.run/auth/:path*"
+    },
+    {
+      "source": "/app/:path*",
+      "destination": "https://p01--voxikin-api--mcgjbd4m7frz.code.run/app/:path*"
+    },
+    {
+      "source": "/extract",
+      "destination": "https://p01--voxikin-api--mcgjbd4m7frz.code.run/extract"
+    },
+    {
+      "source": "/h/:token",
+      "has": [{ "type": "header", "key": "sec-fetch-dest", "value": "empty" }],
+      "destination": "https://p01--voxikin-api--mcgjbd4m7frz.code.run/h/:token"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
