@@ -339,11 +339,19 @@ class TurnManager {
    *
    * @returns {*|undefined}
    */
-  stop() {
+  stop(opts = {}) {
     if (this.ended) {
       return; // Already ended — idempotent.
     }
-    return this._end({ label: 'STOPPED', source: 'manual', reason: 'stop_called' });
+    // `source` distinguishes a deliberate end from an interrupted one. A
+    // person clicking Stop, or hanging up, has finished the call; a socket
+    // closing has not. Downstream that is the difference between a session
+    // that is completed and one that stays resumable.
+    return this._end({
+      label: 'STOPPED',
+      source: opts.source || 'manual',
+      reason: opts.reason || 'stop_called',
+    });
   }
 
   /**

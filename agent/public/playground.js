@@ -320,6 +320,24 @@
    * @param {boolean} [isPartial=false] - render as italic/gray partial text
    * @returns {HTMLDivElement} The created message element.
    */
+  /**
+   * Empty the transcript so a new call starts on a blank window.
+   *
+   * Without this the previous call's turns stayed on screen and the new
+   * call's appended below them, which read as the conversation continuing.
+   * (The other half of that symptom was real: an explicit Stop used to leave
+   * a resumable session behind, so the agent genuinely did continue. Fixed
+   * separately in the turn manager.)
+   */
+  function clearTranscript() {
+    transcriptEl.innerHTML = '';
+    partialMessageEl = null;
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'बात शुरू करने के लिए Start दबाइए।';
+    transcriptEl.appendChild(hint);
+  }
+
   function appendMessage(role, text, isPartial) {
     // Remove the initial hint on first real message.
     const hint = transcriptEl.querySelector('.hint');
@@ -796,10 +814,13 @@
         await connectWebSocket();
       }
 
-      // 2. Request microphone access and begin streaming.
+      // 2. A new call starts on a clean window — see clearTranscript().
+      clearTranscript();
+
+      // 3. Request microphone access and begin streaming.
       await startMicrophone();
 
-      // 3. Tell the server to start the conversation.
+      // 4. Tell the server to start the conversation.
       sendJSON({ type: 'start', language, phone, direction });
 
       // 4. Update UI state. (The button was already disabled on entry.)

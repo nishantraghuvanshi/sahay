@@ -129,7 +129,10 @@ function handlePlaygroundConnection(ws, deps) {
 
           case 'stop':
             if (conversation) {
-              await conversation.stop();
+              // Explicit Stop: the person finished the call. Distinct from the
+              // socket closing below, which may be a refresh or a dropped
+              // connection and should stay resumable.
+              await conversation.stop({ deliberate: true });
               conversation = null;
             }
             send({ type: 'status', state: 'idle' });

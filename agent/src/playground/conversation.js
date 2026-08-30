@@ -130,7 +130,17 @@ class PlaygroundConversation {
         // own stop() can await it — otherwise a disconnect immediately
         // followed by process shutdown could leave the session 'active'
         // instead of 'dropped', which would make it unresumable.
-        const endedReason = outcome && outcome.source === 'tool_call' ? 'customer-ended-call' : undefined;
+        // 'tool_call'  — the agent reported an outcome and hung up.
+        // 'user_ended'  — the person deliberately ended the call.
+        // Both are a finished call, so both close as completed and are NOT
+        // resumable. Anything else (silence timeout, browser disconnect, a
+        // dropped socket) stays `dropped` so the next session resumes.
+        //
+        // Conflating these is why every Stop click used to leave a resumable
+        // session behind, and the next playground call carried on the last
+        // one mid-conversation.
+        const DELIBERATE = new Set(['tool_call', 'user_ended']);
+        const endedReason = outcome && DELIBERATE.has(outcome.source) ? 'customer-ended-call' : undefined;
         await this._closeSession(endedReason);
         this.onOutcome(outcome);
       },
@@ -605,7 +615,7 @@ class PlaygroundConversation {
   /**
    * Stop the conversation externally (browser disconnect or user stop).
    */
-  async stop() {
+  async stop({ deliberate = false } = {}) {
     this.ended = true;
     // turn.stop() triggers onEndConversation with a non-tool_call outcome,
     // which _closeSession maps to 'dropped' — this is what makes a browser
@@ -614,7 +624,7 @@ class PlaygroundConversation {
     // session is actually closed before this method returns — turn.stop()
     // is idempotent (a no-op if already ended, e.g. a normally-completed
     // conversation), so this never re-closes an already-closed session.
-    await this.turn.stop();
+    await this.turn.stop(deliberate ? { source: 'user_ended', reason: 'stopped_by_user' } : {});
 
     // Disconnect TTS streaming WebSocket, if this adapter has one
     const ttsAdapter = this._getTtsAdapter();
