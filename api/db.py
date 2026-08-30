@@ -15,6 +15,9 @@ import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from api import schema_version
+from api.db_path import assert_filesystem_path
+
 ROOT = Path(__file__).resolve().parent
 SCHEMA = ROOT / "schema.sql"
 
@@ -23,7 +26,8 @@ SCHEMA = ROOT / "schema.sql"
 # app from mock to live is a base-URL change and not a debugging session.
 FIXTURE = ROOT.parent / "scripts" / "mock-api.json"
 
-DB_PATH = Path(os.getenv("VOXIKIN_DB", ROOT / "voxikin.db"))
+_DB_PATH_ENV = "VOXIKIN_DB"
+DB_PATH = Path(os.getenv(_DB_PATH_ENV, ROOT / "voxikin.db"))
 
 # The fixture is written against this date; every timestamp in it is shifted by
 # whole days onto today, so "yesterday" stays yesterday however long the file sits
@@ -263,68 +267,22 @@ def decode(table: str, row: sqlite3.Row) -> dict:
     return out
 
 
-# Columns added after a database may already exist. `CREATE TABLE IF NOT EXISTS`
-# silently skips an existing table, so a new column would never appear and every
-# query naming it would fail on a developer's older file. Each entry must be
-# nullable or carry a DEFAULT — SQLite cannot add a bare NOT NULL column to a table
-# that already has rows.
-_ADDED_COLUMNS: dict[str, dict[str, str]] = {
-    "medications": {
-        "stopped_at": "TEXT",
-        "start_date": "TEXT",
-    },
-    "dose_events": {
-        "rescheduled_to": "TEXT",
-        "attempt_count": "INTEGER NOT NULL DEFAULT 0",
-        "next_attempt_at": "TEXT",
-        "actor": "TEXT",
-    },
-    "escalations": {
-        "dose_event_id": "TEXT",
-    },
-    "patients": {
-        "timezone": "TEXT NOT NULL DEFAULT 'Asia/Kolkata'",
-        "quiet_windows": "TEXT",
-        "drug_name": "TEXT",
-        "notes": "TEXT",
-        "updated_at": "TEXT",
-    },
-}
-# Caregiver auth, from the app lane. Added here as well as in schema.sql so a
-# database created before this merge gains the columns instead of erroring the
-# first time somebody signs in.
-_ADDED_COLUMNS["caregivers"] = {
-    "phone_verified_at": "TEXT",
-    "email_verified_at": "TEXT",
-    "password_hash": "TEXT",
-    "password_salt": "TEXT",
-    "password_set_at": "TEXT",
-    "failed_logins": "INTEGER NOT NULL DEFAULT 0",
-    "locked_until": "TEXT",
-    "demo_call_used_at": "TEXT",
-    "test_call_used_at": "TEXT",
-}
-
-_ADDED_COLUMNS["calls"] = {"alert_sent_at": "TEXT", "alert_channel": "TEXT"}
-_ADDED_COLUMNS["medications"].update({"created_at": "TEXT", "updated_at": "TEXT"})
-_ADDED_COLUMNS["dose_events"]["call_id"] = "TEXT"
-_ADDED_COLUMNS["dose_events"].update(
-    {"confirmed_at": "TEXT", "updated_at": "TEXT"}
-)
-
-
+# Schema-version check and additive migration. api/schema.sql is the single
+# authority for both the target version and the column list — see
+# schema_version.py — replacing what used to be a hand-maintained dict here
+# that had drifted out of step with agent/src/adapters/persistence/sqlite.js's
+# own hand-maintained list of the same thing. spec:
+# .superpowers/sdd/modularise-boundaries/task-4-brief.md
 def _migrate(con: sqlite3.Connection) -> list[str]:
-    """Add columns an older database is missing. Returns what it added."""
-    added = []
-    for table, columns in _ADDED_COLUMNS.items():
-        existing = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
-        if not existing:
-            continue  # table not created yet; the schema script will make it whole
-        for name, decl in columns.items():
-            if name not in existing:
-                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
-                added.append(f"{table}.{name}")
-    return added
+    """Add columns an existing, compatible database is missing. Returns what
+    it added. Kept as a thin wrapper (same name and return shape as before)
+    over schema_version.check_and_migrate so existing direct callers of this
+    function don't need to change. Raises
+    schema_version.IncompatibleDatabaseError, and adds nothing, when the
+    database predates a rename or has the wrong primary-key type.
+    """
+    result = schema_version.check_and_migrate(con, SCHEMA.read_text(), str(DB_PATH))
+    return result.get("added", [])
 
 
 def seed_enabled() -> bool:
@@ -349,14 +307,27 @@ def init(reset: bool = False) -> None:
 
     Seeding only happens when `caregivers` is empty, so restarting the API never
     overwrites a schedule someone signed off through the app.
+
+    Fails closed: a configured path that is evidently not a filesystem path
+    (a Postgres/MySQL/etc connection string — see agent/postgresql:/... in
+    this working tree) is refused before anything is created, and an
+    existing-but-incompatible database (wrong primary-key type, or a
+    pre-rename column name) is refused with nothing written. See
+    schema_version.check_and_migrate for the verdict logic — this used to
+    run the full schema script unconditionally before that check, which
+    would have created any wholly-new table on an incompatible database
+    (CREATE TABLE IF NOT EXISTS is a no-op only for tables that already
+    exist) before refusal had a chance to run.
     """
     if reset and DB_PATH.exists():
         DB_PATH.unlink()
 
+    assert_filesystem_path(str(DB_PATH), _DB_PATH_ENV if _DB_PATH_ENV in os.environ else None)
+
     con = connect()
     try:
-        con.executescript(SCHEMA.read_text())
-        added = _migrate(con)
+        result = schema_version.check_and_migrate(con, SCHEMA.read_text(), str(DB_PATH))
+        added = result.get("added", [])
         if added:
             import logging
             logging.getLogger("voxikin.api").info("migrated: added %s", ", ".join(added))

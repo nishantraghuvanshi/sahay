@@ -36,6 +36,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const SqliteRepository = require('../src/adapters/persistence/sqlite');
 const ConsoleRepository = require('../src/adapters/persistence/console');
 const ProviderRegistry = require('../src/adapters/providers/registry');
+const { resolveConfiguredDbPath } = require('../src/utils/db-path');
 const {
   buildScheduleVariables,
 } = require('../src/use-cases/medication-adherence/scheduling/call-variables');
@@ -55,9 +56,12 @@ function buildRepository() {
   // no session was opened, and the schedule lookup that fills next_call_line
   // and food_line found no patient, so both came back empty and the call went
   // out missing them. Nothing errored.
-  const dbPath =
-    process.env.DB_PATH || process.env.DATABASE_URL || process.env.VOXIKIN_DB;
-  return dbPath ? new SqliteRepository({ dbPath }) : new ConsoleRepository();
+  const { value: dbPath, varName } = resolveConfiguredDbPath([
+    'DB_PATH',
+    'DATABASE_URL',
+    'VOXIKIN_DB',
+  ]);
+  return dbPath ? new SqliteRepository({ dbPath, dbPathSource: varName }) : new ConsoleRepository();
 }
 
 function parseArgs() {

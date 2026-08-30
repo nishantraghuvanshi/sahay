@@ -578,7 +578,16 @@ def test_the_app_records_who_established_the_outcome(client):
 
 def test_an_older_database_gains_the_new_columns(tmp_path):
     """`CREATE TABLE IF NOT EXISTS` skips an existing table, so without a migration a
-    developer's older file would be missing every column added since."""
+    developer's older file would be missing every column added since.
+
+    db._migrate is now a thin wrapper over schema_version.check_and_migrate
+    (task 4) — same signature and return shape, so this test is unchanged
+    except for which column it checks: medications.start_date is declared
+    `NOT NULL DEFAULT (date('now'))` in schema.sql, and SQLite refuses
+    ALTER TABLE ADD COLUMN for a non-constant DEFAULT regardless of
+    nullability, so it is correctly *skipped* rather than added — see
+    test_schema_version.py's ...skipped_not_thrown test.
+    """
     import sqlite3
     path = tmp_path / "old.db"
     con = sqlite3.connect(path)
@@ -594,7 +603,7 @@ def test_an_older_database_gains_the_new_columns(tmp_path):
     con.row_factory = sqlite3.Row
     added = db._migrate(con)
     con.commit()
-    assert "medications.start_date" in added
+    assert "medications.slots" in added
     assert "dose_events.attempt_count" in added
     # and nothing was lost doing it
     assert con.execute("SELECT name FROM medications").fetchone()["name"] == "Metformin"

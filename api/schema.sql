@@ -13,6 +13,25 @@
 -- Columns marked [GAP-n] are additions raised in docs/SCHEMA-GAPS-LANE-C.md.
 -- They are here because the app already collects the values and had nowhere to
 -- put them.
+--
+-- ============ schema version — the single authority ============
+--
+-- Both runtimes (agent/src/adapters/persistence/schema-version.js,
+-- api/schema_version.py) parse the two lines below out of this file rather
+-- than hand-maintaining their own migration list — that divergence is what
+-- task-4-brief.md fixes. Bump SCHEMA_VERSION whenever a table or column is
+-- added here; leave it alone for a comment-only edit.
+--
+-- SCHEMA_VERSION = 1
+--
+-- RENAMES documents column renames a live database may still carry the old
+-- name for. A missing column is "not yet created" and safe to ALTER in; an
+-- old name from this list present on a table means the database predates the
+-- rename and is INCOMPATIBLE — adding the new name beside it would strand
+-- real data in the column nothing reads (see medications.times/slots below).
+-- Format: table.old_name->new_name, comma-separated.
+--
+-- RENAMES: medications.times->slots, medications.food_rule->with_food
 
 PRAGMA foreign_keys = ON;
 

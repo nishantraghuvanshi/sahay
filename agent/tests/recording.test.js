@@ -65,11 +65,13 @@ describe('recording_url column', () => {
 
     // Hand-build the pre-recording_url schema, exactly as it looked before
     // this change, then open it through SqliteRepository like a real
-    // pre-existing production database would be.
+    // pre-existing production database would be. TEXT primary key, matching
+    // schema.sql — an INTEGER one is a *different*, incompatible case (task
+    // 4), not what this test is about.
     const oldDb = new DatabaseSync(dbPath);
     oldDb.exec(`
       CREATE TABLE calls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         call_id TEXT UNIQUE NOT NULL,
         outcome_label TEXT,
         ground_truth TEXT,

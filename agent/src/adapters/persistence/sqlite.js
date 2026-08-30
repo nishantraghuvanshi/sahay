@@ -3,6 +3,8 @@
 const { DatabaseSync } = require('node:sqlite');
 const OutcomeRepositoryPort = require('../../core/ports/repository');
 const logger = require('../../utils/logger');
+const { assertFilesystemPath } = require('../../utils/db-path');
+const { readSchemaSql, checkAndMigrate } = require('./schema-version');
 
 /** States a session may be moved into once it is no longer active. */
 const SESSION_END_STATES = ['completed', 'dropped', 'abandoned'];
@@ -81,10 +83,22 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // ./data/voiceagent.db while the caregiver app wrote api/voxikin.db, and the two
     // never met: a dose moved on the calendar did not change which call was placed.
     // VOXIKIN_DB is the same variable the Python API reads, so both land on one file.
-    this.dbPath =
-      opts.dbPath ||
-      process.env.VOXIKIN_DB ||
-      require('path').join(__dirname, '..', '..', '..', '..', 'api', 'voxikin.db');
+    let dbPath = opts.dbPath;
+    let dbPathSource = opts.dbPathSource || null;
+    if (!dbPath && process.env.VOXIKIN_DB) {
+      dbPath = process.env.VOXIKIN_DB;
+      dbPathSource = dbPathSource || 'VOXIKIN_DB';
+    }
+    if (!dbPath) {
+      dbPath = require('path').join(__dirname, '..', '..', '..', '..', 'api', 'voxikin.db');
+    }
+
+    // Fail closed on a value that is evidently not a filesystem path (a
+    // Postgres/MySQL/etc connection string) BEFORE anything is created —
+    // see agent/postgresql:/... in this working tree for what happens
+    // without this check.
+    assertFilesystemPath(dbPath, dbPathSource);
+    this.dbPath = dbPath;
 
     // Ensure the data directory exists
     const path = require('path');
@@ -95,6 +109,12 @@ class SqliteRepository extends OutcomeRepositoryPort {
     }
 
     this.db = new DatabaseSync(this.dbPath);
+
+    // Version check first, before any pragma that writes to the file (WAL
+    // mode persists to the database header) — an incompatible database must
+    // be refused having had nothing at all written to it.
+    this._migrate();
+
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA foreign_keys = ON;');
     // Wait rather than fail when another process holds the write lock. SQLite is
@@ -102,8 +122,6 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // run against a live DB — without this they throw SQLITE_BUSY instantly
     // instead of waiting the moment they overlap with a call in progress.
     this.db.exec('PRAGMA busy_timeout = 5000;');
-
-    this._migrate();
   }
 
   /** @returns {boolean} SQLite stores across calls. */
@@ -112,82 +130,28 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
-   * Auto-migrate the database schema.
-   * Uses CREATE TABLE IF NOT EXISTS so it's safe to run on every boot.
+   * Open-time schema check and migration. api/schema.sql is the single
+   * authority — both the target version and the additive column list are
+   * derived from it (see schema-version.js) rather than hand-maintained
+   * here. Refuses to open (and writes nothing) when the database is
+   * incompatible: an INTEGER primary key where the schema now says TEXT, or
+   * a pre-rename column name (medications.times/food_rule) still present.
+   * spec: .superpowers/sdd/modularise-boundaries/task-4-brief.md
    * @private
    */
   _migrate() {
-    // One schema for the whole product, loaded from api/schema.sql rather than
-    // declared again here.
-    //
-    // There used to be two: this file described medicines and doses for the
-    // dialler, api/schema.sql described them for the caregiver app, and neither
-    // knew about the other. A dose moved on the calendar did not change which call
-    // was placed. The founder's call on 30 Aug was that TRD §3 names win and the
-    // scheduler's columns fold into them, so this reads that file and adds nothing.
-    //
-    // Every statement in it is CREATE TABLE/INDEX IF NOT EXISTS, so running it on
-    // every boot stays safe.
-    const path = require('path');
-    const fs = require('fs');
-    const schemaPath = path.join(__dirname, '..', '..', '..', '..', 'api', 'schema.sql');
-    this.db.exec(fs.readFileSync(schemaPath, 'utf8'));
-
-    // CREATE TABLE IF NOT EXISTS never alters a table that already exists,
-    // so a database created before recording_url was added needs an
-    // explicit ALTER TABLE here. _ensureColumn is idempotent — a fresh
-    // database already has the column from the CREATE TABLE above, so this
-    // is a no-op there.
-    this._ensureColumn('calls', 'recording_url', 'TEXT');
-    this._ensureColumn('patients', 'timezone', 'TEXT');
-    this._ensureColumn('patients', 'schedule_signed_off_at', 'TEXT');
-    this._ensureColumn('patients', 'quiet_windows', 'TEXT');
-    // The caregiver-app columns. api/schema.sql grew these in its CREATE TABLE,
-    // which never reaches a patients table that already exists — so a database
-    // from before the app landed is missing all thirteen and every query that
-    // names one fails at runtime (the playground's patient list was the first
-    // to hit it, on `p.caregiver_id`). Listed here, not left to a rebuild,
-    // because these databases carry real call history.
-    // caregiver_id defaults to NULL, which is what SQLite requires of an added
-    // column carrying a REFERENCES clause.
-    this._ensureColumn('patients', 'caregiver_id', 'TEXT REFERENCES caregivers(id)');
-    this._ensureColumn('patients', 'honorific', 'TEXT');
-    this._ensureColumn('patients', 'age', 'INTEGER');
-    this._ensureColumn('patients', 'conditions', "TEXT NOT NULL DEFAULT '[]'");
-    this._ensureColumn('patients', 'allergies', "TEXT NOT NULL DEFAULT '[]'");
-    this._ensureColumn('patients', 'doctor_name', 'TEXT');
-    this._ensureColumn('patients', 'doctor_phone', 'TEXT');
-    this._ensureColumn('patients', 'address_text', 'TEXT');
-    this._ensureColumn('patients', 'meal_times', 'TEXT');
-    this._ensureColumn('patients', 'calls_paused', 'INTEGER NOT NULL DEFAULT 0');
-    this._ensureColumn('patients', 'intro_call_at', 'TEXT');
-    this._ensureColumn('patients', 'intro_call_status', 'TEXT');
-    this._ensureColumn('patients', 'consents', 'TEXT');
-    this._ensureColumn('medications', 'is_priority', 'INTEGER DEFAULT 0');
-    this._ensureColumn('dose_events', 'attempt_count', 'INTEGER DEFAULT 0');
-    this._ensureColumn('dose_events', 'next_attempt_at', 'TEXT');
-  }
-
-  /**
-   * Add a column to an existing table if it isn't already there. Safe to
-   * call on every boot: checks PRAGMA table_info before altering, so it
-   * never re-adds a column (which would throw) or touches a fresh database
-   * that was created with the column already in its CREATE TABLE.
-   *
-   * table/column are always internal literals passed by _migrate(), never
-   * external input, so the interpolation below is not an injection risk.
-   *
-   * @param {string} table
-   * @param {string} column
-   * @param {string} type - SQLite column type, e.g. 'TEXT'
-   * @private
-   */
-  _ensureColumn(table, column, type) {
-    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
-    const exists = columns.some((c) => c.name === column);
-    if (!exists) {
-      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-      logger.log('db_column_added', { table, column });
+    const schemaSql = readSchemaSql();
+    const result = checkAndMigrate(this.db, schemaSql, this.dbPath);
+    if (result.verdict === 'created') {
+      logger.log('db_schema_created', { version: result.version });
+    } else if (result.verdict === 'migrated') {
+      logger.log('db_migrated', {
+        from: result.from,
+        to: result.version,
+        added: result.added,
+        skipped: result.skipped,
+        skippedIndexes: result.skippedIndexes,
+      });
     }
   }
 

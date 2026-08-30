@@ -23,6 +23,7 @@ require('dotenv').config();
 const SqliteRepository = require('../src/adapters/persistence/sqlite');
 const ConsoleRepository = require('../src/adapters/persistence/console');
 const { localSlotToUtc } = require('../src/utils/time');
+const { resolveConfiguredDbPath } = require('../src/utils/db-path');
 
 /**
  * Edit this by hand for each pilot patient. `times` are "HH:MM" 24h local
@@ -124,9 +125,12 @@ function parseArgs() {
  * database and usually comes from .env.
  */
 function buildRepository() {
-  const dbPath =
-    process.env.DB_PATH || process.env.DATABASE_URL || process.env.VOXIKIN_DB;
-  return dbPath ? new SqliteRepository({ dbPath }) : new ConsoleRepository();
+  const { value: dbPath, varName } = resolveConfiguredDbPath([
+    'DB_PATH',
+    'DATABASE_URL',
+    'VOXIKIN_DB',
+  ]);
+  return dbPath ? new SqliteRepository({ dbPath, dbPathSource: varName }) : new ConsoleRepository();
 }
 
 /** @returns {string} YYYY-MM-DD for a Date, in UTC. */
