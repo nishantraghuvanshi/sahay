@@ -1,6 +1,10 @@
 'use strict';
 
+const crypto = require('crypto');
 const TransportPort = require('../../core/ports/transport');
+const { captureField } = require('../../core/call/lifecycle');
+const { INTAKE_FIELDS } = require('../../use-cases/medication-adherence/inbound-context');
+const { EVENT_TYPES } = require('../../core/events/types');
 const logger = require('../../utils/logger');
 
 const API = 'https://api.elevenlabs.io';
@@ -36,6 +40,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
     this.engine = engine;
     this.webhookUrl = config.webhookUrl;
     this.strategy = config.strategy;
+    this.repository = config.repository;
     this.agentId = process.env.ELEVENLABS_AGENT_ID || null;
     this.phoneNumberId =
       config.providersConfig?.transport?.elevenlabs?.phone_number_id || null;
@@ -67,7 +72,24 @@ class ElevenLabsTransportAdapter extends TransportPort {
         }
 
         try {
-          this.engine.getEventBus().emit(`tool:${name}`, req.body || {});
+          // kinvox_call_id rides in the body alongside the tool's real
+          // arguments — it's a request_body_schema property ElevenLabs
+          // populates from a dynamic variable (see _toolDeclaration), not a
+          // separate call-metadata field the way Vapi's message.call.id is.
+          // Pulled out here so `args` handed to the engine and to
+          // _captureField is exactly the tool's own arguments, nothing else.
+          const { kinvox_call_id: callId, ...args } = req.body || {};
+
+          await this.engine.getEventBus().emit(EVENT_TYPES.TOOL_CALLED, {
+            callId: callId || null,
+            tool: name,
+            args,
+          });
+
+          if (name === 'capture_field') {
+            await this._captureField(callId || null, args);
+          }
+
           logger.log('el_tool_dispatched', { name });
           return res.json({ ok: true });
         } catch (err) {
@@ -75,6 +97,46 @@ class ElevenLabsTransportAdapter extends TransportPort {
           // Fixed message only: err.message could leak internals to this
           // public, unauthenticated-by-name caller.
           return res.status(500).json({ ok: false, error: 'tool dispatch failed' });
+        }
+      });
+
+      // --- HTTP route: /el/post-call ---
+      // ElevenLabs' post-call webhook, fired once after the conversation
+      // ends. This is the only place a call's transcript, duration, cost
+      // and tool history all land together — nothing here writes to the
+      // `calls` table directly. Emitting CONVERSATION_ENDED and letting the
+      // engine's own handler derive the outcome, persist it, check
+      // escalation and notify plugins (engine.js's _setupEventHandlers) is
+      // what the Vapi 'end-of-call-report' case does too; duplicating that
+      // logic here would risk a second, out-of-sync write to the same row.
+      config.app.post('/el/post-call', async (req, res) => {
+        // Same shared-secret gate as the tool route: this endpoint sits on
+        // the same public tunnel.
+        const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
+        if (!expected || req.get('X-Kinvox-Token') !== expected) {
+          logger.log('el_post_call_unauthorized', {});
+          return res.status(401).json({ ok: false, error: 'unauthorized' });
+        }
+
+        const body = req.body || {};
+        const callId = body.conversation_id;
+
+        // Refuse rather than emit an event with no call identity: nothing
+        // downstream (deriveOutcome, save()) has anything to key on.
+        if (!callId) {
+          logger.log('el_post_call_rejected', { reason: 'no conversation_id' });
+          return res.status(400).json({ ok: false, error: 'conversation_id required' });
+        }
+
+        try {
+          await this.engine.getEventBus().emit(EVENT_TYPES.CONVERSATION_ENDED, {
+            callData: this._mapPostCallData(body),
+          });
+          logger.log('el_post_call_processed', { callId });
+          return res.json({ ok: true });
+        } catch (err) {
+          logger.log('el_post_call_failed', { callId, error: err.message });
+          return res.status(500).json({ ok: false, error: 'post-call processing failed' });
         }
       });
     }
@@ -109,6 +171,84 @@ class ElevenLabsTransportAdapter extends TransportPort {
     }
     logger.log('el_agent_patched', { agentId, webhookUrl: this.webhookUrl });
     return res.json();
+  }
+
+  /**
+   * Write a captured intake field to the session, turn by turn.
+   *
+   * Mirrors vapi.js's `_captureField` exactly — same lifecycle helper, same
+   * allowed-field list — because the underlying state (a session's
+   * fields_so_far) is transport-agnostic. Kept as a thin wrapper here rather
+   * than shared code because the two adapters differ in how they get
+   * `callId` and `args` out of their native payload; the call into
+   * `captureField()` itself already tolerates a missing/unknown session
+   * (see lifecycle.js), which matters here since this transport opens no
+   * session for outbound calls.
+   *
+   * @param {string|null} callId
+   * @param {Object} args - { field, value } from the tool call
+   * @private
+   */
+  async _captureField(callId, args) {
+    const { field, value } = args;
+    await captureField({
+      repository: this.repository,
+      callId,
+      field,
+      value,
+      allowedFields: INTAKE_FIELDS.map((f) => f.key),
+    });
+  }
+
+  /**
+   * Map ElevenLabs' post-call webhook payload onto the transport-agnostic
+   * CONVERSATION_ENDED shape (see vapi.js's 'end-of-call-report' handler for
+   * the sibling mapping this mirrors).
+   *
+   * Field provenance verified against the cached OpenAPI spec rather than
+   * guessed:
+   *   - duration/cost/endedReason/phone come from GetConversationResponseModel's
+   *     `metadata` (ConversationHistoryMetadataCommonModel: call_duration_secs,
+   *     cost, termination_reason; phone from the phone_call sub-object's
+   *     external_number).
+   *   - toolCalls is flattened out of each transcript turn's own `tool_calls`
+   *     array (ConversationHistoryTranscriptCommonModel nests them per-turn;
+   *     Vapi's callData.toolCalls is already a flat list, and
+   *     medication-adherence/outcomes.js's checkToolCalls() reads a flat
+   *     list — {name, arguments} per call, arguments a JSON string it parses).
+   *   - transcript is rendered as "role: message" lines, which
+   *     extractCallerSpeech() in outcomes.js already knows how to split on
+   *     ("user"/"agent" both match its speaker-prefix regex).
+   *   - recordingUrl has no documented field anywhere in the spec (unlike
+   *     Vapi's artifact.recordingUrl) — left null rather than invented.
+   *
+   * @param {Object} body - req.body from POST /el/post-call
+   * @returns {Object} callData, shaped for EVENT_TYPES.CONVERSATION_ENDED
+   * @private
+   */
+  _mapPostCallData(body) {
+    const metadata = body.metadata || {};
+    const turns = Array.isArray(body.transcript) ? body.transcript : [];
+
+    const toolCalls = [];
+    for (const turn of turns) {
+      for (const call of turn.tool_calls || []) {
+        toolCalls.push({ name: call.tool_name, arguments: call.params_as_json });
+      }
+    }
+
+    return {
+      callId: body.conversation_id,
+      phone: metadata.phone_call?.external_number || null,
+      toolCalls,
+      variables: body.conversation_initiation_client_data?.dynamic_variables || {},
+      transcript: turns.map((t) => `${t.role}: ${t.message || ''}`).join('\n'),
+      analysis: body.analysis || {},
+      endedReason: metadata.termination_reason || null,
+      duration: metadata.call_duration_secs ?? null,
+      cost: metadata.cost ?? null,
+      recordingUrl: null,
+    };
   }
 
   /**
@@ -149,7 +289,26 @@ class ElevenLabsTransportAdapter extends TransportPort {
         request_body_schema: {
           type: 'object',
           description: fn.description,
-          properties: params.properties,
+          properties: {
+            ...params.properties,
+            // The webhook has no other way to know which call it's for —
+            // ElevenLabs' documented dynamic variables
+            // (system__call_duration_secs, system__time) carry no
+            // conversation id. `dynamic_variable` here tells ElevenLabs to
+            // populate this property from the kinvox_call_id dynamic
+            // variable createCall() sets, rather than asking the model to
+            // supply it. Field set (dynamic_variable/is_system_provided/
+            // constant_value/is_omitted) mirrors the live source agent's
+            // tool schema, not something invented for this property alone.
+            kinvox_call_id: {
+              type: 'string',
+              description: 'Internal call correlation id — populated automatically, never asked of the caller.',
+              dynamic_variable: 'kinvox_call_id',
+              is_system_provided: false,
+              constant_value: '',
+              is_omitted: false,
+            },
+          },
           required: params.required || [],
         },
       },
@@ -202,6 +361,14 @@ class ElevenLabsTransportAdapter extends TransportPort {
       );
     }
 
+    // Minted here, not read back from ElevenLabs: their OpenAPI spec exposes
+    // only system__call_duration_secs and system__time as dynamic
+    // variables — no conversation id — so the webhook tool calls would
+    // otherwise have no way to say which call they belong to. Sent as a
+    // dynamic variable so _toolDeclaration's kinvox_call_id property (bound
+    // via `dynamic_variable`) gets it populated on every tool call.
+    const kinvoxCallId = crypto.randomUUID();
+
     const res = await fetch(`${API}/v1/convai/twilio/outbound-call`, {
       method: 'POST',
       headers: { 'xi-api-key': this.apiKey, 'Content-Type': 'application/json' },
@@ -209,7 +376,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
         agent_id: assistantId,
         agent_phone_number_id: this.phoneNumberId,
         to_number: phoneNumber,
-        conversation_initiation_client_data: { dynamic_variables: variables },
+        conversation_initiation_client_data: {
+          dynamic_variables: { ...variables, kinvox_call_id: kinvoxCallId },
+        },
       }),
     });
 
@@ -217,8 +386,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
       throw new Error(`ElevenLabs createCall error (${res.status}): ${await res.text()}`);
     }
     const body = await res.json();
-    logger.log('el_call_created', { conversationId: body.conversation_id });
-    return body;
+    logger.log('el_call_created', { conversationId: body.conversation_id, kinvoxCallId });
+    // Returned alongside the API's own response so a caller can correlate
+    // this dispatch with the tool calls and post-call webhook that follow.
+    return { ...body, kinvox_call_id: kinvoxCallId };
   }
 }
 

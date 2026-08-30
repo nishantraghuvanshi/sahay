@@ -96,6 +96,18 @@ describe('buildAssistantConfig', () => {
     assert.deepStrictEqual(outcome.api_schema.request_body_schema.required.sort(), ['outcome', 'reason']);
   });
 
+  test('declares kinvox_call_id bound to the dynamic variable, on every tool', () => {
+    // Without this, the webhook has no idea which call a tool call belongs
+    // to — ElevenLabs' documented dynamic variables carry no conversation id.
+    const a = new ElevenLabsTransportAdapter({});
+    const tools = a.buildAssistantConfig(STRATEGY, {}, 'https://x').conversation_config.agent.prompt.tools;
+    for (const t of tools) {
+      const prop = t.api_schema.request_body_schema.properties.kinvox_call_id;
+      assert.strictEqual(prop.type, 'string');
+      assert.strictEqual(prop.dynamic_variable, 'kinvox_call_id');
+    }
+  });
+
   test('sends the shared secret on every tool call, so the webhook route can verify it', () => {
     const originalSecret = process.env.ELEVENLABS_WEBHOOK_SECRET;
     process.env.ELEVENLABS_WEBHOOK_SECRET = 'test-secret';
@@ -152,10 +164,47 @@ describe('createCall', () => {
       await a.createCall('agent_x', '+919000000042', { patient_name: 'Kamala', meal_slot: 'morning' });
     } finally { restore(); }
 
-    assert.deepStrictEqual(
-      cap.body.conversation_initiation_client_data.dynamic_variables,
-      { patient_name: 'Kamala', meal_slot: 'morning' }
-    );
+    // kinvox_call_id rides alongside the caller's own variables — it isn't
+    // one of them, so it's asserted separately below rather than folded
+    // into one deepStrictEqual against the whole object.
+    const dynamicVariables = cap.body.conversation_initiation_client_data.dynamic_variables;
+    assert.strictEqual(dynamicVariables.patient_name, 'Kamala');
+    assert.strictEqual(dynamicVariables.meal_slot, 'morning');
+  });
+
+  test('createCall mints a kinvox_call_id and puts it in dynamic_variables', async () => {
+    // ElevenLabs' documented dynamic variables (system__call_duration_secs,
+    // system__time) carry no conversation id, so the tool webhook has no
+    // other way to know which call it belongs to without this.
+    process.env.ELEVENLABS_API_KEY = 'test-key';
+    const cap = {};
+    const restore = stubFetch(cap);
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      a.phoneNumberId = PHONE_ID;
+      await a.createCall('agent_x', '+919000000042', {});
+    } finally { restore(); }
+
+    const { kinvox_call_id: callId } = cap.body.conversation_initiation_client_data.dynamic_variables;
+    assert.strictEqual(typeof callId, 'string');
+    assert.match(callId, /^[0-9a-f-]{36}$/);
+  });
+
+  test('createCall returns the kinvox_call_id it sent, so a caller can correlate', async () => {
+    process.env.ELEVENLABS_API_KEY = 'test-key';
+    const cap = {};
+    const restore = stubFetch(cap);
+    let result;
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      a.phoneNumberId = PHONE_ID;
+      result = await a.createCall('agent_x', '+919000000042', {});
+    } finally { restore(); }
+
+    const sentId = cap.body.conversation_initiation_client_data.dynamic_variables.kinvox_call_id;
+    assert.strictEqual(result.kinvox_call_id, sentId);
+    // The API's own response fields (conversation_id, callSid) still pass through.
+    assert.strictEqual(result.conversation_id, 'conv_1');
   });
 
   test('a missing phone number id is named, not left as a 422 from the API', async () => {
