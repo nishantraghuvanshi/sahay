@@ -21,7 +21,14 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.rx_extract import (
+# BEFORE the api.* imports, and that order is load-bearing. `api/db.py` resolves
+# DB_PATH from VOXIKIN_DB at import time, so a .env loaded afterwards had no
+# effect on it — the setting was accepted, documented, and silently ignored, and
+# the API quietly opened a different database. That fails in the worst way
+# available: no error, just an app with no patient in it.
+load_dotenv()
+
+from api.rx_extract import (  # noqa: E402
     MissingCredentialsError,
     VLMBlockedError,
     VLMCallError,
@@ -29,12 +36,10 @@ from api.rx_extract import (
     VLMProviderConfig,
     make_pipeline_b,
 )
-from api.rx_extract.normalize import normalize
-from api import db
-from api.config import get_settings
-from api.routes_app import router as app_router
-
-load_dotenv()
+from api.rx_extract.normalize import normalize  # noqa: E402
+from api import db  # noqa: E402
+from api.config import get_settings  # noqa: E402
+from api.routes_app import router as app_router  # noqa: E402
 
 log = logging.getLogger("voxikin.api")
 

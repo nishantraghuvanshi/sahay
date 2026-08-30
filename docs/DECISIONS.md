@@ -138,6 +138,8 @@ Carried in from `IDEA_SCOPE.md` §2. **Do not reopen during the build.**
 
 | 15:10 | ⚠️ **The two call buttons could name a different patient than the screens show.** All six patient lookups in `api/caregiver/routes.py` now order by `created_at DESC` before `LIMIT 1`, matching `current_patient()` | They were a bare `LIMIT 1` — whatever row SQLite reached first — while `/app/record` has always ordered. With two patients under one caregiver they disagreed, and the disagreement was invisible in the worst way: the button reads *"Call +91… now?"*, which is the single fact the caregiver is asked to check before a real telephone rings, and it could name a household that was not on screen |
 
+| 15:25 | ⚠️ **`load_dotenv()` moved above the `api.*` imports.** `VOXIKIN_DB` set in `.env` had no effect | `api/db.py` resolves `DB_PATH` from the environment at import time, and `.env` was loaded four lines later — so the setting was accepted, documented in `.env.example`, and silently ignored, with the API opening a different database than the one configured. It failed in the worst way available: no error, just an app with no patient in it, which is exactly how the Calendar's two call buttons came to report `ready: false` |
+
 
 ---
 
