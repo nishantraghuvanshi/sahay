@@ -277,3 +277,100 @@ def test_finishing_onboarding_does_not_sign_the_caregiver_out(agent):
         con.close()
         assert after == 1, "onboarding must not delete the caregiver's session"
         assert c.get("/auth/me").status_code == 200, "still signed in after onboarding"
+
+
+def test_the_real_test_call_actually_dials(agent):
+    """The other button: this one rings the parent's phone.
+
+    Kept apart from the demo at every level. The assertions below are mostly
+    about that separation, because the failure that matters is not "the call
+    did not work" — it is a caregiver expecting a transcript and their parent's
+    phone ringing instead.
+    """
+    with TestClient(app) as c:
+        c.post("/auth/otp/start", json={"channel": "sms", "destination": CAREGIVER_PHONE})
+        c.post(
+            "/auth/otp/verify",
+            json={"channel": "sms", "destination": CAREGIVER_PHONE, "code": "123456"},
+        )
+        c.post("/app/onboarding", json=ONBOARDING)
+
+        # It names the number before it dials it, so the caregiver can check.
+        status = c.get("/app/test-call").json()
+        assert status["available"] is True
+        assert status["ready"] is True
+        assert status["will_call"] == PARENT_PHONE
+        assert status["parent_name"] == "कमला"
+
+        placed = c.post("/app/test-call", json={}).json()
+        assert placed["ok"] is True, placed
+        assert placed["calling"] == PARENT_PHONE
+
+        # It went to the REAL call route, not the demo one.
+        assert agent.real_calls, "must reach /api/call"
+        assert agent.demo_calls == [], "must not go through the demo path"
+        assert agent.real_calls[0]["phone"] == PARENT_PHONE
+        assert agent.real_calls[0]["drug"] == "Metformin"
+
+        # One only.
+        assert c.post("/app/test-call", json={}).json()["error"] == "test_call_already_used"
+
+
+def test_the_two_call_buttons_have_separate_quotas(agent):
+    """Spending one must not spend the other. A shared counter would let a used
+    demo silently authorise a real call to a patient, or the reverse."""
+    with TestClient(app) as c:
+        c.post("/auth/otp/start", json={"channel": "sms", "destination": CAREGIVER_PHONE})
+        c.post(
+            "/auth/otp/verify",
+            json={"channel": "sms", "destination": CAREGIVER_PHONE, "code": "123456"},
+        )
+        c.post("/app/onboarding", json=ONBOARDING)
+
+        assert c.post("/app/demo-call", json={}).json()["ok"] is True
+        # The demo is spent; the real call is untouched.
+        assert c.get("/app/demo-call").json()["available"] is False
+        assert c.get("/app/test-call").json()["available"] is True
+
+        assert c.post("/app/test-call", json={}).json()["ok"] is True
+        assert c.get("/app/test-call").json()["available"] is False
+
+
+def test_a_real_call_is_never_placed_before_onboarding(agent):
+    with TestClient(app) as c:
+        c.post("/auth/otp/start", json={"channel": "sms", "destination": CAREGIVER_PHONE})
+        c.post(
+            "/auth/otp/verify",
+            json={"channel": "sms", "destination": CAREGIVER_PHONE, "code": "123456"},
+        )
+        body = c.post("/app/test-call", json={}).json()
+        assert body["error"] == "onboarding_incomplete"
+        assert agent.real_calls == [], "no phone may ring without a patient on file"
+
+
+def test_a_failed_dial_does_not_burn_the_attempt(monkeypatch):
+    class _Down:
+        def __call__(self, *a, **k):
+            class _C:
+                async def __aenter__(self): return self
+                async def __aexit__(self, *e): return False
+                async def post(self, *a, **k): raise httpx.ConnectError("agent down")
+            return _C()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Down())
+    with TestClient(app) as c:
+        c.post("/auth/otp/start", json={"channel": "sms", "destination": CAREGIVER_PHONE})
+        c.post(
+            "/auth/otp/verify",
+            json={"channel": "sms", "destination": CAREGIVER_PHONE, "code": "123456"},
+        )
+        c.post("/app/onboarding", json=ONBOARDING)
+        assert c.post("/app/test-call", json={}).json()["error"] == "agent_unreachable"
+        # Nothing rang, so nothing was spent.
+        assert c.get("/app/test-call").json()["available"] is True
+
+
+def test_the_real_call_needs_a_signed_in_caregiver():
+    with TestClient(app) as c:
+        assert c.post("/app/test-call", json={}).status_code == 401
+        assert c.get("/app/test-call").status_code == 401

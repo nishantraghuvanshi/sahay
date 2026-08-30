@@ -280,3 +280,117 @@ async def _release_demo(caregiver_id: str) -> None:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+# ------------------------------------------------------- real test call
+
+
+@router.get("/test-call")
+async def test_call_status(caregiver: CaregiverDep):
+    """Whether this caregiver may still place their one real test call."""
+    async with db.connection() as conn:
+        used_at = await conn.fetchval(
+            "SELECT test_call_used_at FROM caregivers WHERE id = $1", caregiver.id
+        )
+        patient = await conn.fetchrow(
+            "SELECT name, phone_e164 FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            caregiver.id,
+        )
+    return {
+        "ok": True,
+        "available": used_at is None,
+        "used_at": used_at,
+        "ready": patient is not None,
+        # Shown on the button, because "we will call this number" is the one
+        # fact the caregiver must check before pressing it.
+        "will_call": patient["phone_e164"] if patient else None,
+        "parent_name": patient["name"] if patient else None,
+    }
+
+
+@router.post("/test-call")
+async def test_call(caregiver: CaregiverDep, settings: SettingsDep):
+    """Place a REAL call to the parent's number.
+
+    This is not the demo. A telephone rings in someone's house, an elderly
+    person picks it up, and the agent talks to them — and whatever they say is
+    recorded against their dose record like any other call, because it IS any
+    other call. The only thing "test" about it is that a caregiver asked for it
+    rather than the scheduler.
+
+    Kept apart from /app/demo-call at every level — its own route, its own
+    quota column, its own button — because a demo and a real call must never be
+    one flag apart from each other. A misread flag on a shared endpoint would
+    ring a patient who was expecting a transcript.
+    """
+    async with db.transaction() as conn:
+        used_at = await conn.fetchval(
+            "SELECT test_call_used_at FROM caregivers WHERE id = $1", caregiver.id
+        )
+        if used_at is not None:
+            return {"ok": False, "error": "test_call_already_used", "used_at": used_at}
+
+        patient = await conn.fetchrow(
+            "SELECT name, phone_e164, drug_name FROM patients WHERE caregiver_id = $1 LIMIT 1",
+            caregiver.id,
+        )
+        if patient is None:
+            return {"ok": False, "error": "onboarding_incomplete"}
+        if not patient["phone_e164"]:
+            return {"ok": False, "error": "no_phone_number"}
+
+        med = await conn.fetchval(
+            "SELECT name FROM medications WHERE patient_id = "
+            "(SELECT id FROM patients WHERE caregiver_id = $1 LIMIT 1) "
+            "AND excluded = 0 AND stopped_at IS NULL LIMIT 1",
+            caregiver.id,
+        )
+
+        # Claimed before dialling, in the transaction. Two clicks in flight
+        # would otherwise both pass the check and ring the parent twice.
+        await conn.execute(
+            "UPDATE caregivers SET test_call_used_at = $2 WHERE id = $1",
+            caregiver.id,
+            _now_iso(),
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.demo_call_timeout_s) as client:
+            headers = {"x-api-key": settings.agent_api_key} if settings.agent_api_key else {}
+            resp = await client.post(
+                f"{settings.agent_base_url.rstrip('/')}/api/call",
+                headers=headers,
+                json={
+                    "phone": patient["phone_e164"],
+                    "name": patient["name"] or "आपके",
+                    "drug": med or patient["drug_name"] or "your medicine",
+                    "caregiver": caregiver.name,
+                },
+            )
+    except httpx.HTTPError as exc:
+        # Nothing was dialled, so the attempt is given back.
+        await _release_test_call(caregiver.id)
+        log.warning("test call could not reach the agent: %s", exc)
+        return {"ok": False, "error": "agent_unreachable"}
+
+    if resp.status_code != 200:
+        await _release_test_call(caregiver.id)
+        log.warning("test call rejected by agent: %s %s", resp.status_code, resp.text[:200])
+        return {"ok": False, "error": "call_failed", "status": resp.status_code}
+
+    body = resp.json()
+    log.info("test call placed for caregiver=%s", caregiver.id)
+    return {
+        "ok": True,
+        "calling": patient["phone_e164"],
+        "parent_name": patient["name"],
+        "conversation_id": body.get("conversation_id") or body.get("callId"),
+    }
+
+
+async def _release_test_call(caregiver_id: str) -> None:
+    """Only ever called when no call was placed."""
+    async with db.transaction() as conn:
+        await conn.execute(
+            "UPDATE caregivers SET test_call_used_at = NULL WHERE id = $1", caregiver_id
+        )

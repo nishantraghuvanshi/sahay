@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS caregivers (
   -- rather than a boolean so "when did they try this" is answerable later, and
   -- so clearing it to re-enable a demo is an obvious one-line UPDATE.
   demo_call_used_at TEXT,
+  -- The real test call, which actually rings the parent's phone. Separate from
+  -- the demo on purpose: one is a transcript and the other is a telephone
+  -- ringing in someone's house, and a single counter would let a spent demo
+  -- silently authorise a real call or the reverse.
+  test_call_used_at TEXT,
   created_at        TEXT NOT NULL
 );
 
