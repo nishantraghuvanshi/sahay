@@ -36,9 +36,9 @@ async function main() {
     body: JSON.stringify({
       settings: {
         auth_type: 'hmac',
-        name: 'Kinvox post-call',
+        name: 'Voxikin post-call',
         webhook_url: `${webhookUrl}/el/post-call`,
-        request_headers: { 'X-Kinvox-Token': process.env.ELEVENLABS_WEBHOOK_SECRET },
+        request_headers: { 'X-Voxikin-Token': process.env.ELEVENLABS_WEBHOOK_SECRET },
       },
     }),
   });

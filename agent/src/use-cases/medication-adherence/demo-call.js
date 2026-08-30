@@ -135,7 +135,7 @@ async function runDemoCall({
     parent_name: parentName,
     drug_name: drugName,
     caregiver_name: caregiverName || 'आपके परिवार',
-    kinvox_call_id: 'demo',
+    voxikin_call_id: 'demo',
     ...schedule,
   };
 

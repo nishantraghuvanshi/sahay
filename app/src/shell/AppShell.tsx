@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
+import { useQuery } from '@tanstack/react-query'
 import { useIsDesktop } from './useBreakpoint'
-import { NAV, TABS } from './nav'
+import { NAV, TABS, UPGRADE_PATH } from './nav'
 import { Bar, Dot, Wordmark } from '../ui'
 import { useCareRecord } from '../api/hooks'
+import { getSubscription } from '../api/billing'
 import { LogoutButton } from '../auth/LogoutButton'
+import SessionBar from './SessionBar'
 
 /**
  * One shell, two layouts: sidebar + top bar on desktop, bottom tab bar on a phone.
@@ -33,6 +36,11 @@ export default function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* The phone layout's only chrome was the tab bar, and that bar is capped at
+          four items by the design contract — so sign-out lived on /settings and
+          nowhere else. This strip is where it goes on every other screen; the
+          desktop branch above does not need one, the sidebar carries it. */}
+      <SessionBar />
       <main id="main" ref={mainRef} tabIndex={-1} className="min-h-0 flex-1 overflow-auto p-4">
         <Outlet />
       </main>
@@ -71,10 +79,29 @@ function SkipLink() {
 }
 
 function Sidebar() {
+  /**
+   * Same query key as Settings, so the two share one cached answer rather than
+   * asking twice on every page. In mock mode getSubscription resolves to "no
+   * plan" instead of throwing, which is the honest state for a deployment with
+   * no billing behind it — so Upgrade shows, as it should.
+   */
+  const billing = useQuery({ queryKey: ['billing'], queryFn: getSubscription })
+  const paying =
+    billing.data?.subscription?.status === 'active' || Boolean(billing.data?.pending_order_id)
+
+  /**
+   * Hidden while the answer is still loading, not shown-then-pulled: a link
+   * that appears for 300ms and vanishes under the cursor is worse than one
+   * that arrives a beat late.
+   */
+  const items = NAV.filter((item) =>
+    item.to === UPGRADE_PATH ? billing.isSuccess && !paying : true,
+  )
+
   return (
-    <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4">
-      <div className="flex items-center px-1 pb-4">
-        <Wordmark size={17} />
+    <aside className="flex w-[208px] shrink-0 flex-col gap-1 border-r border-line bg-surface p-4 xl:w-[240px] xl:p-5 2xl:w-[264px] 2xl:p-6">
+      <div className="flex items-center px-1 pb-4 2xl:pb-5">
+        <Wordmark className="text-[17px] xl:text-[20px] 2xl:text-[24px]" />
       </div>
 
       <PatientCard />
@@ -82,7 +109,7 @@ function Sidebar() {
       {/* The tab bar is a <nav>; the sidebar was seven bare links in an <aside>, so it
           did not appear in the landmark list a screen reader navigates by. */}
       <nav aria-label="Main" className="flex flex-col gap-1">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon
         return (
           <NavLink
@@ -165,11 +192,19 @@ function PatientCard() {
   )
 }
 
+/**
+ * The bar scales with the window. A fixed 56px strip carrying 20px type is right
+ * on a 13" laptop and reads as a leftover toolbar on a 27" display — the chrome
+ * has to grow with the room, or the whole app looks like it is running in a
+ * window someone forgot to resize.
+ */
 function TopBar() {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-6">
-      <span className="font-display text-lg font-semibold tracking-tight">Kinvox</span>
-      <span className="text-xs text-muted-strong">the care line, at a glance</span>
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-6 xl:h-16 xl:gap-4 xl:px-8 2xl:h-20 2xl:px-10">
+      <span className="font-display text-lg font-semibold tracking-tight xl:text-xl 2xl:text-2xl">
+        Voxikin
+      </span>
+      <span className="text-xs text-muted-strong xl:text-sm">the care line, at a glance</span>
     </header>
   )
 }

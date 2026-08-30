@@ -36,6 +36,7 @@ CLAUDE.md
 # voice agent local datastore — holds real call transcripts, never ships
 agent/data/
 *.db
+*.db.bak
 *.db-shm
 *.db-wal
 

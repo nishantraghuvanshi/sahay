@@ -22,7 +22,7 @@ displayed as **1E.2**.
 
 ## 0. Read this first — three caveats
 
-1. **The product is Kinvox**, on every frame and every URL (`kinvox.app`), settled
+1. **The product is Voxikin**, on every frame and every URL (`voxikin.app`), settled
    30 Aug. Earlier names — MediWatch, Sahay, briefly Voxikin — survive in older commits
    and stale screenshots; none is current. Voxikin especially must not reappear: it is
    the founder's company, and `[V]` rule 04 keeps it off screen.
@@ -226,18 +226,19 @@ called Mom yet"** until the intro call is scheduled.
 | Route | Frame |
 |---|---|
 | `/` (marketing + login) | `2a` |
+| `/setup/meet` | *no frame — added after the wireframes: the in-browser voice playground a caregiver meets right after signup* |
 | `/setup/parent` · `/setup/prescription` · `/setup/schedule` | `2b` · `2c` · `2d` |
-| **`kinvox.app/setup/consent`** | **`2D.2`** |
+| **`voxikin.app/setup/consent`** | **`2D.2`** |
 | `/home` | `2e`, alts `2l` `2n` |
 | `/calendar` | `2f` |
-| **`kinvox.app/medicines/edit`** | **`2F.2`** |
+| **`voxikin.app/medicines/edit`** | **`2F.2`** |
 | `/alerts` · `/alerts/{id}` | `2g` |
 | `/calls` | `2h` |
 | `/wellbeing` (renders "What she said") | `2j` |
 | `/settings/{section}` | `2k` |
 | `/console` (multi-parent alt) | `2m` |
 
-Every frame now uses `kinvox.app`. `/wellbeing` is a stale path for a screen now called "What
+Every frame now uses `voxikin.app`. `/wellbeing` is a stale path for a screen now called "What
 she said" — rename to `/said` or `/record`.
 
 ### 3.5 Mobile → desktop mapping
@@ -343,9 +344,9 @@ We say who we are, that you set this up, and ask if she is happy to be called."*
    outlined `3rd option?` badge — **an open design question, not a settled option**
 
 **Your consent** (attention card) — three mandatory lines, each with a `copy TBC` marker:
-- ● I confirm Mom knows Kinvox will call her
+- ● I confirm Mom knows Voxikin will call her
 - ● I consent to these calls being recorded and transcribed
-- ○ I understand Kinvox never gives medical advice
+- ○ I understand Voxikin never gives medical advice
 
 with "All three are mandatory · 1 left".
 
@@ -550,7 +551,7 @@ Footer row: annotation · **sign-off checkbox** (attention card, unchecked) · `
 nothing → `2D.2`.*
 
 ### `2D.2` (`#2d2`) Parent consent — the intro call, then consent
-Route `kinvox.app/setup/consent`. Stepper shows **4 · Consent** active; header note
+Route `voxikin.app/setup/consent`. Stepper shows **4 · Consent** active; header note
 **"nothing has called Mom yet"**.
 
 Left (flex 1.35): **"First we ring Mom once to introduce ourselves"** — *"No medicines on
@@ -599,7 +600,7 @@ Footer: **`Edit these medicines`** · **`Upload new prescription`** · legend ·
 moves the whole series.** Annotation: *either button opens the editor (`2F.2`).*
 
 ### `2F.2` (`#2f2`) Edit medicines / upload a new prescription
-Route `kinvox.app/medicines/edit`. Header: ← · "Change medicines" · segmented **Edit
+Route `voxikin.app/medicines/edit`. Header: ← · "Change medicines" · segmented **Edit
 medicine** | **Upload prescription**.
 
 Left: a table of current medicines with **pending-change states** — an edited row is
@@ -832,8 +833,8 @@ When a screen needs something the wireframes do not show, extend using the rules
 ## 12. Revision history
 
 **Rev 3 — current files.** Consent became a real product surface, the gate moved, and the
-product name settled as **Kinvox** across every frame and URL on 30 Aug
-(MediWatch → Sahay → Kinvox):
+product name settled as **Voxikin** across every frame and URL on 30 Aug
+(MediWatch → Sahay → Voxikin):
 
 - **Auth rebuilt.** Google/Apple sign-in removed. `1a` / `2a` are now four numbered,
   progressively-unlocking steps: phone → phone OTP → email → email OTP. Language
@@ -858,7 +859,7 @@ product name settled as **Kinvox** across every frame and URL on 30 Aug
 - **CTAs renamed to their destination** — `Upload Prescription`, `Approve Schedule`,
   `Continue to Consent`, `Continue on the app`, `Save and Continue` — and every gated one
   is visibly disabled with its blocking reason beside it.
-- New frames use **`kinvox.app`**.
+- New frames use **`voxikin.app`**.
 
 **Rev 2.** Scope narrowed, safety posture pushed into the UI: the whole pharmacy domain
 (`1k`, `1l`, `1r`, `2i`, plus stock/refill/prices) and all sentiment scoring were removed;

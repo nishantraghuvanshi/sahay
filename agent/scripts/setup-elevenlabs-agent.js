@@ -6,7 +6,7 @@ const SOURCE_AGENT_ID = 'agent_4901m0kzym5pfm7b7y9aprndv6qp';
 const API = 'https://api.elevenlabs.io';
 
 /**
- * Duplicate the prior product's agent into one Kinvox owns.
+ * Duplicate the prior product's agent into one Voxikin owns.
  *
  * We never patch the original: it is English, carries its own 6,640-character
  * prompt, and works. Every later PATCH targets this copy, so the original stays
@@ -19,7 +19,7 @@ async function main() {
   const res = await fetch(`${API}/v1/convai/agents/${SOURCE_AGENT_ID}/duplicate`, {
     method: 'POST',
     headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Kinvox Dose Call (outbound)' }),
+    body: JSON.stringify({ name: 'Voxikin Dose Call (outbound)' }),
   });
   if (!res.ok) {
     throw new Error(`duplicate failed (${res.status}): ${await res.text()}`);

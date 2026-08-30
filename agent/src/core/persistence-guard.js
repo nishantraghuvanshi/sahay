@@ -32,7 +32,7 @@ function assertPersistenceSatisfied(useCase, repository) {
   throw new Error(
     `Use case "${useCase.name}" requires persistence for inbound context and resume, ` +
       `but the active repository does not persist. ` +
-      `Set KINVOX_DB (e.g. KINVOX_DB=../api/kinvox.db) or DB_PATH and restart.`
+      `Set VOXIKIN_DB (e.g. VOXIKIN_DB=../api/voxikin.db) or DB_PATH and restart.`
   );
 }
 

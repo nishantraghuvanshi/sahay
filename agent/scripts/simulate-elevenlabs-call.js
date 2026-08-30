@@ -96,7 +96,7 @@ async function runScenario(key, scenario, args, credentials) {
     ...(scenario.variables || {}),
     // The correlation id createCall mints, so a simulated tool call carries
     // the same parameter a real one would.
-    kinvox_call_id: `sim-${key}`,
+    voxikin_call_id: `sim-${key}`,
   };
 
   const res = await fetch(
@@ -286,13 +286,13 @@ async function runScenario(key, scenario, args, credentials) {
         warnings.push(`engine persists ${derived}; the call ended at ${last}`);
       }
     }
-    if (outcomes[0].kinvox_call_id !== dynamicVariables.kinvox_call_id) {
-      // A warning, not a failure: kinvox_call_id is declared with
+    if (outcomes[0].voxikin_call_id !== dynamicVariables.voxikin_call_id) {
+      // A warning, not a failure: voxikin_call_id is declared with
       // `dynamic_variable`, which ElevenLabs resolves when it really executes
       // a tool. Simulated tool calls are mocked, so the injection plausibly
       // never runs, and the model would not invent the value — it carries no
       // description by design. Only a real call can settle this.
-      warnings.push('kinvox_call_id absent (expected under mocking; verify on a real call)');
+      warnings.push('voxikin_call_id absent (expected under mocking; verify on a real call)');
     }
   }
 

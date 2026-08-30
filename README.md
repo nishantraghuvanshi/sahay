@@ -1,4 +1,4 @@
-# Kinvox
+# Voxikin
 
 **One AI voice line that calls an ageing parent on schedule to manage medicines, and
 picks up when they call in — where the inbound call already knows everything the
@@ -67,8 +67,8 @@ Postgres 16+ is required — the schema uses `TEXT[]`, `JSONB` and partial index
 cp .env.example .env      # fill in — never commit this file
 
 # database
-createdb kinvox
-psql -d postgres -c "CREATE ROLE kinvox LOGIN PASSWORD 'kinvox'"
+createdb voxikin
+psql -d postgres -c "CREATE ROLE voxikin LOGIN PASSWORD 'voxikin'"
 psql "$DATABASE_URL" -f api/schema.sql      # idempotent, doubles as the migration
 
 python3 -m venv .venv && .venv/bin/pip install -r api/requirements.txt
@@ -110,6 +110,16 @@ registration for A2P SMS, which takes days, and WhatsApp is not SMS. See
 carrier hop. Every other rule — hashing, expiry, attempt counting, session issue — runs
 exactly as in production. Team destinations only, with consent (`SR-7`); leave empty in
 any real deployment.
+
+`DEV_OTP_BYPASS_NUMBERS=*` extends that to every phone number, which is what the demo
+build runs while no WhatsApp sender is approved — without it, step 2 of signup cannot be
+completed and there is no app to show. `DEV_OTP_BYPASS_EMAILS=*` does the same for every
+email address, and is switched independently, since the two channels break for different
+reasons. Either way nothing is sent: the code is always `DEV_OTP_BYPASS_CODE`.
+
+Treat both as master keys: anyone who knows `DEV_OTP_BYPASS_CODE` can pass that channel
+for any destination, including one that already has an account. The API logs a warning
+per wildcard on every boot while they are set.
 
 ### Caregiver app
 

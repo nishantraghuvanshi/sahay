@@ -20,6 +20,10 @@ Indian prescription conventions to apply:
 - `a/f`/`p/c`=after food, `b/f`/`a/c`=before food.
 - Form prefixes: `T.`/`Tab.`=tablet, `Cap.`=capsule, `Syp.`/`Syr.`=syrup,
   `Inj.`=injection, `Oint.`=ointment, `Drops`, `Sachet`, `Neb.`=nebuliser.
+  `form` must be the value on the RIGHT of those pairs, lowercase, and one of
+  exactly: "tablet", "capsule", "syrup", "injection", "ointment", "drops",
+  "sachet", "nebuliser", or null. Echoing the prefix you read — "Tab.", "Inj." —
+  is not one of them, and the medicine is discarded.
 
 Rules:
 - Never infer a strength, dose, or duration that is not legibly written

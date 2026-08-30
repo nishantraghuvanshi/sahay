@@ -267,7 +267,7 @@ system_prompt: |
     close warmly and file the outcome. Repeating the same refusal forever
     leaves an elderly caller stuck on a call they cannot end.
 
-first_message: "नमस्ते {parent_name} जी, मैं आशा बोल रही हूँ। आपका {drug_name} लेने का समय हो गया है। क्या आपने ले लिया है?"
+first_message: "नमस्ते {parent_name} जी, मैं आशा बोल रही हूँ। आपका {drug_name} {dose_timing} लेने का समय हो गया है। क्या आपने ले लिया है?"
 
 modes:
   # ── Inbound: they called us, and we already hold their record ────
@@ -329,6 +329,9 @@ variables:
   drug_name: "Crocin"
   caregiver_name: "आपके परिवार"
   language: "hi"
+  # Meal-relative timing ("दोपहर के खाने के बाद"), composed per call from the
+  # schedule. Empty by default, and _tidy() closes the gap it leaves.
+  dose_timing: ""
   # Filled per-call by the inbound handler; empty on a cold call.
   context_line: ""
   fields_summary: ""

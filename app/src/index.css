@@ -3,7 +3,7 @@
 @import 'tailwindcss';
 
 /* ------------------------------------------------------------------ tokens
-   The Kinvox design language, declared once and inherited everywhere.
+   The Voxikin design language, declared once and inherited everywhere.
    Warm cream ramp · exactly one accent · status colours layered onto marks
    that already carry a shape and a word. Names are stable — extend, never rename. */
 @theme {
@@ -243,7 +243,7 @@ a:not([class*='no-underline']) {
 /* ------------------------------------------------ shadcn-shaped alias tokens
    `components/ui/sign-in.tsx` was authored against the shadcn token names
    (background / foreground / card / border / primary / muted-foreground …).
-   Rather than fork the component, the names are aliased onto the Kinvox ramp
+   Rather than fork the component, the names are aliased onto the Voxikin ramp
    above, so a stock shadcn block drops in and comes out wearing this palette.
    Extend this block when another shadcn component needs a name we lack. */
 @theme {

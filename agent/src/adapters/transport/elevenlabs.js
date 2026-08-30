@@ -196,7 +196,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         // the secret is not configured — an unset secret must never be
         // treated as "no check required".
         const expected = process.env.ELEVENLABS_WEBHOOK_SECRET;
-        if (!expected || req.get('X-Kinvox-Token') !== expected) {
+        if (!expected || req.get('X-Voxikin-Token') !== expected) {
           // Deliberately says nothing about which part was wrong.
           logger.log('el_tool_unauthorized', { name });
           return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -211,13 +211,13 @@ class ElevenLabsTransportAdapter extends TransportPort {
         }
 
         try {
-          // kinvox_call_id rides in the body alongside the tool's real
+          // voxikin_call_id rides in the body alongside the tool's real
           // arguments — it's a request_body_schema property ElevenLabs
           // populates from a dynamic variable (see _toolDeclaration), not a
           // separate call-metadata field the way Vapi's message.call.id is.
           // Pulled out here so `args` handed to the engine and to
           // _captureField is exactly the tool's own arguments, nothing else.
-          const { kinvox_call_id: callId, ...args } = req.body || {};
+          const { voxikin_call_id: callId, ...args } = req.body || {};
 
           await this.engine.getEventBus().emit(EVENT_TYPES.TOOL_CALLED, {
             callId: callId || null,
@@ -337,7 +337,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         // Two accepted proofs, because there are two senders in play.
         //
         // ElevenLabs signs every delivery itself — we do not choose those
-        // headers, so the X-Kinvox-Token gate the tool route uses cannot
+        // headers, so the X-Voxikin-Token gate the tool route uses cannot
         // apply here. A webhook configured in the dashboard with a custom
         // header is still honoured, so the token path stays.
         //
@@ -349,7 +349,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // whether a real delivery arrived shaped differently than
             // expected, without writing a signature into the log.
             signaturePresent: Boolean(req.get('ElevenLabs-Signature')),
-            tokenPresent: Boolean(req.get('X-Kinvox-Token')),
+            tokenPresent: Boolean(req.get('X-Voxikin-Token')),
             rawBodyCaptured: Boolean(req.rawBody),
           });
           return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -459,7 +459,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
    *   - a valid ElevenLabs-Signature HMAC over the raw body, which the service
    *     always sends and which requires ELEVENLABS_POST_CALL_SECRET (the
    *     wsec_… value shown once when the workspace webhook is created);
-   *   - the X-Kinvox-Token shared secret, for a webhook configured in the
+   *   - the X-Voxikin-Token shared secret, for a webhook configured in the
    *     dashboard with a custom header.
    *
    * Neither secret configured means no request is authorized. The endpoint is
@@ -485,7 +485,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
 
     const token = process.env.ELEVENLABS_WEBHOOK_SECRET;
     if (!token) return false;
-    const provided = req.get('X-Kinvox-Token');
+    const provided = req.get('X-Voxikin-Token');
     if (typeof provided !== 'string' || provided.length !== token.length) return false;
     return crypto.timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(token, 'utf8'));
   }
@@ -573,7 +573,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         // Proves the call came from our agent and not from anyone who found the
         // tunnel URL. report_outcome can raise a family medical alert, so the
         // endpoint cannot be open.
-        request_headers: { 'X-Kinvox-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
+        request_headers: { 'X-Voxikin-Token': process.env.ELEVENLABS_WEBHOOK_SECRET || '' },
         path_params_schema: {},
         query_params_schema: null,
         request_body_schema: {
@@ -585,7 +585,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // ElevenLabs' documented dynamic variables
             // (system__call_duration_secs, system__time) carry no
             // conversation id. `dynamic_variable` here tells ElevenLabs to
-            // populate this property from the kinvox_call_id dynamic
+            // populate this property from the voxikin_call_id dynamic
             // variable createCall() sets, rather than asking the model to
             // supply it.
             //
@@ -597,9 +597,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
             // schema. This one is bound to the dynamic variable createCall
             // sends, so dynamic_variable is the one it gets, and it
             // therefore carries no description.
-            kinvox_call_id: {
+            voxikin_call_id: {
               type: 'string',
-              dynamic_variable: 'kinvox_call_id',
+              dynamic_variable: 'voxikin_call_id',
             },
           },
           required: params.required || [],
@@ -814,7 +814,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
    */
   /**
    * @see TransportPort#getAssistantId
-   * @returns {string} the Kinvox-owned ElevenLabs agent id
+   * @returns {string} the Voxikin-owned ElevenLabs agent id
    */
   getAssistantId() {
     // this.agentId is captured at start(); the env var is the fallback for
@@ -823,7 +823,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
     if (!id) {
       throw new Error(
         'Missing env var: ELEVENLABS_AGENT_ID. Run `npm run setup-elevenlabs` ' +
-          'to duplicate the source agent into a Kinvox-owned copy, and record ' +
+          'to duplicate the source agent into a Voxikin-owned copy, and record ' +
           'the id it prints.'
       );
     }
@@ -843,9 +843,9 @@ class ElevenLabsTransportAdapter extends TransportPort {
     // only system__call_duration_secs and system__time as dynamic
     // variables — no conversation id — so the webhook tool calls would
     // otherwise have no way to say which call they belong to. Sent as a
-    // dynamic variable so _toolDeclaration's kinvox_call_id property (bound
+    // dynamic variable so _toolDeclaration's voxikin_call_id property (bound
     // via `dynamic_variable`) gets it populated on every tool call.
-    const kinvoxCallId = crypto.randomUUID();
+    const voxikinCallId = crypto.randomUUID();
 
     const res = await fetch(`${API}/v1/convai/twilio/outbound-call`, {
       method: 'POST',
@@ -855,7 +855,7 @@ class ElevenLabsTransportAdapter extends TransportPort {
         agent_phone_number_id: this.phoneNumberId,
         to_number: phoneNumber,
         conversation_initiation_client_data: {
-          dynamic_variables: { ...variables, kinvox_call_id: kinvoxCallId },
+          dynamic_variables: { ...variables, voxikin_call_id: voxikinCallId },
         },
       }),
     });
@@ -864,10 +864,10 @@ class ElevenLabsTransportAdapter extends TransportPort {
       throw new Error(`ElevenLabs createCall error (${res.status}): ${await res.text()}`);
     }
     const body = await res.json();
-    logger.log('el_call_created', { conversationId: body.conversation_id, kinvoxCallId });
+    logger.log('el_call_created', { conversationId: body.conversation_id, voxikinCallId });
     // Returned alongside the API's own response so a caller can correlate
     // this dispatch with the tool calls and post-call webhook that follow.
-    return { ...body, kinvox_call_id: kinvoxCallId };
+    return { ...body, voxikin_call_id: voxikinCallId };
   }
 }
 

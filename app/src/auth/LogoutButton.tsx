@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { LogOut } from 'lucide-react'
 import { auth } from './api'
@@ -10,7 +9,6 @@ import { SESSION_KEY } from './SessionProvider'
  */
 export function LogoutButton({ className }: { className?: string }) {
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
 
   async function handleLogout() {
     try {
@@ -18,7 +16,20 @@ export function LogoutButton({ className }: { className?: string }) {
     } finally {
       queryClient.setQueryData(SESSION_KEY, null)
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== SESSION_KEY[0] })
-      navigate('/login', { replace: true })
+
+      // `/`, not `/login`. Logging out is leaving, not being interrupted, and the
+      // login form asks someone who just chose to go for the credentials they
+      // just put down. RequireAuth still sends an *expired* session to /login,
+      // which is the opposite case: they were reaching for a screen and should
+      // land back on it once they sign in.
+      //
+      // A document navigation, not `navigate()`, because an in-app one loses a
+      // race it cannot win: clearing the session above re-renders RequireAuth,
+      // which is still mounted over this screen, and its <Navigate to="/login">
+      // commits after ours and replaces it. Reloading also guarantees the thing
+      // the comment above promises — no component state belonging to the last
+      // caregiver survives into the next session, cached or not.
+      window.location.replace('/')
     }
   }
 

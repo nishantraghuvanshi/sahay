@@ -101,16 +101,16 @@ async def send_email(settings: Settings, to: str, subject: str, text: str) -> De
 
 
 def otp_sms_body(code: str, ttl_min: int) -> str:
-    return f"{code} is your Kinvox verification code. It expires in {ttl_min} minutes."
+    return f"{code} is your Voxikin verification code. It expires in {ttl_min} minutes."
 
 
 def otp_email_subject(code: str) -> str:
-    return f"{code} is your Kinvox verification code"
+    return f"{code} is your Voxikin verification code"
 
 
 def otp_email_text(code: str, ttl_min: int) -> str:
     return (
-        f"Your Kinvox verification code is {code}.\n\n"
+        f"Your Voxikin verification code is {code}.\n\n"
         f"It expires in {ttl_min} minutes. If you did not ask for it, ignore this email."
     )
 

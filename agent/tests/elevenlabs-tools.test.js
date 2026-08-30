@@ -38,7 +38,7 @@ async function post(app, path, body, headers = {}) {
   }
 }
 
-const AUTH_HEADERS = { 'X-Kinvox-Token': TEST_SECRET };
+const AUTH_HEADERS = { 'X-Voxikin-Token': TEST_SECRET };
 
 describe('ElevenLabs tool webhooks', () => {
   test('report_outcome reaches the engine on the real tool.called channel', async () => {
@@ -55,16 +55,16 @@ describe('ElevenLabs tool webhooks', () => {
     assert.strictEqual(seen[0].payload.args.outcome, 'CONFIRMED');
   });
 
-  test('kinvox_call_id in the body becomes callId, not part of args', async () => {
+  test('voxikin_call_id in the body becomes callId, not part of args', async () => {
     const { app, seen } = harness();
     await post(app, '/el/tools/report_outcome', {
-      outcome: 'CONFIRMED', reason: 'user confirmed taking medicine', kinvox_call_id: 'call-123',
+      outcome: 'CONFIRMED', reason: 'user confirmed taking medicine', voxikin_call_id: 'call-123',
     }, AUTH_HEADERS);
     assert.strictEqual(seen[0].payload.callId, 'call-123');
-    assert.strictEqual(seen[0].payload.args.kinvox_call_id, undefined);
+    assert.strictEqual(seen[0].payload.args.voxikin_call_id, undefined);
   });
 
-  test('a tool call with no kinvox_call_id gets a null callId, not a throw', async () => {
+  test('a tool call with no voxikin_call_id gets a null callId, not a throw', async () => {
     const { app, seen } = harness();
     const res = await post(app, '/el/tools/report_outcome', {
       outcome: 'CONFIRMED', reason: 'user confirmed taking medicine',
@@ -103,7 +103,7 @@ describe('ElevenLabs tool webhooks', () => {
     const { app, seen } = harness();
     const res = await post(app, '/el/tools/report_outcome', {
       outcome: 'CONFIRMED', reason: 'user confirmed taking medicine',
-    }, { 'X-Kinvox-Token': 'not-the-secret' });
+    }, { 'X-Voxikin-Token': 'not-the-secret' });
     assert.strictEqual(res.status, 401);
     assert.strictEqual(res.body.ok, false);
     assert.strictEqual(seen.length, 0);
@@ -134,7 +134,7 @@ describe('ElevenLabs post-call webhook', () => {
       phone_call: { external_number: '+919000000042' },
     },
     conversation_initiation_client_data: {
-      dynamic_variables: { patient_name: 'Kamala', kinvox_call_id: 'call-1' },
+      dynamic_variables: { patient_name: 'Kamala', voxikin_call_id: 'call-1' },
     },
     analysis: { call_successful: 'success' },
   };
@@ -154,7 +154,7 @@ describe('ElevenLabs post-call webhook', () => {
     assert.strictEqual(callData.duration, 42);
     assert.strictEqual(callData.cost, 0.031);
     assert.strictEqual(callData.endedReason, 'agent_ended_call');
-    assert.deepStrictEqual(callData.variables, { patient_name: 'Kamala', kinvox_call_id: 'call-1' });
+    assert.deepStrictEqual(callData.variables, { patient_name: 'Kamala', voxikin_call_id: 'call-1' });
     assert.strictEqual(callData.recordingUrl, null);
     assert.deepStrictEqual(callData.toolCalls, [
       { name: 'report_outcome', arguments: '{"outcome":"CONFIRMED","reason":"user confirmed"}' },
@@ -181,7 +181,7 @@ describe('ElevenLabs post-call webhook', () => {
 
   test('a request with the wrong token is refused and never reaches the event bus', async () => {
     const { app, seen } = harness();
-    const res = await post(app, '/el/post-call', FULL_PAYLOAD, { 'X-Kinvox-Token': 'not-the-secret' });
+    const res = await post(app, '/el/post-call', FULL_PAYLOAD, { 'X-Voxikin-Token': 'not-the-secret' });
     assert.strictEqual(res.status, 401);
     assert.strictEqual(res.body.ok, false);
     assert.strictEqual(seen.length, 0);
@@ -229,7 +229,7 @@ describe('ElevenLabs post-call webhook — the shape the service actually sends'
       phone_call: { external_number: '+919000000042' },
     },
     conversation_initiation_client_data: {
-      dynamic_variables: { parent_name: 'Kamala', kinvox_call_id: 'call-9' },
+      dynamic_variables: { parent_name: 'Kamala', voxikin_call_id: 'call-9' },
     },
     analysis: { call_successful: 'success' },
   };
@@ -322,7 +322,7 @@ describe('ElevenLabs post-call webhook — HMAC signature authentication', () =>
     })();
   }
 
-  test('a correctly signed delivery is accepted without any X-Kinvox-Token', () =>
+  test('a correctly signed delivery is accepted without any X-Voxikin-Token', () =>
     withSigningSecret(async () => {
       const { app, seen } = harness();
       const res = await post(app, '/el/post-call', PAYLOAD, signedHeaders(PAYLOAD));
@@ -353,7 +353,7 @@ describe('ElevenLabs post-call webhook — HMAC signature authentication', () =>
       assert.strictEqual(seen.length, 0);
     }));
 
-  test('the X-Kinvox-Token path still works while a signing secret is configured', () =>
+  test('the X-Voxikin-Token path still works while a signing secret is configured', () =>
     // Both mechanisms are accepted: ElevenLabs always signs, but a webhook
     // configured in the dashboard with a custom header should not break.
     withSigningSecret(async () => {

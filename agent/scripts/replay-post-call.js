@@ -108,7 +108,7 @@ async function main() {
     console.log('ELEVENLABS_POST_CALL_SECRET here matches the workspace webhook.');
   }
   console.log('\nWhat landed is in the calls table:');
-  console.log(`  sqlite3 "$KINVOX_DB" "SELECT outcome_label, outcome_source, outcome_reason FROM calls WHERE call_id='${args.conversation}'"`);
+  console.log(`  sqlite3 "$VOXIKIN_DB" "SELECT outcome_label, outcome_source, outcome_reason FROM calls WHERE call_id='${args.conversation}'"`);
 }
 
 main().catch((e) => {

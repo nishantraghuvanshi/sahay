@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import uuid
 import secrets
 from dataclasses import dataclass
@@ -70,11 +71,56 @@ def code_matches(code: str, code_hash: str, pepper: str) -> bool:
     return hmac.compare_digest(hash_code(code, pepper), code_hash)
 
 
+# Everything people put between the digits of a phone number. The login field's
+# own placeholder reads "+91 98765 43210", so the spaced form is not an edge
+# case — it is what the UI asks for.
+_PHONE_NOISE = re.compile(r"[\s\-().\u00a0]")
+
+
+def normalise_phone(value: str) -> str:
+    """Any way an Indian mobile gets typed -> the one spelling stored in
+    `caregivers.phone_e164`.
+
+    India only, matching the E164 pattern in api/auth/routes.py. Handles the
+    four shapes people actually produce: grouped with spaces or dashes, a bare
+    ten digits, a 91 prefix with no plus, and the 00 international prefix.
+    Anything else is returned as typed and fails validation downstream, which is
+    the right outcome for a number this cannot confidently rewrite.
+    """
+    d = _PHONE_NOISE.sub("", value.strip())
+    if d.startswith("00"):
+        d = "+" + d[2:]
+    if d.startswith("+"):
+        return d
+    if len(d) == 12 and d.startswith("91"):
+        return "+" + d
+    # A leading zero is trunk notation: 09876543210 is the same subscriber.
+    if len(d) == 11 and d.startswith("0"):
+        d = d[1:]
+    if len(d) == 10 and d[0] in "6789":
+        return "+91" + d
+    return d
+
+
 def normalise(channel: Channel, destination: str) -> str:
     """One destination must have exactly one spelling, or the rate limiter and
     the lookup index disagree about whether two rows are the same person."""
     d = destination.strip()
-    return d.lower() if channel is Channel.email else d
+    return d.lower() if channel is Channel.email else normalise_phone(d)
+
+
+def normalise_identifier(value: str) -> str:
+    """The login field takes either a phone or an email in one box, so it has to
+    decide which before it can normalise. `@` is the only thing that separates
+    them — no phone shape contains one.
+
+    This exists because `/auth/otp/start` normalised and `/auth/login` did not.
+    A caregiver who signed up successfully could then be told their password did
+    not match, purely because they typed their number with the spaces the
+    placeholder shows them.
+    """
+    v = value.strip()
+    return v.lower() if "@" in v else normalise_phone(v)
 
 
 # --------------------------------------------------------------------- issue
@@ -132,9 +178,9 @@ async def prepare_send(
     # real one: same hash, same expiry, same attempt budget. Only the carrier
     # hop is skipped, so the demo path and the production path share every rule.
     is_bypass = (
-        destination in settings.bypass_numbers
+        settings.phone_is_bypassed(destination)
         if channel is Channel.sms
-        else destination in settings.bypass_emails
+        else settings.email_is_bypassed(destination)
     )
     code = settings.dev_otp_bypass_code if is_bypass else generate_code()
 
