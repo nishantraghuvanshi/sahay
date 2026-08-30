@@ -158,3 +158,43 @@ describe('createCall', () => {
     );
   });
 });
+
+describe('boot-time agent patch', () => {
+  test('pushes the current tunnel into the agent tool URLs', async () => {
+    process.env.ELEVENLABS_API_KEY = 'test-key';
+    process.env.ELEVENLABS_AGENT_ID = 'agent_copy';
+    const cap = {};
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      cap.url = url; cap.method = opts.method; cap.body = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      await a.start(null, { getEventBus: () => ({ emit() {} }) }, {
+        webhookUrl: 'https://fresh-tunnel.ngrok-free.dev',
+        strategy: {
+          buildSystemPrompt: () => 'P', buildFirstMessage: () => 'F',
+          getTools: () => require('../tools.json').tools,
+        },
+      });
+    } finally { globalThis.fetch = real; }
+
+    assert.strictEqual(cap.method, 'PATCH');
+    assert.strictEqual(cap.url, 'https://api.elevenlabs.io/v1/convai/agents/agent_copy');
+    const tools = cap.body.conversation_config.agent.prompt.tools;
+    assert.ok(tools.every((t) => t.api_schema.url.startsWith('https://fresh-tunnel.ngrok-free.dev')));
+  });
+
+  test('does not patch, and does not throw, when no agent id is configured', async () => {
+    delete process.env.ELEVENLABS_AGENT_ID;
+    let called = false;
+    const real = globalThis.fetch;
+    globalThis.fetch = async () => { called = true; return { ok: true, json: async () => ({}) }; };
+    try {
+      const a = new ElevenLabsTransportAdapter({});
+      await a.start(null, { getEventBus: () => ({ emit() {} }) }, { webhookUrl: 'https://x', strategy: {} });
+    } finally { globalThis.fetch = real; }
+    assert.strictEqual(called, false);
+  });
+});

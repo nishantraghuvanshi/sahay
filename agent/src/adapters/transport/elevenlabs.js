@@ -80,6 +80,35 @@ class ElevenLabsTransportAdapter extends TransportPort {
     }
 
     logger.log('transport_started', { transport: 'elevenlabs', webhookUrl: this.webhookUrl });
+
+    if (this.agentId && this.strategy && typeof this.strategy.getTools === 'function') {
+      await this._patchAgent(this.agentId, this.buildAssistantConfig(this.strategy, {}, this.webhookUrl));
+    } else if (!this.agentId) {
+      // Loud, because the alternative is a transport that starts fine and never
+      // works. Run `npm run setup-elevenlabs` and record the printed id.
+      logger.log('el_agent_id_missing', { hint: 'run npm run setup-elevenlabs' });
+    }
+  }
+
+  /**
+   * Push the current config to the agent.
+   *
+   * Called on every boot rather than by a setup script, because the tool URLs
+   * embed the tunnel origin and the free ngrok tier rotates it on restart. The
+   * source agent still points at a host that stopped resolving weeks ago; tool
+   * calls failed silently the whole time. Re-patching makes that unreachable.
+   */
+  async _patchAgent(agentId, config) {
+    const res = await fetch(`${API}/v1/convai/agents/${agentId}`, {
+      method: 'PATCH',
+      headers: { 'xi-api-key': this.apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      throw new Error(`ElevenLabs agent patch failed (${res.status}): ${await res.text()}`);
+    }
+    logger.log('el_agent_patched', { agentId, webhookUrl: this.webhookUrl });
+    return res.json();
   }
 
   /**
