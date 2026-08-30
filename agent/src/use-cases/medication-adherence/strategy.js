@@ -7,7 +7,7 @@ const yaml = require('js-yaml');
 const ConversationStrategy = require('../../core/strategy/base');
 const { deriveOutcome, OUTCOMES } = require('./outcomes');
 const { TOOLS } = require('./tools');
-const { MEMBERS, GLOBAL_MEMBERS, GLOBAL_DESTINATIONS } = require('./squad');
+const { membersFor, GLOBAL_MEMBERS, GLOBAL_DESTINATIONS } = require('./squad');
 
 /**
  * Medication Adherence Strategy
@@ -153,9 +153,13 @@ class MedicationAdherenceStrategy extends ConversationStrategy {
       });
     }
 
-    const byKey = new Map(MEMBERS.map((m) => [m.key, m]));
+    // The graph is selected by the prescription's food rule, not branched on
+    // at runtime: an after-food regimen never builds the before-food states.
+    // See squad.js for why that distinction matters clinically.
+    const definitions = membersFor(variables.food_rule);
+    const byKey = new Map(definitions.map((m) => [m.key, m]));
 
-    return MEMBERS.map((member) => {
+    return definitions.map((member) => {
       const destinations = [...member.destinations];
 
       // Globals reach every member that can still transition. A terminal
