@@ -1,7 +1,7 @@
 """spec: caregiver auth — screens 1a / 2a.
 
-Four endpoints. The modules under `api/auth/` hold the rules; this file is only
-HTTP: parse, delegate, shape the answer.
+The modules under `api/auth/` hold the rules; this file is only HTTP: parse,
+delegate, shape the answer.
 
 Envelope: `{ok:true, ...}` / `{ok:false, error}` at HTTP 200 for business
 outcomes, per TRD §5.1 — the app's client.ts already inverts that into a thrown
@@ -11,7 +11,9 @@ which is a real 401; see api/auth/deps.py for why.
 
 from __future__ import annotations
 
+import time
 import uuid
+from collections import defaultdict, deque
 from datetime import UTC, datetime
 
 import logging
@@ -271,14 +273,98 @@ async def complete_signup(body: CompleteSignupBody, caregiver: CaregiverDep):
     return {"ok": True, "caregiver": _as_json(row)}
 
 
+class CheckBody(BaseModel):
+    """One phone-or-email box, same as the login field."""
+
+    identifier: str
+
+
+# A caller who can ask "does this account exist" 10,000 times has a customer
+# list. `/auth/otp/start` is deliberately blind for exactly that reason, so this
+# endpoint — which is not blind — carries the cost the blindness used to.
+#
+# In-process and per-IP: one API process, and a restart clearing the window is
+# an acceptable loss for a throttle whose job is to make bulk enumeration
+# tedious rather than to be an audit record. A dict of deques of floats.
+CHECK_MAX_PER_IP_HOUR = 40
+_check_hits: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _check_allowed(ip: str | None) -> bool:
+    if ip is None:
+        return True
+    hits = _check_hits[ip]
+    cutoff = time.monotonic() - 3600
+    while hits and hits[0] < cutoff:
+        hits.popleft()
+    if len(hits) >= CHECK_MAX_PER_IP_HOUR:
+        return False
+    hits.append(time.monotonic())
+    return True
+
+
+@router.post("/check")
+async def check(body: CheckBody, ip: IpDep):
+    """Does this phone or email already have an account?
+
+    This is an enumeration oracle, and it is one on purpose. The rest of auth
+    goes out of its way to deny it: `/auth/otp/start` answers identically for a
+    known and an unknown number, and `/auth/login` calls every failure
+    `invalid_credentials`. That protects a caregiver's phone number from being
+    confirmed as ours by a stranger — but it also means the two dead ends people
+    actually hit have no way out.
+
+    A new caregiver typing a password on `/login` gets "that does not match",
+    which is not true and not actionable — they have nothing to match with. An
+    existing caregiver on `/signup` gets an SMS they did not need, and only
+    finds out four steps later. Both send them to the other page with the
+    identifier already in hand, which is what this endpoint is for.
+
+    `has_password` separates the two accounts that both "exist": one that
+    finished step 5 and can log in, and one that verified a phone and stopped —
+    the second must go back to signup to finish, not to a login form its owner
+    can never satisfy.
+
+    Throttled per IP. Answers `unknown` rather than a guess when over the limit,
+    so the caller falls back to the vague-but-safe wording instead of asserting
+    something it does not know.
+    """
+    if not _check_allowed(ip):
+        return {"ok": True, "unknown": True, "exists": False, "has_password": False}
+
+    identifier = otp.normalise_identifier(body.identifier)
+    if not identifier:
+        return {"ok": True, "unknown": True, "exists": False, "has_password": False}
+
+    async with db.connection() as conn:
+        row = await conn.fetchrow(
+            "SELECT password_hash FROM caregivers "
+            " WHERE phone_e164 = $1 OR lower(email) = lower($1)",
+            identifier,
+        )
+
+    return {
+        "ok": True,
+        "unknown": False,
+        "exists": row is not None,
+        "has_password": row is not None and row["password_hash"] is not None,
+    }
+
+
 @router.post("/login")
 async def login(body: LoginBody, request: Request, response: Response, settings: SettingsDep):
     """Returning caregiver: identifier + password.
 
-    Every failure answers `invalid_credentials`, whatever actually went wrong —
-    unknown account, no password set, wrong password. Naming the real reason
-    would turn this endpoint into a way to enumerate who has an account, which
-    is the same leak `/auth/otp/start` is shaped to avoid.
+    Three distinct failures, deliberately: `no_account` (nobody here),
+    `signup_incomplete` (phone verified, never set a password) and
+    `invalid_credentials` (right account, wrong password). Only the third is
+    about the password, and only the third should say so.
+
+    This does leak whether an account exists. That was a considered trade, made
+    once for `/auth/check` and applied here for consistency — see the long note
+    on that endpoint. A single vague answer meant a first-time caregiver was
+    told their password was wrong when they had never set one, and had no way to
+    discover that signing up was the missing step.
     """
     # Normalised the same way `/auth/otp/start` normalises a destination. It was
     # a bare .strip(), and the two halves of auth disagreeing about how a phone
@@ -299,9 +385,17 @@ async def login(body: LoginBody, request: Request, response: Response, settings:
             """,
             identifier,
         )
-        if row is None or row["password_hash"] is None:
-            # No account, or one that never set a password. Same answer either way.
-            return invalid
+        if row is None:
+            # No such caregiver. `/auth/check` will say the same thing to anyone
+            # who asks it directly, so hiding it here buys nothing and costs a
+            # new caregiver the one instruction they need: sign up first.
+            return {"ok": False, "error": "no_account"}
+
+        if row["password_hash"] is None:
+            # The phone was verified and signup stopped before step 5. There is
+            # no password to be wrong about; "invalid_credentials" sent them
+            # round the same loop forever.
+            return {"ok": False, "error": "signup_incomplete"}
 
         if pw.is_locked(row["locked_until"]):
             return {"ok": False, "error": "account_locked"}

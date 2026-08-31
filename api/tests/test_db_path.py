@@ -1,4 +1,5 @@
-"""db_path.py — reject a DB_PATH that is not a filesystem path. spec:
+"""db_path.py — reject a configured database target neither runtime can open.
+spec:
 .superpowers/sdd/modularise-boundaries/task-4-brief.md, controller addendum.
 
 Pure stdlib, no FastAPI dependency — see test_schema_version.py's module
@@ -25,8 +26,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from api.db_path import (  # noqa: E402
-    NotAFilesystemPathError,
-    assert_filesystem_path,
+    UnsupportedDatabaseTargetError,
+    assert_database_target,
+    is_remote_target,
     redact_credentials,
 )
 
@@ -41,11 +43,17 @@ def _ids(cases):
 
 
 class TestTheSharedFixture:
+    VERDICTS = ("path", "remote", "refused")
+
     def test_is_present_and_non_trivial(self):
         # An empty or missing fixture must not read as a pass.
         assert len(CASES) >= 30, f"expected 30+ shared cases, got {len(CASES)}"
-        assert any(c["connection_string"] for c in CASES)
-        assert any(not c["connection_string"] for c in CASES)
+        for verdict in self.VERDICTS:
+            assert any(c["verdict"] == verdict for c in CASES), (
+                f"no {verdict} cases — all three verdicts must be exercised"
+            )
+        for case in CASES:
+            assert case["verdict"] in self.VERDICTS, f"unknown verdict on {case['label']}"
         assert REDOS
 
     @pytest.mark.parametrize(
@@ -58,9 +66,14 @@ class TestTheSharedFixture:
             "1abc:/user:SECRET@host",
             "$$$://user:SECRET@host",
             "C:/Users/x/data.db",
+            # The deployed case: refusing this, or coarsening it in the boot
+            # log, is what the allowlist exists to prevent.
+            "libsql://sahay-prod.turso.io",
+            "libsql://tok:SECRETPW@sahay-prod.turso.io",
+            "libsql://sahay-prod.turso.io/?authToken=SECRETTOKEN",
         ],
     )
-    def test_carries_the_shapes_finding_1_named(self, required):
+    def test_carries_the_shapes_finding_1_named_and_the_deployed_remote_shapes(self, required):
         assert required in {c["input"] for c in CASES}
 
 
@@ -69,7 +82,7 @@ class TestRedactCredentialsAgainstTheFixture:
     def test_every_shared_case(self, case):
         got = redact_credentials(case["input"])
         assert got == case["expected"], f"{case['label']}: {got!r} != {case['expected']!r}"
-        if not case["connection_string"]:
+        if case["verdict"] == "path":
             # Not merely "equal": the same string, so a real path can never
             # be corrupted into pointing at a different database.
             assert got == case["input"]
@@ -77,18 +90,19 @@ class TestRedactCredentialsAgainstTheFixture:
         for forbidden in case.get("forbidden", []):
             assert forbidden not in got, f"{case['label']}: {forbidden!r} survived into {got!r}"
         # The structural guarantee, checked by construction rather than by
-        # pattern: userinfo cannot exist in the output at all.
+        # pattern: userinfo cannot exist in the output at all — not even for
+        # an accepted remote target, whose userinfo is dropped rather than kept.
         assert "@" not in got, f"{case['label']}: an authority delimiter survived into {got!r}"
 
 
-class TestAssertFilesystemPathAgainstTheFixture:
+class TestAssertDatabaseTargetAgainstTheFixture:
     @pytest.mark.parametrize("case", CASES, ids=_ids(CASES))
     def test_every_shared_case(self, case):
-        if not case["connection_string"]:
-            assert_filesystem_path(case["input"], "VOXIKIN_DB")  # must not raise
+        if case["verdict"] != "refused":
+            assert_database_target(case["input"], "VOXIKIN_DB")  # must not raise
             return
-        with pytest.raises(NotAFilesystemPathError) as exc_info:
-            assert_filesystem_path(case["input"], "VOXIKIN_DB")
+        with pytest.raises(UnsupportedDatabaseTargetError) as exc_info:
+            assert_database_target(case["input"], "VOXIKIN_DB")
         message = str(exc_info.value)
         # Finding 1's self-inflicted half: the guard rejected on ":/+" but
         # rendered the offending value through a redactor that understood
@@ -100,14 +114,28 @@ class TestAssertFilesystemPathAgainstTheFixture:
         assert "@" not in message
 
 
+class TestIsRemoteTargetAgainstTheFixture:
+    # One definition of "remote" for the whole product: api/db.py decides it
+    # from TURSO_DATABASE_URL being set, but the SHAPE of a reachable URL is
+    # this function's answer and the Node adapter asks its mirror. The fixture
+    # pins the same answer on both sides.
+    @pytest.mark.parametrize("case", CASES, ids=_ids(CASES))
+    def test_every_shared_case(self, case):
+        assert is_remote_target(case["input"]) is (case["verdict"] == "remote")
+
+
 class TestMessageShapeNotSharedWordingIsPerRuntime:
     def test_error_names_the_variable_that_was_set(self):
-        with pytest.raises(NotAFilesystemPathError, match="VOXIKIN_DB"):
-            assert_filesystem_path("postgresql://a:b@c/d", "VOXIKIN_DB")
+        with pytest.raises(UnsupportedDatabaseTargetError, match="VOXIKIN_DB"):
+            assert_database_target("postgresql://a:b@c/d", "VOXIKIN_DB")
 
     def test_falls_back_to_a_generic_label_when_no_variable_name_given(self):
-        with pytest.raises(NotAFilesystemPathError, match="configured database path"):
-            assert_filesystem_path("postgresql://a:b@c/d")
+        with pytest.raises(UnsupportedDatabaseTargetError, match="configured database path"):
+            assert_database_target("postgresql://a:b@c/d")
+
+    def test_the_refusal_names_the_schemes_that_would_have_been_accepted(self):
+        with pytest.raises(UnsupportedDatabaseTargetError, match=r"libsql://"):
+            assert_database_target("postgresql://a:b@c/d", "VOXIKIN_DB")
 
 
 class TestCoercionIsLanguageSpecificSoNotShareable:
@@ -134,6 +162,6 @@ class TestNoReDoS:
 
     @pytest.mark.parametrize("case", REDOS, ids=_ids(REDOS))
     def test_within_the_shared_budget(self, case):
-        text = case["unit"] * case["count"] + case["suffix"]
+        text = case.get("prefix", "") + case["unit"] * case["count"] + case["suffix"]
         ms = self._best_ms(lambda: redact_credentials(text))
         assert ms < case["max_ms"], f"{case['label']}: took {ms:.3f}ms, budget {case['max_ms']}ms"

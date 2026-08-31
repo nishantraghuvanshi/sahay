@@ -32,7 +32,8 @@ function assertPersistenceSatisfied(useCase, repository) {
   throw new Error(
     `Use case "${useCase.name}" requires persistence for inbound context and resume, ` +
       `but the active repository does not persist. ` +
-      `Set VOXIKIN_DB (e.g. VOXIKIN_DB=../api/voxikin.db) or DB_PATH and restart.`
+      `Set TURSO_DATABASE_URL (the deployed database, shared with the Care API), or `+
+      `VOXIKIN_DB / DB_PATH for a local file (e.g. VOXIKIN_DB=../api/voxikin.db), and restart.`
   );
 }
 

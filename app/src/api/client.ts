@@ -114,9 +114,13 @@ function humanise(code: string): string {
 
     // ---- password (api/auth/routes.py)
     case 'invalid_credentials':
-      // Deliberately vague, matching the server: naming which half was wrong
-      // would say whether the account exists.
-      return 'That phone or email and password do not match.'
+      // Now that `no_account` and `signup_incomplete` are their own codes, this
+      // one means what it says: the account is real and the password is wrong.
+      return 'That password is not right. Try again.'
+    case 'no_account':
+      return 'No account yet for that phone or email.'
+    case 'signup_incomplete':
+      return 'That signup was never finished — there is no password set yet.'
     case 'account_locked':
       return 'Too many attempts. Try again in 15 minutes, or sign in with a code.'
     case 'password_too_short':

@@ -263,9 +263,9 @@ describe('boot log — a DB_PATH shaped like a URL is refused, and the refusal i
   // separator collapses to "<scheme>://<redacted>" by construction, so no
   // userinfo character can ever survive regardless of what it contains.
   //
-  // Final round: assertFilesystemPath and redactCredentials now ask ONE
-  // predicate about what counts as a connection string, so a value the
-  // redactor coarsens is also a value the repository refuses to open. These
+  // Final round: assertDatabaseTarget and redactCredentials now ask ONE
+  // predicate about what a database target is, so a value the redactor
+  // coarsens is also a value the repository refuses to open. These
   // DB_PATHs therefore no longer reach the server_listening line at all —
   // the server exits first. That is the stronger guarantee, and it is what
   // this block now asserts: nothing is created on disk from the raw value,
@@ -282,7 +282,7 @@ describe('boot log — a DB_PATH shaped like a URL is refused, and the refusal i
   /** The value as the refusal message rendered it. The message is emitted
    * inside a JSON log line, so the quotes around it arrive escaped. */
   function parseRefusedValue(output) {
-    const match = output.match(/is not a filesystem path: \\?"(.*?)\\?" looks like a/);
+    const match = output.match(/is not a usable database target: \\?"(.*?)\\?" is neither a/);
     return match ? match[1] : null;
   }
 
@@ -301,7 +301,7 @@ describe('boot log — a DB_PATH shaped like a URL is refused, and the refusal i
       assert.ok(!output.includes(secret), 'secret leaked into the boot output');
 
       const rendered = parseRefusedValue(output);
-      assert.ok(rendered, `no filesystem-path refusal found in output:\n${output}`);
+      assert.ok(rendered, `no database-target refusal found in output:\n${output}`);
       assert.ok(!rendered.includes(secret), `the refusal itself carried the secret: ${rendered}`);
       // No '@' surviving anywhere is the structural guarantee this round is
       // built on — not "the password is gone" but "userinfo cannot exist in

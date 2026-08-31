@@ -66,28 +66,42 @@ const StrategyClass = useCase.strategy;
 const strategy = new StrategyClass();
 
 // 4. Set up repository (Phase 1: SQLite, fallback to console if no DB)
-// VOXIKIN_DB is the shared database the Python Care API also reads; DB_PATH and
-// DATABASE_URL predate it and still work. Any of the three selects SQLite —
+// TURSO_DATABASE_URL is the shared database the Python Care API also reads; DB_PATH
+// and VOXIKIN_DB predate it and still work. Any of the three selects SQLite —
 // without this, setting only VOXIKIN_DB left the console repository active and the
 // persistence guard rejected the boot while a real database sat configured.
-// DB_PATH and DATABASE_URL come first deliberately: they are set per invocation
+// DB_PATH comes first deliberately: it is set per invocation
 // (a test spawning a server with its own temp file), and must beat VOXIKIN_DB, which
 // is the shared product database and typically comes from .env. The other order
 // silently pointed an isolated test at the real database.
+// TURSO_DATABASE_URL sits between them: it is the deployed database, shared with
+// the Python API, and must beat the shared-file variables below it while still
+// losing to a per-invocation DB_PATH. DATABASE_URL is deliberately no longer
+// consulted — it has only ever been set to a Postgres connection string here,
+// which this adapter cannot use and used to treat as a filename.
+//
+// resolveConfiguredDbPath rather than a hand-written `||` chain because the
+// NAME is worth as much as the value: SqliteRepository's refusal says which
+// variable was misconfigured, and `process.env.A || process.env.B` throws that
+// away.
 const { value: useSqlite, varName: dbPathVarName } = resolveConfiguredDbPath([
   'DB_PATH',
-  'DATABASE_URL',
+  'TURSO_DATABASE_URL',
   'VOXIKIN_DB',
 ]);
 const repository = useSqlite
-  ? new SqliteRepository({ dbPath: useSqlite, dbPathSource: dbPathVarName })
+  ? new SqliteRepository({
+      dbPath: useSqlite,
+      dbPathSource: dbPathVarName,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
   : new ConsoleRepository();
 
 // db_path is meant to be a SQLite filesystem path, but DB_PATH, DATABASE_URL
 // and VOXIKIN_DB have all been seen set to a Postgres connection string by
 // mistake (see agent/postgresql:/... in this working tree) — and logging it
 // verbatim would put the password in the log. SqliteRepository now refuses
-// to open such a value outright (utils/db-path.js#assertFilesystemPath), so
+// to open such a value outright (utils/db-path.js#assertDatabaseTarget), so
 // this redaction is defence-in-depth for a value about to be rejected
 // anyway, not the primary defense. redactCredentials lives in
 // utils/db-path.js so this boot log and SqliteRepository's own refusal
@@ -96,7 +110,17 @@ const repository = useSqlite
 // Resolved absolute path for the boot log — repository.dbPath may be
 // relative (a test spawning a server with DB_PATH=./tmp/x.db), and null for
 // ConsoleRepository, which has no file at all.
-const dbPath = repository.dbPath ? path.resolve(redactCredentials(repository.dbPath)) : null;
+//
+// A remote database has no path to resolve, and logging it as null would read
+// exactly like the no-database case this line exists to distinguish. Log the URL
+// instead, through the same redaction: for an allowed remote scheme that keeps
+// the scheme and host — so this line still says WHICH database production is on —
+// while dropping userinfo and any "?authToken=" a Turso URL may carry.
+const dbPath = repository.isRemote
+  ? redactCredentials(repository.url)
+  : repository.dbPath
+    ? path.resolve(redactCredentials(repository.dbPath))
+    : null;
 
 // 4b. Refuse to run a use case whose behaviour would be silently wrong
 //     without persistence (inbound context, resume-after-drop).

@@ -51,6 +51,9 @@ interface SignInPageProps {
   identifierType?: React.HTMLInputTypeAttribute;
   identifierLabel?: string;
   identifierPlaceholder?: string;
+  /** Prefill, for a caregiver bounced here from the other auth page — they typed
+   *  the number once already. Uncontrolled: the form is read with FormData. */
+  identifierDefaultValue?: string;
   showGoogle?: boolean;
   showResetPassword?: boolean;
   createAccountPrompt?: React.ReactNode;
@@ -96,6 +99,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   identifierType = 'email',
   identifierLabel = 'Email Address',
   identifierPlaceholder = 'Enter your email address',
+  identifierDefaultValue = '',
   showGoogle = true,
   showResetPassword = true,
   createAccountPrompt = 'New to our platform?',
@@ -119,18 +123,25 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <>
             <form className="space-y-5" onSubmit={onSignIn}>
               <div className="animate-element animate-delay-300">
-                <label className="text-sm font-medium text-muted-foreground">{identifierLabel}</label>
+                {/* htmlFor/id, not a bare <label>. Without the pairing the field
+                    has no accessible name at all: a screen reader announces
+                    "edit text", and neither a password manager nor a test can
+                    find it by what the page visibly calls it. */}
+                <label htmlFor="signin-identifier" className="text-sm font-medium text-muted-foreground">{identifierLabel}</label>
                 <GlassInputWrapper>
-                  <input name={identifierName} type={identifierType} autoComplete="username" placeholder={identifierPlaceholder} className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none" />
+                  {/* `key` so a prefill arriving after mount (the redirect from
+                      /signup lands with router state) actually reaches the field —
+                      defaultValue alone is read once and then ignored. */}
+                  <input key={identifierDefaultValue} id="signin-identifier" name={identifierName} type={identifierType} defaultValue={identifierDefaultValue} autoComplete="username" placeholder={identifierPlaceholder} className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none" />
                 </GlassInputWrapper>
               </div>
 
               <div className="animate-element animate-delay-400">
-                <label className="text-sm font-medium text-muted-foreground">Password</label>
+                <label htmlFor="signin-password" className="text-sm font-medium text-muted-foreground">Password</label>
                 <GlassInputWrapper>
                   <div className="relative">
-                    <input name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
+                    <input id="signin-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none" />
+                    <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
                       {showPassword ? <EyeOff className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" /> : <Eye className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />}
                     </button>
                   </div>

@@ -10,7 +10,7 @@ in.
 
     if reset and DB_PATH.exists(): DB_PATH.unlink()
 
-ABOVE assert_filesystem_path(...). So `init(reset=True)` with a URL-shaped
+ABOVE assert_database_target(...). So `init(reset=True)` with a URL-shaped
 VOXIKIN_DB deleted the file before refusing — the module's own docstring
 claimed refusal happens "before anything is created", but deletion is not
 creation, and the controller addendum explicitly says the evidence file
@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from api import db  # noqa: E402
-from api.db_path import NotAFilesystemPathError  # noqa: E402
+from api.db_path import UnsupportedDatabaseTargetError  # noqa: E402
 
 
 def test_init_reset_with_a_url_shaped_path_refuses_and_deletes_nothing(tmp_path, monkeypatch):
@@ -32,7 +32,7 @@ def test_init_reset_with_a_url_shaped_path_refuses_and_deletes_nothing(tmp_path,
     # ever reaching the filesystem-path check. `Path("postgresql://a:b@c")`
     # is built as a RELATIVE path from the process's own cwd so it reproduces
     # agent/postgresql:/... in the real working tree exactly — the collapsed
-    # single-slash form that assert_filesystem_path once rejected while the
+    # single-slash form that assert_database_target once rejected while the
     # Node redactor still printed it in clear.
     monkeypatch.chdir(tmp_path)
     raw = "postgresql://kinvox:secret@localhost:5432/kinvox"
@@ -46,10 +46,10 @@ def test_init_reset_with_a_url_shaped_path_refuses_and_deletes_nothing(tmp_path,
     raised = False
     try:
         db.init(reset=True)
-    except NotAFilesystemPathError:
+    except UnsupportedDatabaseTargetError:
         raised = True
 
-    assert raised, "init(reset=True) with a URL-shaped path must raise NotAFilesystemPathError"
+    assert raised, "init(reset=True) with a URL-shaped path must raise UnsupportedDatabaseTargetError"
     assert existing.exists(), "the file must NOT have been deleted before the refusal"
     assert existing.read_bytes() == b"not actually empty"
 

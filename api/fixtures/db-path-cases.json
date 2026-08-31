@@ -16,10 +16,26 @@
     "Add a case here, not to one suite. Both sides must agree byte for byte.",
     "",
     "cases[]  input -> expected output of redactCredentials/redact_credentials.",
-    "         'connection_string' is also the expected verdict of",
-    "         assertFilesystemPath/assert_filesystem_path: true means it must",
-    "         throw, false means it must accept. The two share one predicate,",
-    "         so one flag pins both.",
+    "         'verdict' is ALSO the expected verdict of",
+    "         assertDatabaseTarget/assert_database_target, because the two",
+    "         share one predicate and one flag therefore pins both:",
+    "",
+    "           'path'     an ordinary filesystem path. Accepted, and the",
+    "                      redacted output is the input BYTE-IDENTICAL.",
+    "           'remote'   a libSQL/Turso URL the product can actually reach.",
+    "                      Accepted, and the redacted output keeps the scheme",
+    "                      and host but never userinfo, path or query -- a",
+    "                      Turso URL carries its token in '?authToken='.",
+    "           'refused'  anything else. assert* must raise, and the",
+    "                      redacted output is coarsened to",
+    "                      '<scheme-or-redacted>://<redacted>'.",
+    "",
+    "         'remote' exists because the deployed product runs on",
+    "         libsql://...turso.io. A guard that refuses every '<scheme>://'",
+    "         refuses the URL production boots on, and a redactor that",
+    "         coarsens every '://' makes the boot log stop saying which",
+    "         database is live.",
+    "",
     "         'forbidden' lists substrings that must NOT appear in the",
     "         redacted output or in the rejection message.",
     "redos[]  input = unit*count + suffix; must complete within max_ms.",
@@ -33,61 +49,212 @@
       "label": "a plain absolute path",
       "input": "/data/voiceagent.db",
       "expected": "/data/voiceagent.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a path containing '@' — a legal filesystem character",
       "input": "/tmp/a@b/x.db",
       "expected": "/tmp/a@b/x.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a path containing ':' not followed by '/'",
       "input": "/tmp/a:b/x.db",
       "expected": "/tmp/a:b/x.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a dated backup directory, ':' mid-path",
       "input": "/tmp/backup:2026-08-30/x.db",
       "expected": "/tmp/backup:2026-08-30/x.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a relative path",
       "input": "./data/v.db",
       "expected": "./data/v.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a bare filename",
       "input": "voiceagent.db",
       "expected": "voiceagent.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a Windows drive path — one letter, one slash, no '@'",
       "input": "C:/Users/x/data.db",
       "expected": "C:/Users/x/data.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "a lower-case Windows drive path",
       "input": "c:/users/x/data.db",
       "expected": "c:/users/x/data.db",
-      "connection_string": false
+      "verdict": "path"
     },
     {
       "label": "the empty string",
       "input": "",
       "expected": "",
-      "connection_string": false
+      "verdict": "path"
+    },
+    {
+      "label": "the deployed Turso URL — accepted, and the host survives so the boot log still names the database",
+      "input": "libsql://sahay-prod.turso.io",
+      "expected": "libsql://sahay-prod.turso.io",
+      "verdict": "remote",
+      "forbidden": [
+        "<redacted>"
+      ]
+    },
+    {
+      "label": "a Turso URL carrying userinfo — accepted, but the credential does not survive",
+      "input": "libsql://tok:SECRETPW@sahay-prod.turso.io",
+      "expected": "libsql://sahay-prod.turso.io",
+      "verdict": "remote",
+      "forbidden": [
+        "SECRETPW",
+        "tok:",
+        "@"
+      ]
+    },
+    {
+      "label": "a Turso URL carrying its token in the query — the query is dropped, not kept",
+      "input": "libsql://sahay-prod.turso.io/?authToken=SECRETTOKEN",
+      "expected": "libsql://sahay-prod.turso.io",
+      "verdict": "remote",
+      "forbidden": [
+        "SECRETTOKEN",
+        "authToken",
+        "?"
+      ]
+    },
+    {
+      "label": "a password containing '@' cannot split the authority — the LAST '@' wins",
+      "input": "libsql://tok:SEC@RETPW@sahay-prod.turso.io",
+      "expected": "libsql://sahay-prod.turso.io",
+      "verdict": "remote",
+      "forbidden": [
+        "SEC",
+        "RETPW",
+        "tok",
+        "@"
+      ]
+    },
+    {
+      "label": "an https Turso target",
+      "input": "https://sahay-prod.turso.io",
+      "expected": "https://sahay-prod.turso.io",
+      "verdict": "remote",
+      "forbidden": [
+        "<redacted>"
+      ]
+    },
+    {
+      "label": "a wss target with a port — the port is part of the host and survives",
+      "input": "wss://sahay-prod.turso.io:8080",
+      "expected": "wss://sahay-prod.turso.io:8080",
+      "verdict": "remote",
+      "forbidden": [
+        "<redacted>"
+      ]
+    },
+    {
+      "label": "a ws target on localhost",
+      "input": "ws://127.0.0.1:8080",
+      "expected": "ws://127.0.0.1:8080",
+      "verdict": "remote",
+      "forbidden": [
+        "<redacted>"
+      ]
+    },
+    {
+      "label": "an http target with a path — the path is dropped, the host is kept",
+      "input": "http://127.0.0.1:8080/voxikin",
+      "expected": "http://127.0.0.1:8080",
+      "verdict": "remote",
+      "forbidden": [
+        "voxikin"
+      ]
+    },
+    {
+      "label": "an upper-case scheme — RFC 3986 schemes are case-insensitive",
+      "input": "LIBSQL://sahay-prod.turso.io",
+      "expected": "LIBSQL://sahay-prod.turso.io",
+      "verdict": "remote",
+      "forbidden": [
+        "<redacted>"
+      ]
+    },
+    {
+      "label": "an allowed scheme with a SINGLE slash — no authority to trust, so fail closed",
+      "input": "libsql:/tok:SECRET@sahay-prod.turso.io",
+      "expected": "libsql://<redacted>",
+      "verdict": "refused",
+      "forbidden": [
+        "SECRET",
+        "tok:",
+        "turso",
+        "@"
+      ]
+    },
+    {
+      "label": "an allowed scheme naming no host at all — nothing to reach, so fail closed",
+      "input": "libsql:///data/local.db",
+      "expected": "libsql://<redacted>",
+      "verdict": "refused",
+      "forbidden": [
+        "data/local.db"
+      ]
+    },
+    {
+      "label": "an allowed scheme after a real path prefix — the prefix is not the scheme",
+      "input": "/mnt/libsql://tok:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "verdict": "refused",
+      "forbidden": [
+        "SECRET",
+        "tok:",
+        "@"
+      ]
+    },
+    {
+      "label": "an allowed scheme with leading whitespace — not exactly a scheme, so fail closed",
+      "input": " libsql://sahay-prod.turso.io",
+      "expected": "<redacted>://<redacted>",
+      "verdict": "refused",
+      "forbidden": [
+        "turso"
+      ]
+    },
+    {
+      "label": "an allowed scheme with a trailing character — 'libsqlx' is not 'libsql'",
+      "input": "libsqlx://tok:SECRET@host",
+      "expected": "libsqlx://<redacted>",
+      "verdict": "refused",
+      "forbidden": [
+        "SECRET",
+        "tok:",
+        "@"
+      ]
+    },
+    {
+      "label": "a Windows drive prefix in front of an allowed scheme — still not a target",
+      "input": "C:/data/libsql://tok:SECRET@host",
+      "expected": "<redacted>://<redacted>",
+      "verdict": "refused",
+      "forbidden": [
+        "SECRET",
+        "tok:",
+        "@"
+      ]
     },
     {
       "label": "a postgresql URL — the canonical case",
       "input": "postgresql://kinvox:SECRETPW@localhost:5432/kinvox",
       "expected": "postgresql://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRETPW",
         "kinvox:",
@@ -98,7 +265,7 @@
       "label": "the pathlib-collapsed single-slash form — FINDING 1, leaked verbatim on Node",
       "input": "postgresql:/kinvox:SECRETPW@localhost:5432/kinvox",
       "expected": "postgresql://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRETPW",
         "kinvox:",
@@ -109,7 +276,7 @@
       "label": "no scheme at all before ':/' — FINDING 1, leaked verbatim on Node",
       "input": ":/user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -120,7 +287,7 @@
       "label": "no scheme at all before '://'",
       "input": "://user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -131,7 +298,7 @@
       "label": "a digit-led scheme, single slash",
       "input": "1abc:/user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -142,7 +309,7 @@
       "label": "a digit-led scheme, double slash",
       "input": "1abc://user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -153,7 +320,7 @@
       "label": "a punctuation-led scheme, double slash",
       "input": "$$$://user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -164,7 +331,7 @@
       "label": "a punctuation-led scheme, single slash",
       "input": "$$$:/user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -175,7 +342,7 @@
       "label": "a scheme-shaped run after a real path prefix",
       "input": "/mnt/1x://user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -186,7 +353,7 @@
       "label": "an embedded scheme after a legitimate-looking directory prefix",
       "input": "/mnt/backups/scp://deploy:SECRET@2024/release.db",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "deploy:",
@@ -197,7 +364,7 @@
       "label": "a short postgresql URL",
       "input": "postgresql://u:s@h",
       "expected": "postgresql://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "u:s",
         "@"
@@ -207,7 +374,7 @@
       "label": "sqlite:/// — three slashes, no authority, nothing to leak",
       "input": "sqlite:///abs/path.db",
       "expected": "sqlite://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "abs/path.db"
       ]
@@ -216,7 +383,7 @@
       "label": "postgres://",
       "input": "postgres://user:SECRET@host/db",
       "expected": "postgres://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "@"
@@ -226,7 +393,7 @@
       "label": "mysql://",
       "input": "mysql://user:SECRET@host/db",
       "expected": "mysql://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "@"
@@ -236,7 +403,7 @@
       "label": "mongodb://",
       "input": "mongodb://user:SECRET@host/db",
       "expected": "mongodb://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "@"
@@ -246,7 +413,7 @@
       "label": "a one-character scheme with an authority — drive-shaped but '//' opens userinfo",
       "input": "a://user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -257,7 +424,7 @@
       "label": "a one-character scheme with a single slash but userinfo — the '@' rule is what catches this",
       "input": "a:/user:SECRET@host",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "user:",
@@ -268,7 +435,7 @@
       "label": "a drive letter followed by '//' is an authority, not a drive",
       "input": "C://Users:SECRET@x",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "@"
@@ -278,7 +445,7 @@
       "label": "a real Windows drive prefix in front of a real connection string",
       "input": "C:/Users/x/postgresql://u:SECRET@h",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "SECRET",
         "@"
@@ -288,28 +455,28 @@
       "label": "a drive-shaped prefix with a SECOND ':/' later is not exempt (fail closed)",
       "input": "C:/a/sub:/b",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": []
     },
     {
       "label": "a lone '://'",
       "input": "://",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": []
     },
     {
       "label": "a lone ':/'",
       "input": ":/",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": []
     },
     {
       "label": "a leading null byte",
       "input": "\u0000abc://x",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": [
         "abc"
       ]
@@ -318,14 +485,14 @@
       "label": "whitespace padding",
       "input": "   \t ://x   ",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": []
     },
     {
       "label": "a non-ASCII scheme-shaped prefix",
       "input": "ünïcödé://x",
       "expected": "<redacted>://<redacted>",
-      "connection_string": true,
+      "verdict": "refused",
       "forbidden": []
     }
   ],
@@ -350,6 +517,14 @@
       "count": 1000000,
       "suffix": "",
       "max_ms": 10
+    },
+    {
+      "label": "an allowed scheme followed by a 4M-character authority",
+      "unit": "a",
+      "count": 4000000,
+      "suffix": "",
+      "prefix": "libsql://",
+      "max_ms": 100
     }
   ]
 }

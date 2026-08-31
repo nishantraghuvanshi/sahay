@@ -135,9 +135,24 @@ except Exception as exc:  # pragma: no cover - surfaced at boot, not hidden
     log.error("caregiver auth routes not mounted: %s", exc)
 
 # The caregiver app runs on a different origin in development (Vite on :5173).
+#
+# allow_credentials is required, not optional: the app sends every request with
+# `credentials: 'include'` (app/src/api/client.ts) because the session lives in an
+# httpOnly cookie. Without this header a browser drops that cookie on any
+# cross-origin call and every authenticated screen answers 401 — and it does so
+# silently, with a green preflight, which is why this was invisible for so long.
+#
+# It is not what protects the deployment today: app.voxikin.com proxies /auth and
+# /app under its own origin, so the browser never makes a cross-origin call at all
+# and the cookie stays SameSite=Lax. This is here so that the day someone points
+# VITE_API_BASE straight at the API, login does not quietly stop working.
+#
+# Credentialed CORS forbids a wildcard origin, so CORS_ORIGINS must stay an
+# explicit list. Starlette echoes a matching origin back rather than sending "*".
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
