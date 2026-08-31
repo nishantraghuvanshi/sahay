@@ -21,11 +21,17 @@ require('dotenv').config();
 
 const SqliteRepository = require('../src/adapters/persistence/sqlite');
 const ConsoleRepository = require('../src/adapters/persistence/console');
+const { resolveConfiguredDbPath } = require('../src/utils/db-path');
 
-/** Same repository selection as seed-medications.js / make-call.js / server.js. */
+/**
+ * Same repository selection as seed-medications.js / make-call.js /
+ * server.js, minus VOXIKIN_DB — deliberately: this script only ever runs
+ * against a path given explicitly for this invocation, never the shared
+ * product database.
+ */
 function buildRepository() {
-  const dbPath = process.env.DB_PATH || process.env.DATABASE_URL;
-  return dbPath ? new SqliteRepository({ dbPath }) : new ConsoleRepository();
+  const { value: dbPath, varName } = resolveConfiguredDbPath(['DB_PATH', 'DATABASE_URL']);
+  return dbPath ? new SqliteRepository({ dbPath, dbPathSource: varName }) : new ConsoleRepository();
 }
 
 function parseArgs(args) {

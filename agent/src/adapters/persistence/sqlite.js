@@ -8,6 +8,12 @@
 const Database = require('libsql');
 const OutcomeRepositoryPort = require('../../core/ports/repository');
 const logger = require('../../utils/logger');
+const {
+  assertDatabaseTarget,
+  isRemoteTarget,
+  resolveConfiguredDbPath,
+} = require('../../utils/db-path');
+const { readSchemaSql, checkAndMigrate } = require('./schema-version');
 
 /**
  * Strip libsql's per-row `_metadata` (query timings) off a result row.
@@ -107,25 +113,36 @@ class SqliteRepository extends OutcomeRepositoryPort {
     // a clone with nothing provisioned still runs.
     // An explicit option beats the environment, so a test that spawns a server
     // with its own temp database is not silently redirected at the shared one.
-    this.url =
-      opts.url ||
-      opts.dbPath ||
-      process.env.TURSO_DATABASE_URL ||
-      process.env.VOXIKIN_DB ||
-      require('path').join(__dirname, '..', '..', '..', '..', 'api', 'voxikin.db');
-    this.authToken = opts.authToken || process.env.TURSO_AUTH_TOKEN || undefined;
-    this.isRemote = /^(libsql|wss?|https?):\/\//.test(this.url);
-
-    // A Postgres URL here used to be taken literally as a filename — that is what
-    // created the agent/postgresql:/ directory sitting in this repo — and the
-    // failure was a database that silently had no tables rather than an error.
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(this.url) && !this.isRemote) {
-      throw new Error(
-        `Unusable database URL scheme: ${this.url.split('://')[0]}://. This adapter ` +
-          'speaks SQLite/libSQL only — use a libsql:// or https:// Turso URL, or a ' +
-          'filesystem path.'
-      );
+    //
+    // The env lookup goes through resolveConfiguredDbPath so the NAME survives:
+    // the refusal below says which variable was misconfigured, which a plain
+    // `process.env.A || process.env.B` chain cannot.
+    let url = opts.url || opts.dbPath;
+    let dbPathSource = opts.dbPathSource || null;
+    if (!url) {
+      const configured = resolveConfiguredDbPath(['TURSO_DATABASE_URL', 'VOXIKIN_DB']);
+      url = configured.value;
+      dbPathSource = configured.varName;
     }
+    this.url = url || require('path').join(__dirname, '..', '..', '..', '..', 'api', 'voxikin.db');
+    this.authToken = opts.authToken || process.env.TURSO_AUTH_TOKEN || undefined;
+
+    // Fail closed on a value this adapter cannot open BEFORE anything is
+    // created — see agent/postgresql:/... in this working tree for what
+    // happens without this check. A Postgres URL here used to be taken
+    // literally as a filename; that is what created that directory, and the
+    // failure was a database that silently had no tables rather than an error.
+    //
+    // The allowlist lives in utils/db-path.js, not here: this file used to
+    // carry its own /^(libsql|wss?|https?):\/\// regex for isRemote AND a
+    // second scheme check that only matched "scheme://", so
+    // `postgresql:/user:pw@host` matched neither and was opened as a file —
+    // and the message the other branch threw interpolated `url.split('://')[0]`,
+    // which for that same single-slash form is the WHOLE string, password
+    // included. One predicate, one redaction, no second definition to drift.
+    assertDatabaseTarget(this.url, dbPathSource);
+    this.isRemote = isRemoteTarget(this.url);
+
     // Kept for the boot log and for callers that still read it.
     this.dbPath = this.isRemote ? null : this.url;
 
@@ -141,6 +158,11 @@ class SqliteRepository extends OutcomeRepositoryPort {
 
     this.db = new Database(this.url, this.authToken ? { authToken: this.authToken } : {});
 
+    // Version check first, before any pragma that writes to the file (WAL
+    // mode persists to the database header) — an incompatible database must
+    // be refused having had nothing at all written to it.
+    this._migrate();
+
     if (!this.isRemote) {
       // Both of these describe a local file being shared between processes on one
       // machine, and neither means anything to a remote server: Turso is not
@@ -154,8 +176,6 @@ class SqliteRepository extends OutcomeRepositoryPort {
       this.db.exec('PRAGMA busy_timeout = 5000;');
     }
     this.db.exec('PRAGMA foreign_keys = ON;');
-
-    this._migrate();
   }
 
   /** @returns {boolean} SQLite stores across calls. */
@@ -164,7 +184,7 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
-   * Whether boot should apply schema.sql itself.
+   * Whether boot should apply the schema itself.
    *
    * Locally it should: it is what makes a fresh clone run with nothing to
    * provision. Against Turso it should not — 430 statements over the network on
@@ -185,33 +205,27 @@ class SqliteRepository extends OutcomeRepositoryPort {
   }
 
   /**
-   * Auto-migrate the database schema.
-   * Uses CREATE TABLE IF NOT EXISTS so it's safe to run on every boot.
+   * Open-time schema check and migration. api/schema.sql is the single
+   * authority — both the target version and the additive column list are
+   * derived from it (see schema-version.js) rather than hand-maintained
+   * here. Refuses to open (and writes nothing) when the database is
+   * incompatible: an INTEGER primary key where the schema now says TEXT, or
+   * a pre-rename column name (medications.times/food_rule) still present.
+   * spec: .superpowers/sdd/modularise-boundaries/task-4-brief.md
    * @private
    */
   _migrate() {
-    // One schema for the whole product, loaded from api/schema.sql rather than
-    // declared again here.
-    //
-    // There used to be two: this file described medicines and doses for the
-    // dialler, api/schema.sql described them for the caregiver app, and neither
-    // knew about the other. A dose moved on the calendar did not change which call
-    // was placed. The founder's call on 30 Aug was that TRD §3 names win and the
-    // scheduler's columns fold into them, so this reads that file and adds nothing.
-    //
-    // Every statement in it is CREATE TABLE/INDEX IF NOT EXISTS, so running it on
-    // every boot stays safe.
     if (!this._migrateOnBoot()) {
       logger.log('db_migrate_skipped', { remote: this.isRemote });
       return;
     }
 
-    const path = require('path');
-    const fs = require('fs');
     // agent/ is deployed on its own, without the rest of the repo beside it, so
-    // this file is not always reachable. A vendored copy sits next to the
+    // api/schema.sql is not always reachable. A vendored copy sits next to the
     // Dockerfile for that case; the repo path stays first so local development
     // keeps reading the one true schema rather than a copy that can drift.
+    const path = require('path');
+    const fs = require('fs');
     const candidates = [
       path.join(__dirname, '..', '..', '..', '..', 'api', 'schema.sql'),
       path.join(__dirname, '..', '..', '..', 'schema.sql'),
@@ -223,63 +237,22 @@ class SqliteRepository extends OutcomeRepositoryPort {
           'band and set VOXIKIN_MIGRATE_ON_BOOT=0, or vendor a copy into agent/.'
       );
     }
-    this.db.exec(fs.readFileSync(schemaPath, 'utf8'));
 
-    // CREATE TABLE IF NOT EXISTS never alters a table that already exists,
-    // so a database created before recording_url was added needs an
-    // explicit ALTER TABLE here. _ensureColumn is idempotent — a fresh
-    // database already has the column from the CREATE TABLE above, so this
-    // is a no-op there.
-    this._ensureColumn('calls', 'recording_url', 'TEXT');
-    this._ensureColumn('patients', 'timezone', 'TEXT');
-    this._ensureColumn('patients', 'schedule_signed_off_at', 'TEXT');
-    this._ensureColumn('patients', 'quiet_windows', 'TEXT');
-    // The caregiver-app columns. api/schema.sql grew these in its CREATE TABLE,
-    // which never reaches a patients table that already exists — so a database
-    // from before the app landed is missing all thirteen and every query that
-    // names one fails at runtime (the playground's patient list was the first
-    // to hit it, on `p.caregiver_id`). Listed here, not left to a rebuild,
-    // because these databases carry real call history.
-    // caregiver_id defaults to NULL, which is what SQLite requires of an added
-    // column carrying a REFERENCES clause.
-    this._ensureColumn('patients', 'caregiver_id', 'TEXT REFERENCES caregivers(id)');
-    this._ensureColumn('patients', 'honorific', 'TEXT');
-    this._ensureColumn('patients', 'age', 'INTEGER');
-    this._ensureColumn('patients', 'conditions', "TEXT NOT NULL DEFAULT '[]'");
-    this._ensureColumn('patients', 'allergies', "TEXT NOT NULL DEFAULT '[]'");
-    this._ensureColumn('patients', 'doctor_name', 'TEXT');
-    this._ensureColumn('patients', 'doctor_phone', 'TEXT');
-    this._ensureColumn('patients', 'address_text', 'TEXT');
-    this._ensureColumn('patients', 'meal_times', 'TEXT');
-    this._ensureColumn('patients', 'calls_paused', 'INTEGER NOT NULL DEFAULT 0');
-    this._ensureColumn('patients', 'intro_call_at', 'TEXT');
-    this._ensureColumn('patients', 'intro_call_status', 'TEXT');
-    this._ensureColumn('patients', 'consents', 'TEXT');
-    this._ensureColumn('medications', 'is_priority', 'INTEGER DEFAULT 0');
-    this._ensureColumn('dose_events', 'attempt_count', 'INTEGER DEFAULT 0');
-    this._ensureColumn('dose_events', 'next_attempt_at', 'TEXT');
-  }
-
-  /**
-   * Add a column to an existing table if it isn't already there. Safe to
-   * call on every boot: checks PRAGMA table_info before altering, so it
-   * never re-adds a column (which would throw) or touches a fresh database
-   * that was created with the column already in its CREATE TABLE.
-   *
-   * table/column are always internal literals passed by _migrate(), never
-   * external input, so the interpolation below is not an injection risk.
-   *
-   * @param {string} table
-   * @param {string} column
-   * @param {string} type - SQLite column type, e.g. 'TEXT'
-   * @private
-   */
-  _ensureColumn(table, column, type) {
-    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
-    const exists = columns.some((c) => c.name === column);
-    if (!exists) {
-      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-      logger.log('db_column_added', { table, column });
+    // dbPath is null for a remote database; the URL is what identifies it
+    // there, and checkAndMigrate renders whatever it is given through
+    // redactCredentials before it reaches a message.
+    const schemaSql = readSchemaSql(schemaPath);
+    const result = checkAndMigrate(this.db, schemaSql, this.dbPath || this.url);
+    if (result.verdict === 'created') {
+      logger.log('db_schema_created', { version: result.version });
+    } else if (result.verdict === 'migrated') {
+      logger.log('db_migrated', {
+        from: result.from,
+        to: result.version,
+        added: result.added,
+        skipped: result.skipped,
+        skippedIndexes: result.skippedIndexes,
+      });
     }
   }
 

@@ -46,19 +46,64 @@ const ADAPTER_DIR = path.join(SRC_ROOT, 'adapters', 'transport') + path.sep;
 //     TransportPort, and not one of the two leaks this task's brief named.
 //   - use-cases/medication-adherence/demo-call.js: an ElevenLabs-only demo
 //     call path that never goes through TransportPort at all.
+//   - adapters/providers/tts/elevenlabs.js: the ElevenLabs TTS bridge, a
+//     TTSPort implementation and a structural sibling of
+//     adapters/providers/tts/sarvam.js. It posts to
+//     api.elevenlabs.io/v1/text-to-speech to synthesise audio; that is a
+//     provider integration, not a caller resolving a transport detail
+//     itself, and TTSPort is a different boundary from TransportPort.
+//     Surfaced only once the comment stripper below stopped truncating URLs
+//     at their "//" — before that fix no hostname in this file's pattern
+//     could match any real source line at all. Listed rather than fixed
+//     because it is pre-existing and outside the boundary this guard draws;
+//     if the TTS provider boundary should be enforced too, that is its own
+//     guard with its own allowed set, not a widening of this one.
 const ALLOWED_EXCEPTIONS = new Set([
   path.join(SRC_ROOT, 'core', 'middleware', 'auth.js'),
   path.join(SRC_ROOT, 'use-cases', 'medication-adherence', 'demo-call.js'),
+  path.join(SRC_ROOT, 'adapters', 'providers', 'tts', 'elevenlabs.js'),
 ]);
 
 const VENDOR_PATTERN = /\bVAPI_[A-Z_]+\b|\bELEVENLABS_[A-Z_]+\b|api\.vapi\.ai|api\.elevenlabs\.io/;
 
-/** Strips a trailing `// ...` line comment. Good enough: this codebase never
- * puts a vendor name in a string literal that also contains "//" earlier on
- * the same line. */
+/**
+ * Strips a trailing `// ...` line comment, WITHOUT mistaking a URL for one.
+ *
+ * This used to be `line.indexOf('//')` and cut there. That also cut
+ * `await fetch('https://api.vapi.ai/call/' + id)` at the `//` in the scheme,
+ * leaving `await fetch('https:` — so the `api.vapi.ai` and `api.elevenlabs.io`
+ * alternatives in VENDOR_PATTERN were dead against real source, and the
+ * Important finding this file exists to stop recurring (GET /api/call/:callId
+ * fetching api.vapi.ai directly) could not be detected at all. The suite was
+ * green because it never matched, not because there was nothing to match.
+ *
+ * A `//` inside a string literal is not a comment, so the scan tracks quote
+ * state — single, double and backtick — and honours backslash escapes. Every
+ * URL in this codebase lives inside a string literal, which is exactly the
+ * case the old version got wrong.
+ *
+ * Remaining blind spot, unchanged and still documented at the top of this
+ * file: a line whose quote state is left open by a multi-line template
+ * literal is scanned with the wrong state, so a real comment on it would not
+ * be stripped. That direction fails towards a false positive (a noisy test),
+ * never towards a missed leak.
+ */
 function stripLineComment(line) {
-  const idx = line.indexOf('//');
-  return idx === -1 ? line : line.slice(0, idx);
+  let quote = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === '\\') i++; // skip the escaped character
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '/' && line[i + 1] === '/') return line.slice(0, i);
+  }
+  return line;
 }
 
 function listJsFiles(dir) {
@@ -149,6 +194,42 @@ describe('transport vendor boundary', () => {
 
     test('a line comment naming a vendor var is stripped before matching', () => {
       const line = '  // reading VAPI_ASSISTANT_ID here hardcoded this to one orchestrator';
+      assert.strictEqual(VENDOR_PATTERN.test(stripLineComment(line)), false);
+    });
+
+    // The comment stripper used to cut at the first '//', which is also
+    // where a URL's scheme ends — so every hostname alternative in
+    // VENDOR_PATTERN was unreachable against real source and this guard
+    // could not detect the very leak it was written to prevent. These four
+    // are the self-check: a known-bad line containing a real vendor URL must
+    // still match AFTER stripping.
+    for (const [label, line] of [
+      ['a single-quoted vapi URL', "      const res = await fetch('https://api.vapi.ai/call/' + callId);"],
+      ['a double-quoted elevenlabs URL', '      const res = await fetch("https://api.elevenlabs.io/v1/convai");'],
+      ['a template-literal vapi URL', '      const res = await fetch(`https://api.vapi.ai/call/${callId}`);'],
+      ['a vendor URL on a line that also carries a real trailing comment',
+        "      await fetch('https://api.vapi.ai/call'); // poll the vendor directly"],
+    ]) {
+      test(`stripLineComment does not truncate ${label} — the URL still matches`, () => {
+        const stripped = stripLineComment(line);
+        assert.ok(
+          VENDOR_PATTERN.test(stripped),
+          `the hostname was cut out of the line before matching: ${JSON.stringify(stripped)}`
+        );
+      });
+    }
+
+    test('findVendorMatches catches a vendor URL in real source, not just the bare pattern', () => {
+      const content = [
+        'async function getCallStatus(callId) {',
+        "  return fetch('https://api.vapi.ai/call/' + callId); // straight to the vendor",
+        '}',
+      ].join('\n');
+      assert.strictEqual(findVendorMatches(content).length, 1);
+    });
+
+    test('a comment is still stripped when the line also holds an unrelated string', () => {
+      const line = "      const label = 'dial'; // VAPI_ASSISTANT_ID belongs to the adapter";
       assert.strictEqual(VENDOR_PATTERN.test(stripLineComment(line)), false);
     });
 

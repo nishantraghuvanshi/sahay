@@ -92,6 +92,17 @@ before(async () => {
         DB_PATH: dbPath,
         VAPI_SECRET: TEST_VAPI_SECRET,
         TRANSPORT: 'vapi',
+        // Forced empty, not merely absent — dotenv (called inside the
+        // spawned process) does not override a key already present in its
+        // env, even an empty-string one. Both .env files set
+        // RESUME_WINDOW_MIN=15, which happens to equal the code default, so
+        // this file — which is entirely about the resume window — was
+        // agreeing with a developer's config by coincidence rather than
+        // exercising the default. agent/.env also sets
+        // CAPTURE_WEBHOOKS=./data/webhooks.jsonl, and cwd is agent/, so this
+        // spawn was appending to the repo's own agent/data/webhooks.jsonl.
+        RESUME_WINDOW_MIN: '',
+        CAPTURE_WEBHOOKS: '',
       },
       // Captured (not 'ignore') so a boot crash has a reason attached to the
       // failure instead of vanishing — see the assert.fail below, which is

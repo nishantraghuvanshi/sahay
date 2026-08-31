@@ -32,6 +32,7 @@ const TransportRegistry = require('./adapters/transport/registry');
 const { captureRawBody } = require('./adapters/transport/elevenlabs-signature');
 const ConsoleRepository = require('./adapters/persistence/console');
 const SqliteRepository = require('./adapters/persistence/sqlite');
+const { redactCredentials, resolveConfiguredDbPath } = require('./utils/db-path');
 
 // Playground
 const { handlePlaygroundConnection } = require('./playground/ws-handler');
@@ -78,8 +79,16 @@ const strategy = new StrategyClass();
 // losing to a per-invocation DB_PATH. DATABASE_URL is deliberately no longer
 // consulted — it has only ever been set to a Postgres connection string here,
 // which this adapter cannot use and used to treat as a filename.
-const useSqlite =
-  process.env.DB_PATH || process.env.TURSO_DATABASE_URL || process.env.VOXIKIN_DB;
+//
+// resolveConfiguredDbPath rather than a hand-written `||` chain because the
+// NAME is worth as much as the value: SqliteRepository's refusal says which
+// variable was misconfigured, and `process.env.A || process.env.B` throws that
+// away.
+const { value: useSqlite, varName: dbPathVarName } = resolveConfiguredDbPath([
+  'DB_PATH',
+  'TURSO_DATABASE_URL',
+  'VOXIKIN_DB',
+]);
 
 // Say out loud which one won when more than one is set.
 //
@@ -102,70 +111,32 @@ if (process.env.DB_PATH && process.env.TURSO_DATABASE_URL) {
   });
 }
 const repository = useSqlite
-  ? new SqliteRepository({ dbPath: useSqlite, authToken: process.env.TURSO_AUTH_TOKEN })
+  ? new SqliteRepository({
+      dbPath: useSqlite,
+      dbPathSource: dbPathVarName,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
   : new ConsoleRepository();
 
-// Redact userinfo (user:password@) out of a value before it reaches a log
-// line. db_path is meant to be a SQLite filesystem path, but DB_PATH,
-// DATABASE_URL and VOXIKIN_DB have all been seen set to a Postgres
-// connection string by mistake — SqliteRepository takes that literally as a
-// filename (see agent/postgresql:/... in this working tree), and logging it
-// verbatim would put the password in the log. Applied before path.resolve()
-// below: resolving first would collapse the connection string's "//" and
-// hide the credential from a "//user:pass@" pattern while leaving the raw
-// password characters in the string, so redact the source value instead.
+// db_path is meant to be a SQLite filesystem path, but DB_PATH, DATABASE_URL
+// and VOXIKIN_DB have all been seen set to a Postgres connection string by
+// mistake (see agent/postgresql:/... in this working tree) — and logging it
+// verbatim would put the password in the log. SqliteRepository now refuses
+// to open such a value outright (utils/db-path.js#assertDatabaseTarget), so
+// this redaction is defence-in-depth for a value about to be rejected
+// anyway, not the primary defense. redactCredentials lives in
+// utils/db-path.js so this boot log and SqliteRepository's own refusal
+// message share one implementation.
 //
-// Not `new URL()`: it throws on an ordinary filesystem path (no scheme),
-// which is the common case and must pass through untouched — that part is
-// fine — but it also throws on a password containing an unencoded '/'
-// (RFC 3986 says such a password must be percent-encoded, so the URL parser
-// treats the '/' as the start of the path and the string stops looking like
-// a URL at all), and an unencoded '/' in a password is exactly the kind of
-// value someone finds out about the hard way. A thrown error there would
-// leave the raw value to fall through unredacted, defeating the point.
-//
-// Only a substring shaped like an actual URL scheme (`word://`) is ever
-// touched, so a plain filesystem path — which never contains "://" — is
-// never misread as one. Within that, the userinfo/host boundary is the
-// LAST '@' before the authority's own
-// terminating '/', '?' or '#' — a password may itself contain '@' (RFC 3986
-// again allows unencoded '@' in userinfo), so scanning for the first '@'
-// redacts too little, as happened in the previous version of this function.
-// If that bounded scan finds no '@' at all, an unencoded '/' inside the
-// password may have made the real boundary look like a path already
-// started — fall back to the last '@' in the whole remainder so that case
-// is still redacted rather than left in the clear.
-function redactCredentials(value) {
-  const str = String(value);
-  return str.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([\s\S]*)$/, (full, scheme, rest) => {
-    const boundary = rest.search(/[/?#]/);
-    const authority = boundary === -1 ? rest : rest.slice(0, boundary);
-
-    let atIndex = authority.lastIndexOf('@');
-    if (atIndex === -1) atIndex = rest.lastIndexOf('@');
-    if (atIndex === -1) return full; // no userinfo — nothing to redact
-
-    const userinfo = rest.slice(0, atIndex);
-    const afterAt = rest.slice(atIndex + 1);
-    const colonIndex = userinfo.indexOf(':');
-    if (colonIndex === -1) return `${scheme}${userinfo}@${afterAt}`; // username only, no password
-
-    const password = userinfo.slice(colonIndex + 1);
-    if (password === '') return full; // explicit empty password — nothing to leak
-
-    const user = userinfo.slice(0, colonIndex);
-    return `${scheme}${user}:***@${afterAt}`;
-  });
-}
-
 // Resolved absolute path for the boot log — repository.dbPath may be
 // relative (a test spawning a server with DB_PATH=./tmp/x.db), and null for
 // ConsoleRepository, which has no file at all.
 //
 // A remote database has no path to resolve, and logging it as null would read
 // exactly like the no-database case this line exists to distinguish. Log the URL
-// instead, through the same redaction — a Turso URL carries no userinfo, but the
-// token that reaches it is a secret and the redaction costs nothing.
+// instead, through the same redaction: for an allowed remote scheme that keeps
+// the scheme and host — so this line still says WHICH database production is on —
+// while dropping userinfo and any "?authToken=" a Turso URL may carry.
 const dbPath = repository.isRemote
   ? redactCredentials(repository.url)
   : repository.dbPath

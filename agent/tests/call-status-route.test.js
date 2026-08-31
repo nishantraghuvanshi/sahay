@@ -74,6 +74,11 @@ function bootServer(transport, envOverrides = {}) {
       API_KEY,
       VAPI_SECRET,
       DISABLE_GUARDRAILS: 'false',
+      // Forced empty for the same dotenv reason as the vendor vars below:
+      // agent/.env sets CAPTURE_WEBHOOKS=./data/webhooks.jsonl and cwd is
+      // agent/, so every spawned server here was appending to the repo's own
+      // agent/data/webhooks.jsonl.
+      CAPTURE_WEBHOOKS: '',
       TRANSPORT: transport,
       ELEVENLABS_WEBHOOK_SECRET,
       ELEVENLABS_POST_CALL_SECRET,

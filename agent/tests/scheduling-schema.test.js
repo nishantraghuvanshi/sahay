@@ -71,7 +71,7 @@ describe('gate columns exist on a fresh database', () => {
   });
 });
 
-describe('_ensureColumn migrates a database created before these columns existed', () => {
+describe('opening a pre-existing, compatible database adds the missing gate columns', () => {
   test('opening a pre-existing database without the gate columns adds them, not crashes', async () => {
     const dbPath = path.join(
       fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-scheduling-schema-legacy-')),
@@ -79,40 +79,40 @@ describe('_ensureColumn migrates a database created before these columns existed
     );
     tmpDbs.push(dbPath);
 
-    // Simulate a database from before this task: the same core tables,
-    // none of the new gate columns.
+    // Simulate a database from before this task: the same core tables, TEXT
+    // ids and the post-reconciliation column names (matching schema.sql),
+    // none of the new gate columns. TEXT ids and current names are the
+    // point — an INTEGER id or a pre-rename column name is a *different*,
+    // incompatible case, covered by schema-version.test.js.
     const legacyDb = new DatabaseSync(dbPath);
     legacyDb.exec(`
       CREATE TABLE patients (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         phone_e164 TEXT UNIQUE NOT NULL,
         name TEXT,
         drug_name TEXT,
         language TEXT,
-        caregiver_name TEXT,
-        caregiver_phone TEXT,
         notes TEXT,
         timezone TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT
       );
       CREATE TABLE medications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER NOT NULL,
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
         name TEXT NOT NULL,
         dose TEXT,
-        times TEXT NOT NULL,
-        food_rule TEXT,
-        start_date TEXT NOT NULL,
+        slots TEXT NOT NULL DEFAULT '[]',
+        with_food TEXT,
+        start_date TEXT NOT NULL DEFAULT (date('now')),
         end_date TEXT,
-        active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
       CREATE TABLE dose_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        medication_id INTEGER NOT NULL,
-        patient_id INTEGER NOT NULL,
+        id TEXT PRIMARY KEY,
+        medication_id TEXT NOT NULL,
+        patient_id TEXT NOT NULL,
         slot_time TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
         actor TEXT,

@@ -30,7 +30,19 @@ function spawnServer(env, { port } = {}) {
   const resolvedPort = port || 20000 + Math.floor(Math.random() * 20000);
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(resolvedPort), ...env },
+    env: {
+      ...process.env,
+      PORT: String(resolvedPort),
+      // Forced empty, not merely absent: agent/.env sets
+      // CAPTURE_WEBHOOKS=./data/webhooks.jsonl, and cwd here is agent/, so
+      // every server this suite spawns was appending to the repo's own
+      // agent/data/webhooks.jsonl. dotenv (called inside the spawned
+      // process) does not override a key already present in its env, even an
+      // empty-string one, so this is what stops `npm test` writing into the
+      // working tree.
+      CAPTURE_WEBHOOKS: '',
+      ...env,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stdout = '';
@@ -175,6 +187,16 @@ describe('boot log — insecure mode is loud and loopback-only', () => {
       // No API_KEY, no VAPI_SECRET, no ALERT_OPERATOR_CONTACT — insecure
       // mode must boot anyway, and every one of those must show up as
       // disabled rather than silently satisfied.
+      //
+      // Forced empty, not merely omitted: agent/.env sets API_KEY and
+      // ALERT_OPERATOR_CONTACT, and dotenv (called inside the spawned
+      // process) does not override a key already present in its env, even an
+      // empty-string one. Without these three lines the comment above was
+      // simply false — this block booted with the developer's real API_KEY
+      // and asserted "insecure mode boots without one".
+      API_KEY: '',
+      VAPI_SECRET: '',
+      ALERT_OPERATOR_CONTACT: '',
       ALLOW_INSECURE_LOCAL: '1',
       TRANSPORT: 'vapi',
     });
@@ -234,84 +256,166 @@ describe('boot log — an explicit non-loopback bind while insecure refuses to s
   });
 });
 
-describe('boot log — db_path redacts a credential-bearing value', () => {
-  // Contained inside a tmpdir per test so cleanup removes everything
-  // SqliteRepository creates, unlike the leaked artifact this file is named
-  // after. Built with template-literal concatenation, NOT path.join/
-  // path.resolve — those collapse "://" down to a single "/" before the
-  // value ever reaches redactCredentials(), which would silently defeat the
-  // very scheme match this test means to exercise, and does not represent
-  // how DB_PATH is actually set in practice (a raw connection string, no
-  // unrelated directory prefix).
-  async function assertRedacted({ dbDir, connectionStringPath, secret, dbPathPattern }) {
+describe('boot log — a DB_PATH shaped like a URL is refused, and the refusal is coarsened', () => {
+  // Round 3: after two rounds of bypassed selective-redaction (a password
+  // containing '@', then one containing '/', then one containing both), the
+  // approach changed entirely — no parsing. Any value containing a scheme
+  // separator collapses to "<scheme>://<redacted>" by construction, so no
+  // userinfo character can ever survive regardless of what it contains.
+  //
+  // Final round: assertDatabaseTarget and redactCredentials now ask ONE
+  // predicate about what a database target is, so a value the redactor
+  // coarsens is also a value the repository refuses to open. These
+  // DB_PATHs therefore no longer reach the server_listening line at all —
+  // the server exits first. That is the stronger guarantee, and it is what
+  // this block now asserts: nothing is created on disk from the raw value,
+  // AND the message that reports the refusal is itself coarsened. The
+  // previous shape (boot successfully, then check the log line) was only
+  // possible because the guard let an embedded "scheme://" through, which is
+  // the same hole that let agent/postgresql:/kinvox:... be created in the
+  // real working tree.
+  //
+  // Built with template-literal concatenation, not path.join/path.resolve,
+  // which would collapse "://" to "/" before the value ever reaches the
+  // guard and hide the scheme this test means to exercise.
+
+  /** The value as the refusal message rendered it. The message is emitted
+   * inside a JSON log line, so the quotes around it arrive escaped. */
+  function parseRefusedValue(output) {
+    const match = output.match(/is not a usable database target: \\?"(.*?)\\?" is neither a/);
+    return match ? match[1] : null;
+  }
+
+  async function assertCoarsened({ dbDir, dbPathValue, secret }) {
     const handle = spawnServer({
-      DB_PATH: connectionStringPath,
+      DB_PATH: dbPathValue,
       ALLOW_INSECURE_LOCAL: '1',
       TRANSPORT: 'vapi',
     });
     try {
-      const healthy = await waitForHealth(handle.baseUrl, handle.child);
-      assert.ok(healthy, `server failed to boot:\n${handle.getStderr()}`);
+      const healthy = await waitForHealth(handle.baseUrl, handle.child, 5000);
+      assert.strictEqual(healthy, false, 'the server must refuse to open a connection-string DB_PATH');
+      assert.ok(await waitForExit(handle.child), 'the server should exit rather than hang');
 
-      const stdout = handle.getStdout();
-      assert.ok(!stdout.includes(secret), `secret leaked into boot log output: ${stdout}`);
+      const output = handle.getStdout() + handle.getStderr();
+      assert.ok(!output.includes(secret), 'secret leaked into the boot output');
 
-      const line = parseServerListeningLine(stdout);
-      assert.ok(line, 'no server_listening line found');
-      assert.ok(line.db_path, 'db_path should still be present and useful');
-      assert.ok(!line.db_path.includes(secret), 'db_path field itself must not carry the secret');
-      assert.match(line.db_path, dbPathPattern, 'db_path should redact to user:***@, not drop the field entirely');
+      const rendered = parseRefusedValue(output);
+      assert.ok(rendered, `no database-target refusal found in output:\n${output}`);
+      assert.ok(!rendered.includes(secret), `the refusal itself carried the secret: ${rendered}`);
+      // No '@' surviving anywhere is the structural guarantee this round is
+      // built on — not "the password is gone" but "userinfo cannot exist in
+      // the output at all", checked by construction, not by pattern.
+      assert.ok(!rendered.includes('@'), `an authority delimiter survived coarsening: ${rendered}`);
+      assert.ok(rendered.includes('<redacted>'), `not coarsened: ${rendered}`);
+
+      // And nothing was created from the raw value — the original bug was
+      // SqliteRepository mkdir -p'ing the connection string as a directory
+      // tree before anyone noticed.
+      assert.deepStrictEqual(
+        fs.readdirSync(dbDir),
+        [],
+        'nothing may be created on disk from a refused DB_PATH'
+      );
     } finally {
       if (handle.child.exitCode === null && handle.child.signalCode === null) handle.child.kill();
       fs.rmSync(dbDir, { recursive: true, force: true });
     }
   }
 
-  test('a DB_PATH set to a connection string never puts the password in the log', async () => {
-    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-'));
-    const password = 'sup3r-secret-pw';
-    await assertRedacted({
+  test('a password containing an unencoded @ is redacted (round-1 bypass)', async () => {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-at-'));
+    const secret = 'pa@ssXYZsecret';
+    await assertCoarsened({
       dbDir,
-      connectionStringPath: `${dbDir}/postgresql://kinvox:${password}@localhost:5432/kinvox`,
-      secret: password,
-      dbPathPattern: /kinvox:\*\*\*@/,
+      dbPathValue: `${dbDir}/postgresql://kinvox:${secret}@localhost:5432/kinvox`,
+      secret,
     });
   });
 
-  test('a password containing an unencoded @ is fully redacted, not just up to the first @', async () => {
-    // Regression for the round-1 fix: a first-'@'-scan stops at "pa" and
-    // leaves "ssXYZ" — the part after the embedded '@' — in clear text.
-    // The real userinfo/host boundary is the LAST '@' before the authority
-    // ends, per RFC 3986.
-    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-at-'));
-    const password = 'pa@ssXYZsecret';
-    await assertRedacted({
+  test('a password containing an unencoded / is redacted (round-2 bypass)', async () => {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-slash-'));
+    const secret = 'pw-with-slash-secret';
+    await assertCoarsened({
       dbDir,
-      connectionStringPath: `${dbDir}/postgresql://kinvox:${password}@localhost:5432/kinvox`,
-      secret: 'ssXYZsecret', // the part after the embedded '@' — the exact bypass
-      dbPathPattern: /kinvox:\*\*\*@localhost:5432\/kinvox$/,
+      dbPathValue: `${dbDir}/postgresql://kinvox:pw/with/${secret}@localhost:5432/db`,
+      secret,
     });
   });
 
-  test('a password containing an unencoded / is fully redacted', async () => {
-    // An unencoded '/' inside a password makes the value stop looking like
-    // a well-formed URL (the parser would otherwise read it as the start of
-    // the path) — must still be redacted, not left in the clear because the
-    // string technically isn't a valid URL.
-    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-redact-slash-'));
-    const password = 'pw/with/slash-secret';
-    await assertRedacted({
+  test('a password containing BOTH @ and / is redacted (round-3 finding)', async () => {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-both-'));
+    const secret = 'ss-wo-secret';
+    await assertCoarsened({
       dbDir,
-      connectionStringPath: `${dbDir}/postgresql://kinvox:${password}@localhost:5432/db`,
-      secret: 'slash-secret',
-      dbPathPattern: /kinvox:\*\*\*@localhost:5432\/db$/,
+      dbPathValue: `${dbDir}/postgresql://kinvox:pa@${secret}/wo@localhost:5432/db`,
+      secret,
     });
   });
 
-  test('legitimate filesystem paths containing @ or : pass through unmangled', async () => {
+  test('a password that is itself a URL is redacted', async () => {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-nested-url-'));
+    const secret = 'nested-secret-token';
+    await assertCoarsened({
+      dbDir,
+      dbPathValue: `${dbDir}/postgresql://user:http://${secret}@evil.example@localhost:5432/db`,
+      secret,
+    });
+  });
+
+  test('sqlite:/// (three slashes, no authority) is coarsened too', async () => {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-triple-slash-'));
+    // No credential to leak here — this proves the "contains ://" rule is
+    // unconditional, not gated on finding userinfo first.
+    await assertCoarsened({
+      dbDir,
+      dbPathValue: `${dbDir}/sqlite:///abs/path.db`,
+      secret: 'abs/path.db',
+    });
+  });
+
+  test('a malformed scheme (digit-led, punctuation-led, or missing) is still coarsened, not returned raw (round-4 finding)', async () => {
+    // Round 4: the function found "://" correctly but then GATED the
+    // coarsening on the text before it being a well-formed scheme name —
+    // when it wasn't (digit-led, punctuation-led, or nothing at all before
+    // "://"), it fell through to returning the value verbatim, credential
+    // intact. Worse than the mangling bug this replaced. Fixed so any
+    // value containing "://" coarsens unconditionally; a malformed prefix
+    // becomes "<redacted>", never itself.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-malformed-scheme-'));
+    const secret = 'round4-secret-token';
+    await assertCoarsened({
+      dbDir,
+      dbPathValue: `${dbDir}/1abc://user:${secret}@host/db`,
+      secret,
+    });
+  });
+
+  test('a path merely containing an embedded scheme:// is coarsened, not mangled into a false path', async () => {
+    // The re-review's own example was /mnt/backups/scp://deploy:build@2024/
+    // release.db — reproduced here under a writable tmpdir instead of a
+    // literal /mnt path, which this machine cannot write to regardless of
+    // redaction. What matters is proven either way: a value with a
+    // legitimate-looking directory prefix in front of an embedded "scp://"
+    // must not come out as a rewritten path that silently points somewhere
+    // else — it must come out as the coarse form, so an operator sees the
+    // value was suspect rather than trusting a corrupted path.
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-embedded-scheme-'));
+    const secret = 'build-secret-2024';
+    await assertCoarsened({
+      dbDir,
+      dbPathValue: `${dbDir}/backups/scp://deploy:${secret}@host/release.db`,
+      secret,
+    });
+  });
+});
+
+describe('boot log — an ordinary filesystem path passes through byte-identical', () => {
+  test('legitimate paths containing @ or : are never touched', async () => {
     // Must matter more than the leak: a redactor that corrupts a real path
     // breaks database selection. Neither of these contains "://", so
-    // redactCredentials() must not touch them at all.
+    // redactCredentials() must return the exact same value, not a rewrite
+    // that merely happens to look the same.
     const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sahay-boot-log-legit-'));
     const legitPaths = [
       path.join(dbDir, 'a@b', 'x.db'),
@@ -329,6 +433,8 @@ describe('boot log — db_path redacts a credential-bearing value', () => {
           assert.ok(healthy, `server failed to boot for ${dbPath}:\n${handle.getStderr()}`);
           const line = parseServerListeningLine(handle.getStdout());
           assert.ok(line, 'no server_listening line found');
+          // Byte-identical to the resolved value, by strict equality — not
+          // "looks the same", the literal same string.
           assert.strictEqual(line.db_path, path.resolve(dbPath), `${dbPath} must pass through byte-identical`);
         } finally {
           if (handle.child.exitCode === null && handle.child.signalCode === null) handle.child.kill();

@@ -578,8 +578,50 @@ def test_the_app_records_who_established_the_outcome(client):
 
 def test_an_older_database_gains_the_new_columns(tmp_path):
     """`CREATE TABLE IF NOT EXISTS` skips an existing table, so without a migration a
-    developer's older file would be missing every column added since."""
+    developer's older file would be missing every column added since.
+
+    db._migrate is now a thin wrapper over schema_version.check_and_migrate
+    (task 4) — same signature and return shape.
+    """
+    # patients only, deliberately: every gap column patients is missing
+    # here is nullable or DEFAULT-constant, so this exercises a migration
+    # that actually completes. A dose_events/medications fixture stripped
+    # this far would hit their NOT-NULL-no-DEFAULT columns (patient_id,
+    # medication_id, slot_time, created_at, ...) and correctly refuse — see
+    # test_a_migration_that_cannot_complete_safely_refuses below.
     import sqlite3
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.executescript(
+        "CREATE TABLE patients (id TEXT PRIMARY KEY, phone_e164 TEXT NOT NULL UNIQUE, "
+        "created_at TEXT NOT NULL);"
+    )
+    con.commit()
+    con.close()
+
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    added = db._migrate(con)
+    con.commit()
+    assert "patients.timezone" in added
+    assert "patients.caregiver_id" in added
+    con.close()
+
+
+def test_a_migration_that_cannot_complete_safely_refuses_rather_than_silently_certifying(tmp_path):
+    """Fix round 1, finding 1: db._migrate (via schema_version.check_and_migrate)
+    used to stamp user_version unconditionally even when a column — and the
+    index depending on it — could not be safely added. medications.start_date
+    is `NOT NULL DEFAULT (date('now'))` in schema.sql; SQLite refuses
+    ALTER TABLE ADD COLUMN for a non-constant DEFAULT regardless of
+    nullability, so this table's migration can never fully complete and must
+    refuse rather than silently certify a database missing the UNIQUE index
+    (idx_meds_patient_name_start) that guards dose idempotency.
+    """
+    import sqlite3
+
+    from api import schema_version
+
     path = tmp_path / "old.db"
     con = sqlite3.connect(path)
     con.executescript(
@@ -592,11 +634,10 @@ def test_an_older_database_gains_the_new_columns(tmp_path):
 
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row
-    added = db._migrate(con)
-    con.commit()
-    assert "medications.start_date" in added
-    assert "dose_events.attempt_count" in added
-    # and nothing was lost doing it
+    with pytest.raises(schema_version.IncompatibleDatabaseError):
+        db._migrate(con)
+    # user_version was never stamped, and the row survived untouched
+    assert con.execute("PRAGMA user_version").fetchone()[0] == 0
     assert con.execute("SELECT name FROM medications").fetchone()["name"] == "Metformin"
     con.close()
 
